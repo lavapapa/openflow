@@ -54,4 +54,5 @@ export interface ArtifactStore {
   writeFinalReport(value: unknown): Promise<string>;
   updateManifest(status: "succeeded" | "failed" | "cancelled"): Promise<string>;
   getRunArtifacts(): RunArtifacts;
+  isRunCreated(): boolean;
 }

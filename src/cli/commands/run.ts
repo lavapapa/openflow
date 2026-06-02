@@ -194,7 +194,15 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   if (result.status === "failed") {
     const agents = result.agents || [];
     const hasTimeout = agents.some((a) => a.status === "timed_out");
-    const errorCode = hasTimeout ? ErrorCode.PROCESS_TIMEOUT : ErrorCode.PROVIDER_PROCESS_FAILED;
+    
+    let errorCode: ErrorCode = hasTimeout ? ErrorCode.PROCESS_TIMEOUT : ErrorCode.PROVIDER_PROCESS_FAILED;
+    
+    // Preserve specific error code if present
+    if (result.error && typeof result.error === "object" && result.error.code) {
+      if (Object.values(ErrorCode).includes(result.error.code as any)) {
+        errorCode = result.error.code as ErrorCode;
+      }
+    }
     
     const errMessage = typeof result.error === "string"
       ? result.error

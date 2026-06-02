@@ -253,12 +253,12 @@ describe("DefaultRuntimeRunner", () => {
     expect(result.error!.message).toContain("User cancelled execution");
   });
 
-  it("reports SECURITY_POLICY_VIOLATION when workflow tries to access process", async () => {
+  it("does NOT report SECURITY_POLICY_VIOLATION for regular ReferenceError", async () => {
     const runner = new DefaultRuntimeRunner();
     const parsedWorkflow: ParsedWorkflow = {
       meta: { name: "escape", description: "escape" },
       body: `
-        const p = process;
+        const p = someNonExistentVariable;
         export default p;
       `,
       sourcePath: "workflow.js",
@@ -272,8 +272,51 @@ describe("DefaultRuntimeRunner", () => {
     );
 
     expect(result.status).toBe("failed");
-    expect(result.error!.code).toBe("SECURITY_POLICY_VIOLATION");
-    expect(result.error!.message).toContain("process is not defined");
+    expect(result.error!.code).not.toBe("SECURITY_POLICY_VIOLATION");
+    expect(result.error!.message).toContain("someNonExistentVariable is not defined");
+  });
+
+  it("does NOT report SECURITY_POLICY_VIOLATION for errors mentioning constructor", async () => {
+    const runner = new DefaultRuntimeRunner();
+    const parsedWorkflow: ParsedWorkflow = {
+      meta: { name: "constructor-err", description: "constructor-err" },
+      body: `
+        throw new Error("Something went wrong in the constructor");
+      `,
+      sourcePath: "workflow.js",
+      sourceText: "",
+      sourceHash: "123"
+    };
+
+    const result = await runner.run(
+      { parsedWorkflow, config: defaultResolvedConfig, cli: defaultCliOptions },
+      { agentExecutor: new FakeAgentExecutor(), eventSink: new FakeEventSink(), clock: mockClock, idGenerator: mockIdGenerator }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error!.code).not.toBe("SECURITY_POLICY_VIOLATION");
+    expect(result.error!.message).toContain("constructor");
+  });
+
+  it("verify status remains 'failed' even if error message contains 'cancelled'", async () => {
+    const runner = new DefaultRuntimeRunner();
+    const parsedWorkflow: ParsedWorkflow = {
+      meta: { name: "cancelled-msg", description: "cancelled-msg" },
+      body: `
+        throw new Error("The subscription was cancelled by the user");
+      `,
+      sourcePath: "workflow.js",
+      sourceText: "",
+      sourceHash: "123"
+    };
+
+    const result = await runner.run(
+      { parsedWorkflow, config: defaultResolvedConfig, cli: defaultCliOptions },
+      { agentExecutor: new FakeAgentExecutor(), eventSink: new FakeEventSink(), clock: mockClock, idGenerator: mockIdGenerator }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error!.message).toContain("cancelled");
   });
 
   it("reports status 'failed' when fail-fast is triggered by agent failure", async () => {

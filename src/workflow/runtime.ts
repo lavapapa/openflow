@@ -194,7 +194,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       const finishTime = deps.clock ? deps.clock.now() : new Date();
       const durationMs = finishTime.getTime() - startTime.getTime();
 
-      const isCancelled = runtimeAbortController.signal.aborted || err.name === "WorkflowCancelledError" || err.message?.includes("cancelled") || err.message?.includes("Abort");
+      const isCancelled = runtimeAbortController.signal.aborted || err.name === "WorkflowCancelledError";
       
       if (isCancelled) {
         const result = buildCancelledRunResult(runtime, durationMs, finishTime.toISOString(), err.message, deps.artifactStore);
@@ -258,12 +258,7 @@ export async function executeWorkflowModule(runtime: RuntimeState): Promise<unkn
     }
 
     // Map potential sandbox escapes or violations to SECURITY_POLICY_VIOLATION
-    const isSecurityViolation = 
-      err.name === "SecurityError" || 
-      err.message?.includes("constructor") || 
-      err.message?.includes("__proto__") ||
-      err.message?.includes("globalThis") ||
-      err.message?.includes("process is not defined");
+    const isSecurityViolation = err.name === "SecurityError";
 
     if (isSecurityViolation) {
       throw new ExecflowError(
