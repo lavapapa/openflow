@@ -49,7 +49,76 @@ export function validateWorkflow(
         } else if (calleeText === "shell") {
           report(node, "shell() is not supported in the MVP.");
         } else if (calleeText === "pipeline") {
-          report(node, "pipeline() is not supported in the MVP.");
+          if (node.arguments.length < 2) {
+            report(node, "pipeline() requires at least 2 arguments: items and stages.");
+          } else if (node.arguments.length > 3) {
+            report(node, "pipeline() accepts at most 3 arguments: items, stages, and options.");
+          }
+
+          const stagesArg = node.arguments[1];
+          if (stagesArg) {
+            if (ts.isArrayLiteralExpression(stagesArg)) {
+              const stageNamesSeen = new Set<string>();
+              for (const element of stagesArg.elements) {
+                if (!ts.isObjectLiteralExpression(element)) {
+                  report(element, "pipeline() stages must be named stage objects, not function shorthands. Recommend using { name: 'stageName', run: ... }");
+                } else {
+                  let hasNameProp = false;
+                  let nameValue: string | undefined;
+
+                  for (const prop of element.properties) {
+                    if (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop) || ts.isSpreadAssignment(prop) || ts.isMethodDeclaration(prop)) {
+                      const propName = ts.isPropertyAssignment(prop) || ts.isMethodDeclaration(prop)
+                        ? (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name) ? prop.name.text : prop.name.getText())
+                        : ts.isShorthandPropertyAssignment(prop) ? prop.name.text : "";
+                      
+                      if (propName === "name") {
+                        hasNameProp = true;
+                        if (ts.isPropertyAssignment(prop) && ts.isStringLiteral(prop.initializer)) {
+                          nameValue = prop.initializer.text;
+                        }
+                      }
+                    }
+                  }
+
+                  if (!hasNameProp) {
+                    report(element, "pipeline() stage object is missing 'name' property.");
+                  } else if (nameValue !== undefined) {
+                    if (stageNamesSeen.has(nameValue)) {
+                      report(element, `pipeline() duplicate stage name detected: '${nameValue}'.`);
+                    } else {
+                      stageNamesSeen.add(nameValue);
+                    }
+                  }
+                }
+              }
+            } else if (ts.isArrowFunction(stagesArg) || ts.isFunctionExpression(stagesArg)) {
+              report(stagesArg, "pipeline() stages must be named stage objects, not function shorthands. Recommend using { name: 'stageName', run: ... }");
+            }
+          }
+
+          const optionsArg = node.arguments[2];
+          if (optionsArg && ts.isObjectLiteralExpression(optionsArg)) {
+            const allowedOptionKeys = ["label", "strategy", "concurrency", "stageConcurrency", "preserveOrder", "failFast"];
+            for (const prop of optionsArg.properties) {
+              if (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop) || ts.isSpreadAssignment(prop) || ts.isMethodDeclaration(prop)) {
+                const propName = ts.isPropertyAssignment(prop) || ts.isMethodDeclaration(prop)
+                  ? (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name) ? prop.name.text : prop.name.getText())
+                  : ts.isShorthandPropertyAssignment(prop) ? prop.name.text : "";
+                
+                if (propName && !allowedOptionKeys.includes(propName)) {
+                  report(prop, `pipeline() options contain unsupported key '${propName}'.`);
+                }
+
+                if (propName === "strategy" && ts.isPropertyAssignment(prop) && ts.isStringLiteral(prop.initializer)) {
+                  const strategyVal = prop.initializer.text;
+                  if (strategyVal !== "item-streaming" && strategyVal !== "stage-barrier") {
+                    report(prop.initializer, `pipeline() options strategy must be 'item-streaming' or 'stage-barrier'.`);
+                  }
+                }
+              }
+            }
+          }
         } else if (["read", "write"].includes(calleeText)) {
           report(node, `${calleeText}() is not supported in the MVP.`);
         } else if (calleeText === "fetch") {

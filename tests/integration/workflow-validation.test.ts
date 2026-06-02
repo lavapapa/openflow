@@ -147,7 +147,7 @@ export default {};
     expect(result.error.message).toMatch(/require\(\)/);
   });
 
-  it("Unsupported pipeline() fails validation", async () => {
+  it("Unsupported pipeline() fails validation due to function shorthand", async () => {
     // Arrange
     const workflowPath = path.resolve("tests/fixtures/workflows/invalid-pipeline.js");
     
@@ -166,7 +166,7 @@ export default {};
     // CLI exits with code 3.
     expect(exitCode).toBe(3);
     
-    // Error explains that pipeline() is not supported in MVP.
-    expect(result.error.message).toMatch(/pipeline\(\) is not supported in the MVP/);
+    // Error explains that function shorthand is not supported.
+    expect(result.error.message).toMatch(/stages must be named stage objects/);
   });
 });

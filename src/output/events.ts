@@ -15,7 +15,17 @@ export type EventType =
   | "agent.completed"
   | "agent.failed"
   | "agent.timed_out"
-  | "agent.cancelled";
+  | "agent.cancelled"
+  | "pipeline.started"
+  | "pipeline.completed"
+  | "pipeline.failed"
+  | "pipeline.cancelled"
+  | "pipeline.item.started"
+  | "pipeline.item.completed"
+  | "pipeline.item.failed"
+  | "pipeline.stage.started"
+  | "pipeline.stage.completed"
+  | "pipeline.stage.failed";
 
 export interface EventEnvelope<TPayload = unknown> {
   schemaVersion: "execflow.event.v1";
@@ -125,6 +135,83 @@ export interface AgentCancelledPayload {
   durationMs: number;
   error?: SerializedError;
   artifacts?: AgentArtifacts;
+}
+
+export interface PipelineStartedPayload {
+  pipelineId: string;
+  label?: string | undefined;
+  strategy: string;
+  itemCount: number;
+  stages: string[];
+}
+
+export interface CompactPipelineStageResult {
+  stageName: string;
+  stageIndex: number;
+  status: "succeeded" | "failed" | "skipped" | "timed_out" | "cancelled";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  childAgentIds: string[];
+  error?: SerializedError | undefined;
+}
+
+export interface CompactPipelineItemResult {
+  itemIndex: number;
+  status: "succeeded" | "failed" | "cancelled" | "timed_out";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  failedStage?: string | undefined;
+  error?: SerializedError | undefined;
+  stages: CompactPipelineStageResult[];
+}
+
+export interface PipelineTerminalPayload {
+  pipelineId: string;
+  status: "succeeded" | "failed" | "cancelled";
+  durationMs: number;
+  results: CompactPipelineItemResult[];
+  artifactPath?: string | undefined;
+}
+
+export interface PipelineItemStartedPayload {
+  pipelineId: string;
+  itemIndex: number;
+  startedAt: string;
+}
+
+export interface PipelineItemTerminalPayload {
+  pipelineId: string;
+  itemIndex: number;
+  status: "succeeded" | "failed" | "cancelled" | "timed_out";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  failedStage?: string | undefined;
+  error?: SerializedError | undefined;
+  stages: CompactPipelineStageResult[];
+}
+
+export interface PipelineStageStartedPayload {
+  pipelineId: string;
+  itemIndex: number;
+  stageName: string;
+  stageIndex: number;
+  startedAt: string;
+}
+
+export interface PipelineStageTerminalPayload {
+  pipelineId: string;
+  itemIndex: number;
+  stageName: string;
+  stageIndex: number;
+  status: "succeeded" | "failed" | "skipped" | "timed_out" | "cancelled";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  childAgentIds: string[];
+  error?: SerializedError | undefined;
 }
 
 export function isEventEnvelope(value: unknown): value is EventEnvelope {

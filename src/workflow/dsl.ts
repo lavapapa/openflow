@@ -4,6 +4,10 @@ import type { RuntimeState } from "./types.js";
 import { InvalidDslCallError } from "./errors.js";
 import { ExecflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import type { PipelineStage, PipelineOptions, PipelineResult } from "../pipeline/types.js";
+import { runPipeline } from "../pipeline/run.js";
+import { getActivePipelineContext, recordChildAgentId } from "../pipeline/context.js";
+import { createPipelineAgentId } from "../pipeline/id.js";
 
 export function createDsl(runtime: RuntimeState) {
   return {
@@ -56,7 +60,26 @@ export function createDsl(runtime: RuntimeState) {
       }
 
       // Normalization
-      const normalizedId = input.id || (runtime.idGenerator ? runtime.idGenerator.nextId("agent") : `agent-${++runtime.agentCounter}`);
+      let normalizedId = input.id;
+      const activePipeline = getActivePipelineContext();
+      if (!normalizedId) {
+        if (activePipeline) {
+          activePipeline.agentCounter++;
+          normalizedId = createPipelineAgentId({
+            pipelineId: activePipeline.pipelineId,
+            itemIndex: activePipeline.itemIndex,
+            stageName: activePipeline.stageName,
+            suffix: activePipeline.agentCounter.toString()
+          });
+        } else {
+          normalizedId = runtime.idGenerator ? runtime.idGenerator.nextId("agent") : `agent-${++runtime.agentCounter}`;
+        }
+      }
+
+      if (activePipeline) {
+        recordChildAgentId(normalizedId);
+      }
+
       const normalizedProvider = input.provider || runtime.config.defaultProvider || "mock";
       const normalizedTimeoutMs = input.timeoutMs || runtime.config.timeoutMs || 30000;
       const normalizedCwd = input.cwd || runtime.cwd;
@@ -64,21 +87,47 @@ export function createDsl(runtime: RuntimeState) {
       const task: ScheduledTask<AgentResult> = {
         id: normalizedId,
         provider: normalizedProvider,
-        run: (signal: AbortSignal) => {
+        run: async (schedulerSignal: AbortSignal) => {
+          let finalSignal = schedulerSignal;
+          let onAbort: (() => void) | undefined;
+
+          if (activePipeline && activePipeline.stageSignal) {
+            const combinedController = new AbortController();
+            onAbort = () => {
+              combinedController.abort(schedulerSignal.reason || activePipeline.stageSignal?.reason || "Aborted");
+            };
+            if (schedulerSignal.aborted) {
+              combinedController.abort(schedulerSignal.reason);
+            } else if (activePipeline.stageSignal.aborted) {
+              combinedController.abort(activePipeline.stageSignal.reason);
+            } else {
+              schedulerSignal.addEventListener("abort", onAbort);
+              activePipeline.stageSignal.addEventListener("abort", onAbort);
+            }
+            finalSignal = combinedController.signal;
+          }
+
           const execInput: any = {
             id: normalizedId,
             provider: normalizedProvider,
             prompt: input.prompt,
             timeoutMs: normalizedTimeoutMs,
             cwd: normalizedCwd,
-            signal
+            signal: finalSignal
           };
           if (input.label !== undefined) execInput.label = input.label;
           if (input.model !== undefined) execInput.model = input.model;
           if (input.schema !== undefined) execInput.schema = input.schema;
           if (input.metadata !== undefined) execInput.metadata = input.metadata;
 
-          return runtime.agentExecutor.execute(execInput);
+          try {
+            return await runtime.agentExecutor.execute(execInput);
+          } finally {
+            if (onAbort) {
+              schedulerSignal.removeEventListener("abort", onAbort);
+              activePipeline?.stageSignal?.removeEventListener("abort", onAbort);
+            }
+          }
         }
       };
       if (input.label !== undefined) {
@@ -134,6 +183,20 @@ export function createDsl(runtime: RuntimeState) {
         }
         return resultObj;
       }
+    },
+
+    pipeline: async <I, O>(
+      items: I[],
+      stages: PipelineStage<any, any>[],
+      options?: PipelineOptions
+    ): Promise<PipelineResult<O>> => {
+      return runPipeline({
+        items,
+        stages,
+        options,
+        runtime,
+        signal: runtime.abortController.signal
+      });
     }
   };
 }

@@ -1,9 +1,11 @@
 import type { ParsedWorkflow, WorkflowMeta } from "../types/workflow.js";
+import type { ArtifactStore } from "../types/artifacts.js";
 import type { ResolvedConfig } from "../types/config.js";
 import type { AgentResult } from "../types/agent.js";
 import type { Scheduler } from "../types/scheduler.js";
 import type { AgentExecutor } from "../agents/execution-types.js";
 import type { RuntimeEventSink } from "../orchestration/scheduler.js";
+import type { PipelineSummary } from "../pipeline/types.js";
 
 export type { ParsedWorkflow, WorkflowMeta };
 
@@ -21,13 +23,14 @@ export interface WorkflowValidationIssue {
 
 
 export interface RuntimeState {
+  artifactStore?: ArtifactStore | undefined;
   runId: string;
   parsedWorkflow: ParsedWorkflow;
   config: ResolvedConfig;
   args: Record<string, unknown>;
   cwd: string;
   artifactsDir: string;
-  currentPhase?: string;
+  currentPhase?: string | undefined;
   startedAt: string;
   agentResults: AgentResult[];
   scheduler: Scheduler;
@@ -35,6 +38,8 @@ export interface RuntimeState {
   eventSink: RuntimeEventSink;
   abortController: AbortController;
   agentCounter: number;
+  pipelineCounter?: number | undefined;
+  pipelineSummaries?: PipelineSummary[] | undefined;
   idGenerator?: IdGenerator | undefined;
   failFast?: boolean | undefined;
 }

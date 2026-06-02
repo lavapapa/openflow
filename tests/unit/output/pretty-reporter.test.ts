@@ -120,4 +120,64 @@ describe("PrettyReporter", () => {
 
     expect(getStdout()).toBe("[agent-1] some output\n");
   });
+
+  it("pipeline.started prints pipeline start details", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams);
+
+    reporter.handle({
+      type: "pipeline.started",
+      payload: { pipelineId: "pipeline-1", label: "my-pipeline", strategy: "stage-barrier", itemCount: 5 }
+    } as any);
+
+    expect(getStdout()).toBe("◇ Pipeline pipeline-1 (my-pipeline) started [strategy: stage-barrier, items: 5]\n");
+  });
+
+  it("pipeline.stage.started prints progress in verbose mode", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams, { verbose: true });
+
+    reporter.handle({
+      type: "pipeline.stage.started",
+      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", stageIndex: 0 }
+    } as any);
+
+    expect(getStdout()).toBe("  → Item 2: Stage lint started\n");
+  });
+
+  it("pipeline.stage.completed prints completion in verbose mode", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams, { verbose: true });
+
+    reporter.handle({
+      type: "pipeline.stage.completed",
+      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", durationMs: 450 }
+    } as any);
+
+    expect(getStdout()).toBe("  ✓ Item 2: Stage lint completed 450ms\n");
+  });
+
+  it("pipeline.stage.failed prints failure", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams);
+
+    reporter.handle({
+      type: "pipeline.stage.failed",
+      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", error: { message: "lint failed" } }
+    } as any);
+
+    expect(getStdout()).toBe("  ✕ Item 2: Stage lint failed: lint failed\n");
+  });
+
+  it("pipeline.completed prints terminal status and artifact location", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams);
+
+    reporter.handle({
+      type: "pipeline.completed",
+      payload: { pipelineId: "pipeline-1", status: "succeeded", durationMs: 1200, artifactPath: "pipelines/pipeline-1/pipeline.json" }
+    } as any);
+
+    expect(getStdout()).toBe("✓ Pipeline pipeline-1 completed successfully 1.2s\n  Artifacts: pipelines/pipeline-1/pipeline.json\n");
+  });
 });

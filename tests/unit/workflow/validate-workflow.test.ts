@@ -82,12 +82,12 @@ describe("Validate Workflow Restrictions", () => {
     expect(issues.some(i => i.message.includes("shell() is not supported"))).toBe(true);
   });
 
-  it("flags pipeline() calls", () => {
+  it("flags pipeline() calls using function shorthand", () => {
     const parsed = createParsed(`
       await pipeline([], x => x);
     `);
     const issues = validateWorkflow(parsed, options);
-    expect(issues.some(i => i.message.includes("pipeline() is not supported"))).toBe(true);
+    expect(issues.some(i => i.message.includes("stages must be named stage objects"))).toBe(true);
   });
 
   it("flags Date.now() calls", () => {

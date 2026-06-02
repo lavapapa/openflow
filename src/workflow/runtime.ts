@@ -66,6 +66,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
     const runtimeAbortController = createLinkedAbortController(input.signal);
 
     const runtime: RuntimeState = {
+      artifactStore: deps.artifactStore,
       runId,
       parsedWorkflow: input.parsedWorkflow,
       config: input.config,
@@ -78,6 +79,8 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       eventSink: deps.eventSink,
       abortController: runtimeAbortController,
       agentCounter: 0,
+      pipelineCounter: 0,
+      pipelineSummaries: [],
       startedAt: startTime.toISOString(),
       idGenerator: deps.idGenerator !== undefined ? deps.idGenerator : undefined,
       failFast: input.cli.failFast
@@ -291,6 +294,7 @@ export function buildSucceededRunResult(
     status: "succeeded",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
+    pipelines: runtime.pipelineSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
@@ -325,6 +329,7 @@ export function buildFailedRunResult(
     status: "failed",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
+    pipelines: runtime.pipelineSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
@@ -360,6 +365,7 @@ export function buildCancelledRunResult(
     status: "cancelled",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
+    pipelines: runtime.pipelineSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,

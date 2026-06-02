@@ -84,6 +84,45 @@ export class PrettyReporter implements Reporter {
         this.stdout.write(`✕ ${label} cancelled [${payload.provider}] ${errMsg}\n`);
         break;
       }
+      case "pipeline.started": {
+        const labelText = payload.label ? ` (${payload.label})` : "";
+        this.stdout.write(`◇ Pipeline ${payload.pipelineId}${labelText} started [strategy: ${payload.strategy}, items: ${payload.itemCount}]\n`);
+        break;
+      }
+      case "pipeline.stage.started": {
+        if (this.verbose) {
+          this.stdout.write(`  → Item ${payload.itemIndex}: Stage ${payload.stageName} started\n`);
+        }
+        break;
+      }
+      case "pipeline.stage.completed": {
+        if (this.verbose) {
+          const dur = formatDuration(payload.durationMs);
+          this.stdout.write(`  ✓ Item ${payload.itemIndex}: Stage ${payload.stageName} completed ${dur}\n`);
+        }
+        break;
+      }
+      case "pipeline.stage.failed": {
+        const errMsg = payload.error?.message || "Unknown error";
+        this.stdout.write(`  ✕ Item ${payload.itemIndex}: Stage ${payload.stageName} failed: ${errMsg}\n`);
+        break;
+      }
+      case "pipeline.completed":
+      case "pipeline.cancelled":
+      case "pipeline.failed": {
+        const dur = formatDuration(payload.durationMs);
+        if (type === "pipeline.completed") {
+          this.stdout.write(`✓ Pipeline ${payload.pipelineId} completed successfully ${dur}\n`);
+        } else if (type === "pipeline.cancelled") {
+          this.stdout.write(`✕ Pipeline ${payload.pipelineId} cancelled ${dur}\n`);
+        } else {
+          this.stdout.write(`✕ Pipeline ${payload.pipelineId} failed ${dur}\n`);
+        }
+        if (payload.artifactPath) {
+          this.stdout.write(`  Artifacts: ${payload.artifactPath}\n`);
+        }
+        break;
+      }
       case "workflow.completed": {
         this.stdout.write(`✓ Workflow completed successfully\n`);
         break;
