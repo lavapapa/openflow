@@ -1,0 +1,11 @@
+openflow-workflow-author/
+  SKILL.md
+  references/
+    README.md
+    api-document.md
+    cli-commands.md
+    configuration.md
+  assets/
+    basic-workflow.template.ts
+    parallel-workflow.template.ts
+    pipeline-workflow.template.ts
