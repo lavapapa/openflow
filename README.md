@@ -4,6 +4,8 @@ OpenFlow is a local-first command-line workflow runner for orchestrating coding-
 
 It lets engineers define constrained JavaScript-like workflows, run agent tasks sequentially or in parallel, capture structured results, and persist durable run artifacts for local debugging and CI automation.
 
+![OpenFlow](images/demo.png)
+
 ---
 
 ## Why OpenFlow?
