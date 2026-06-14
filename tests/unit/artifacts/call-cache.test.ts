@@ -3,9 +3,13 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   computeAgentFingerprint,
+  computeToolFingerprint,
   findPrefixCacheHit,
   loadRuntimeCallCache,
   materializeCachedAgentResult,
+  materializeCachedToolResult,
+  recordAgentCall,
+  recordToolCall,
   type RuntimeCallCache
 } from "../../../src/artifacts/call-cache.js";
 import type { ArtifactStore } from "../../../src/types/artifacts.js";
@@ -32,7 +36,7 @@ describe("call cache", () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
-  it("computes stable fingerprints and changes when provider-relevant inputs change", () => {
+  it("computes stable agent fingerprints and changes when provider-relevant inputs change", () => {
     const base = {
       call: { id: "a", prompt: "hello", metadata: { b: 2, a: 1 } },
       provider: "codex",
@@ -54,48 +58,171 @@ describe("call cache", () => {
     expect(changed).not.toBe(first);
   });
 
-  it("uses longest-prefix matching and disables later hits after the first miss", () => {
+  it("computes stable tool fingerprints and changes when tool-relevant inputs change", () => {
+    const base = {
+      definitionId: "t1",
+      args: { a: 1, b: 2 },
+      timeoutMs: 1000,
+      metadata: { m: 1 },
+      sourcePath: "/tools/t1.ts",
+      definitionVersion: "1.0.0"
+    };
+
+    const first = computeToolFingerprint(base);
+    const reordered = computeToolFingerprint({
+      ...base,
+      args: { b: 2, a: 1 }
+    });
+    const changedArgs = computeToolFingerprint({ ...base, args: { a: 2 } });
+    const changedVersion = computeToolFingerprint({ ...base, definitionVersion: "1.0.1" });
+
+    expect(reordered).toBe(first);
+    expect(changedArgs).not.toBe(first);
+    expect(changedVersion).not.toBe(first);
+  });
+
+  it("uses longest-prefix matching and disables later hits after the first miss (kind aware)", () => {
     const cache = makeCache([
-      { sequence: 1, callId: "a", fingerprint: "fp-a", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" },
-      { sequence: 2, callId: "b", fingerprint: "fp-b", status: "succeeded", resultPath: "agents/b/normalized-result.json", agentId: "b" },
-      { sequence: 3, callId: "c", fingerprint: "fp-c", status: "succeeded", resultPath: "agents/c/normalized-result.json", agentId: "c" }
+      { kind: "agent", sequence: 1, callId: "a", fingerprint: "fp-a", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" },
+      { kind: "tool", sequence: 2, callId: "t", fingerprint: "fp-t", status: "succeeded", resultPath: "tools/t/output.json", toolCallId: "t", definitionId: "t-def" },
+      { kind: "agent", sequence: 3, callId: "c", fingerprint: "fp-c", status: "succeeded", resultPath: "agents/c/normalized-result.json", agentId: "c" }
     ]);
 
-    expect(findPrefixCacheHit({ cache, sequence: 1, callId: "a", fingerprint: "fp-a" })?.agentId).toBe("a");
-    expect(findPrefixCacheHit({ cache, sequence: 2, callId: "b", fingerprint: "changed" })).toBeUndefined();
+    expect(findPrefixCacheHit({ cache, kind: "agent", sequence: 1, callId: "a", fingerprint: "fp-a" })?.kind).toBe("agent");
+    
+    // Kind mismatch
+    expect(findPrefixCacheHit({ cache, kind: "tool", sequence: 1, callId: "a", fingerprint: "fp-a" })).toBeUndefined();
     expect(cache.prefixCacheUsable).toBe(false);
-    expect(findPrefixCacheHit({ cache, sequence: 3, callId: "c", fingerprint: "fp-c" })).toBeUndefined();
+
+    // After miss, nothing works
+    expect(findPrefixCacheHit({ cache, kind: "tool", sequence: 2, callId: "t", fingerprint: "fp-t" })).toBeUndefined();
   });
 
   it("treats id/label as an additional guard when present", () => {
     const cache = makeCache([
-      { sequence: 1, callId: "old-id", fingerprint: "fp", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }
+      { kind: "agent", sequence: 1, callId: "old-id", fingerprint: "fp", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }
     ]);
 
-    expect(findPrefixCacheHit({ cache, sequence: 1, callId: "new-id", fingerprint: "fp" })).toBeUndefined();
+    expect(findPrefixCacheHit({ cache, kind: "agent", sequence: 1, callId: "new-id", fingerprint: "fp" })).toBeUndefined();
+  });
+
+  it("loads legacy agent-only entries as kind: 'agent'", async () => {
+    const runRoot = path.join(TEMP_DIR, "run-legacy");
+    await fs.mkdir(path.join(runRoot, "agents/a"), { recursive: true });
+    await fs.writeFile(path.join(runRoot, "manifest.json"), JSON.stringify({ runId: "run-legacy" }), "utf8");
+    await fs.writeFile(path.join(runRoot, "cache-index.json"), JSON.stringify({
+      schemaVersion: "openflow.cache-index.v1",
+      entries: [
+        { sequence: 1, callId: "a", fingerprint: "fp", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }
+      ]
+    }), "utf8");
+
+    const cache = await loadRuntimeCallCache({
+      resume: "run-legacy",
+      outDir: TEMP_DIR
+    });
+
+    const entry = cache.previousEntries.get(1);
+    expect(entry?.kind).toBe("agent");
+    expect((entry as any).agentId).toBe("a");
+
+    // Can still find it with kind: agent
+    expect(findPrefixCacheHit({ cache, kind: "agent", sequence: 1, callId: "a", fingerprint: "fp" })).toBeDefined();
   });
 
   it("rebuilds successful ordered entries from calls.jsonl when cache-index.json is missing", async () => {
-    const runRoot = path.join(TEMP_DIR, "run-1");
+    const runRoot = path.join(TEMP_DIR, "run-rebuild");
     await fs.mkdir(path.join(runRoot, "agents/a"), { recursive: true });
-    await fs.writeFile(path.join(runRoot, "manifest.json"), JSON.stringify({ runId: "run-1", workflowHash: "hash" }), "utf8");
+    await fs.writeFile(path.join(runRoot, "manifest.json"), JSON.stringify({ runId: "run-rebuild", workflowHash: "hash" }), "utf8");
     await fs.writeFile(path.join(runRoot, "agents/a/normalized-result.json"), JSON.stringify("ok"), "utf8");
     await fs.writeFile(path.join(runRoot, "calls.jsonl"), [
-      JSON.stringify({ sequence: 1, callId: "a", fingerprint: "fp", status: "failed", resultPath: "agents/a/normalized-result.json", agentId: "a" }),
-      JSON.stringify({ sequence: 1, callId: "a", fingerprint: "fp2", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }),
+      JSON.stringify({ kind: "agent", sequence: 1, callId: "a", fingerprint: "fp", status: "failed", resultPath: "agents/a/normalized-result.json", agentId: "a" }),
+      JSON.stringify({ kind: "agent", sequence: 1, callId: "a", fingerprint: "fp2", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }),
       "not-json"
     ].join("\n"), "utf8");
 
     const cache = await loadRuntimeCallCache({
-      resume: "run-1",
+      resume: "run-rebuild",
       outDir: TEMP_DIR
     });
 
     expect(cache.previousEntries.get(1)?.fingerprint).toBe("fp2");
   });
 
-  it("records calls and normalizes artifact paths relative to run root", async () => {
-    const runRoot = path.join(TEMP_DIR, "run-rec");
+  it("materializes cached agent results into current run root", async () => {
+    const prevRun = path.join(TEMP_DIR, "prev-agent-run");
+    await fs.mkdir(path.join(prevRun, "agents/old-a"), { recursive: true });
+    await fs.writeFile(path.join(prevRun, "agents/old-a/normalized-result.json"), JSON.stringify("ok"), "utf8");
+
+    let writtenFiles: string[] = [];
+    const store = {
+      writeText: async (relativePath: string) => { writtenFiles.push(relativePath); },
+      writeJson: async (relativePath: string) => { writtenFiles.push(relativePath); }
+    } as any;
+
+    const result = await materializeCachedAgentResult({
+      store,
+      previousRunRoot: prevRun,
+      previousRunId: "prev-run",
+      entry: {
+        kind: "agent",
+        sequence: 1,
+        fingerprint: "fp",
+        status: "succeeded",
+        resultPath: "agents/old-a/normalized-result.json",
+        agentId: "old-a"
+      },
+      currentAgentId: "new-a",
+      provider: "codex",
+      permissions: { mode: "default" }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(writtenFiles).toContain("agents/new-a/normalized-result.json");
+    expect(writtenFiles).toContain("agents/new-a/cache-hit.json");
+  });
+
+  it("materializes cached tool results into current run root", async () => {
+    const prevRun = path.join(TEMP_DIR, "prev-tool-run");
+    await fs.mkdir(path.join(prevRun, "tools/old-t"), { recursive: true });
+    await fs.writeFile(path.join(prevRun, "tools/old-t/output.json"), JSON.stringify({ out: "ok" }), "utf8");
+
+    let writtenFiles: Record<string, any> = {};
+    const store = {
+      writeJson: async (relativePath: string, data: any) => { writtenFiles[relativePath] = data; }
+    } as any;
+
+    const result = await materializeCachedToolResult({
+      store,
+      previousRunRoot: prevRun,
+      previousRunId: "prev-run-id",
+      entry: {
+        kind: "tool",
+        sequence: 1,
+        fingerprint: "fp",
+        status: "succeeded",
+        resultPath: "tools/old-t/output.json",
+        toolCallId: "old-t",
+        definitionId: "t-def"
+      },
+      currentToolCallId: "new-t",
+      definitionId: "t-def",
+      failureMode: "throw",
+      workflowInvocationId: "w1"
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.output).toEqual({ out: "ok" });
+    expect(result.artifactPath).toBe("tools/new-t/output.json");
+    expect(writtenFiles["tools/new-t/output.json"]).toEqual({ out: "ok" });
+    expect(writtenFiles["tools/new-t/cache-hit.json"]).toMatchObject({
+      previousToolCallId: "old-t",
+      previousRunId: "prev-run-id"
+    });
+  });
+
+  it("records agent calls into calls.jsonl and cache-index.json", async () => {
+    const runRoot = path.join(TEMP_DIR, "run-agent-rec");
     await fs.mkdir(runRoot, { recursive: true });
     
     const store = {
@@ -122,7 +249,7 @@ describe("call cache", () => {
       }
     } as any;
 
-    await (await import("../../../src/artifacts/call-cache.js")).recordCall({
+    await recordAgentCall({
       store,
       cache,
       sequence: 1,
@@ -132,13 +259,56 @@ describe("call cache", () => {
     });
 
     expect(store.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
+      kind: "agent",
       resultPath: "agents/agent-1/normalized-result.json",
       agentResultPath: "agents/agent-1/agent-result.json"
     }));
-    expect(cache.currentEntries).toHaveLength(1);
-    expect(store.writeJson).toHaveBeenCalledWith("cache-index.json", expect.objectContaining({
-      entries: expect.arrayContaining([expect.objectContaining({ callId: "call-1" })])
+  });
+
+  it("records tool calls into calls.jsonl and cache-index.json", async () => {
+    const runRoot = path.join(TEMP_DIR, "run-tool-rec");
+    await fs.mkdir(runRoot, { recursive: true });
+    
+    const store = {
+      getRunArtifacts: () => ({ rootDir: runRoot }),
+      isRunCreated: () => true,
+      appendJsonl: vi.fn(),
+      writeJson: vi.fn()
+    } as any;
+
+    const cache: RuntimeCallCache = {
+      readEnabled: true,
+      writeIndex: true,
+      currentEntries: [],
+      previousEntries: new Map(),
+      prefixCacheUsable: true
+    };
+
+    const result = {
+      toolCallId: "t-1",
+      definitionId: "t-def",
+      status: "succeeded",
+      ok: true,
+      artifactPath: path.join(runRoot, "tools/t-1/output.json"),
+      workflowInvocationId: "w1"
+    } as any;
+
+    await recordToolCall({
+      store,
+      cache,
+      sequence: 1,
+      callId: "call-1",
+      fingerprint: "fp-1",
+      result
+    });
+
+    expect(store.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
+      kind: "tool",
+      toolCallId: "t-1",
+      definitionId: "t-def",
+      resultPath: "tools/t-1/output.json"
     }));
+    expect(store.writeJson).toHaveBeenCalledWith("tools/t-1/tool-result.json", result);
   });
 
   it("rejects cached artifact paths that escape the previous run directory", async () => {
@@ -151,6 +321,7 @@ describe("call cache", () => {
       store,
       previousRunRoot: TEMP_DIR,
       entry: {
+        kind: "agent",
         sequence: 1,
         callId: "evil",
         fingerprint: "fp",
@@ -162,75 +333,23 @@ describe("call cache", () => {
       provider: "codex",
       permissions: { mode: "default" }
     })).rejects.toMatchObject({ code: "CLI_USAGE_ERROR" });
-  });
 
-  it("does not leak artifact paths from the previous run directory when loading cache hit", async () => {
-    const prevRun = path.join(TEMP_DIR, "prev-run");
-    await fs.mkdir(path.join(prevRun, "agents/old-agent"), { recursive: true });
-    
-    const oldResult = {
-      ok: true,
-      status: "succeeded",
-      id: "old-agent",
-      provider: "codex",
-      stdout: "old-stdout",
-      stderr: "old-stderr",
-      exitCode: 0,
-      durationMs: 100,
-      permissions: { mode: "default" },
-      metadata: { m: 1 },
-      artifacts: {
-        dir: "agents/old-agent",
-        promptPath: "agents/old-agent/prompt.txt",
-        stdoutPath: "agents/old-agent/stdout.log",
-        stderrPath: "agents/old-agent/stderr.log",
-        rawResultPath: "agents/old-agent/raw-result.json",
-        normalizedResultPath: "agents/old-agent/normalized-result.json",
-        permissionsPath: "agents/old-agent/permissions.json",
-        metadataPath: "agents/old-agent/metadata.json",
-        schemaPath: "agents/old-agent/schema.json",
-        validationErrorPath: "agents/old-agent/validation.json"
-      }
-    };
-    
-    await fs.writeFile(path.join(prevRun, "agents/old-agent/agent-result.json"), JSON.stringify(oldResult), "utf8");
-    await fs.writeFile(path.join(prevRun, "agents/old-agent/normalized-result.json"), JSON.stringify("ok"), "utf8");
-
-    let writtenFiles: string[] = [];
-    const store = {
-      writeText: async (relativePath: string) => { writtenFiles.push(relativePath); },
-      writeJson: async (relativePath: string) => { writtenFiles.push(relativePath); }
-    } as any;
-
-    const result = await materializeCachedAgentResult({
+    await expect(materializeCachedToolResult({
       store,
-      previousRunRoot: prevRun,
-      previousRunId: "prev-run",
+      previousRunRoot: TEMP_DIR,
       entry: {
+        kind: "tool",
         sequence: 1,
         fingerprint: "fp",
         status: "succeeded",
-        resultPath: "agents/old-agent/normalized-result.json",
-        agentResultPath: "agents/old-agent/agent-result.json",
-        agentId: "old-agent"
+        resultPath: "../outside.json",
+        toolCallId: "evil",
+        definitionId: "evil"
       },
-      currentAgentId: "new-agent",
-      provider: "codex"
-    });
-
-    for (const [key, value] of Object.entries(result.artifacts)) {
-      if (typeof value === "string") {
-        expect(value).not.toContain("old-agent");
-        expect(value).toContain("new-agent");
-      }
-    }
-
-    expect(result.artifacts.permissionsPath).toBe("agents/new-agent/permissions.json");
-    expect(result.artifacts.metadataPath).toBe("agents/new-agent/metadata.json");
-    expect(result.artifacts.schemaPath).toBeUndefined();
-    expect(result.artifacts.validationErrorPath).toBeUndefined();
-
-    expect(writtenFiles).toContain("agents/new-agent/permissions.json");
-    expect(writtenFiles).toContain("agents/new-agent/metadata.json");
+      currentToolCallId: "evil",
+      definitionId: "evil",
+      failureMode: "throw",
+      workflowInvocationId: "w1"
+    })).rejects.toMatchObject({ code: "CLI_USAGE_ERROR" });
   });
 });

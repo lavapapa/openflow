@@ -38,6 +38,7 @@ export type EventType =
   | "tool.queued"
   | "tool.started"
   | "tool.completed"
+  | "tool.cache_hit"
   | "tool.failed"
   | "tool.timed_out"
   | "tool.cancelled";
@@ -296,6 +297,17 @@ export interface ToolEventPayload {
   artifactPath: string;
   inputPreview?: unknown;
   outputPreview?: unknown;
+}
+
+export interface ToolCacheHitPayload {
+  toolCallId: string;
+  definition: string;
+  label?: string;
+  sequence: number;
+  callId?: string;
+  previousRunId?: string;
+  previousToolCallId: string;
+  artifactPath: string;
 }
 
 export function isEventEnvelope(value: unknown): value is EventEnvelope {

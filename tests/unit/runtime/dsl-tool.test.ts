@@ -3,28 +3,127 @@ import { createDsl } from "../../../src/workflow/dsl.js";
 import { withDslExecutionScope, withToolForbidden } from "../../../src/workflow/scope.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
 import { OpenFlowError } from "../../../src/errors/types.js";
+import * as callCache from "../../../src/artifacts/call-cache.js";
+
+vi.mock("../../../src/artifacts/call-cache.js", async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    computeToolFingerprint: vi.fn().mockReturnValue("test-fingerprint"),
+    findPrefixCacheHit: vi.fn().mockReturnValue(undefined),
+    materializeCachedToolResult: vi.fn(),
+    recordToolCall: vi.fn(),
+    recordAgentCall: vi.fn()
+  };
+});
 
 describe("DSL tool() runtime", () => {
   let mockRuntime: any;
 
   beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(callCache.computeToolFingerprint).mockReturnValue("test-fingerprint");
+    vi.mocked(callCache.findPrefixCacheHit).mockReturnValue(undefined);
     mockRuntime = {
       runId: "test-run",
       config: { timeoutMs: 30000 },
       abortController: new AbortController(),
       toolCallIds: new Set(),
       toolCounter: 0,
+      callSequence: 0,
+      agentResults: [],
+      toolResults: [],
       toolRegistry: {
         require: vi.fn().mockReturnValue({ 
-          definition: { id: "read-json", defaultTimeoutMs: 1000, run: async () => ({}) },
-          validateInput: vi.fn().mockReturnValue({ ok: true, value: {} })
+          definition: { id: "read-json", defaultTimeoutMs: 1000, cacheable: true, run: async () => ({}) },
+          validateInput: vi.fn().mockReturnValue({ ok: true, value: {} }),
+          sourcePath: "tools/read-json.ts"
         })
       },
       toolExecutor: {
         execute: vi.fn().mockResolvedValue({ ok: true, output: { content: "{}" }, durationMs: 1 }),
-        getSummaries: vi.fn().mockReturnValue([])
-      }
+        getSummaries: vi.fn().mockReturnValue([]),
+        addSummary: vi.fn()
+      },
+      artifactStore: {},
+      callCache: { readEnabled: true, prefixCacheUsable: true, previousRunRoot: "/prev" },
+      eventSink: { emit: vi.fn() }
     };
+  });
+
+  it("should return cached result on cache hit", async () => {
+    const dsl = createDsl(mockRuntime);
+    const scope = {
+      runId: "test-run",
+      workflowInvocationId: "root",
+      location: "workflow-top-level" as const,
+      toolAllowed: true,
+      topLevelWindow: true
+    };
+
+    const mockCachedResult = {
+      ok: true,
+      status: "succeeded",
+      toolCallId: "tool-0001-read-json",
+      definitionId: "read-json",
+      output: { content: "cached" },
+      durationMs: 0,
+      artifactPath: "tools/tool-0001-read-json/output.json"
+    };
+
+    vi.mocked(callCache.findPrefixCacheHit).mockReturnValue({
+      kind: "tool",
+      sequence: 1,
+      toolCallId: "prev-tool-0001",
+      fingerprint: "test-fingerprint",
+      status: "succeeded",
+      resultPath: "prev/tools/prev-tool-0001/output.json"
+    } as any);
+
+    vi.mocked(callCache.materializeCachedToolResult).mockResolvedValue(mockCachedResult as any);
+
+    const result = await withDslExecutionScope(scope, () => 
+      dsl.tool({ definition: "read-json", args: { path: "foo.json" } })
+    );
+
+    expect(result).toEqual({ content: "cached" });
+    expect(callCache.findPrefixCacheHit).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "tool",
+      sequence: 1
+    }));
+    expect(callCache.materializeCachedToolResult).toHaveBeenCalled();
+    expect(mockRuntime.eventSink.emit).toHaveBeenCalledWith("tool.cache_hit", expect.objectContaining({
+      definition: "read-json"
+    }));
+    expect(mockRuntime.toolExecutor.execute).not.toHaveBeenCalled();
+    expect(callCache.recordToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      result: mockCachedResult
+    }));
+  });
+
+  it("should disable prefix cache for non-cacheable tools", async () => {
+    mockRuntime.toolRegistry.require.mockReturnValue({ 
+      definition: { id: "write-file", defaultTimeoutMs: 1000, cacheable: false, run: async () => ({}) },
+      validateInput: vi.fn().mockReturnValue({ ok: true, value: {} }),
+      sourcePath: "tools/write-file.ts"
+    });
+
+    const dsl = createDsl(mockRuntime);
+    const scope = {
+      runId: "test-run",
+      workflowInvocationId: "root",
+      location: "workflow-top-level" as const,
+      toolAllowed: true,
+      topLevelWindow: true
+    };
+
+    await withDslExecutionScope(scope, () => 
+      dsl.tool({ definition: "write-file", args: { path: "foo.json", content: "bar" } })
+    );
+
+    expect(mockRuntime.callCache.prefixCacheUsable).toBe(false);
+    expect(callCache.findPrefixCacheHit).not.toHaveBeenCalled();
+    expect(mockRuntime.callSequence).toBe(0); 
   });
 
   it("should execute tool successfully in valid context", async () => {

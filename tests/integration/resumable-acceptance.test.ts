@@ -280,9 +280,9 @@ export default async (ctx) => {
     await writeConfig(configPath);
     
     const warningCases = [
-      { name: "date-now", code: "const t = Date.now();", msg: "Using Date.now() prevents resume and cache support." },
-      { name: "new-date", code: "const d = new Date();", msg: "Using new Date() prevents resume and cache support." },
-      { name: "math-random", code: "const r = Math.random();", msg: "Using Math.random() prevents resume and cache support." }
+      { name: "date-now", code: "const t = Date.now();", msg: "Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead." },
+      { name: "new-date", code: "const d = new Date();", msg: "Avoid new Date(): it prevents deterministic resume/cache behavior. Use tool() instead." },
+      { name: "math-random", code: "const r = Math.random();", msg: "Avoid Math.random(): it prevents deterministic resume/cache behavior. Use tool() instead." }
     ];
 
     for (const { name, code, msg } of warningCases) {
@@ -688,5 +688,114 @@ export default async (ctx) => { "done" };`);
     const errorMessage = error.message + stdout;
     expect(errorMessage).toContain("run-input.json");
     expect(errorMessage).toContain("missing");
+  });
+
+  it("AT-TOOL-01: Tool cache hit in pretty report", async () => {
+    // Arrange
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-at-01.ts");
+    const configPath = path.join(TEMP_DIR, "config.yaml");
+    const runsDir = path.join(TEMP_DIR, "runs-tool-01");
+    const toolsDir = path.join(TEMP_DIR, "tools-01");
+    await fs.mkdir(toolsDir, { recursive: true });
+    await fs.writeFile(path.join(toolsDir, "tool-01.ts"), `
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "tool-01",
+  description: "test",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: () => "ok"
+};`);
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `export const meta = { name: "tool-at-01", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "tool-01", args: {}, label: "my-tool" });
+  return "done";
+};`);
+
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir, "--report", "pretty"]);
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Act
+    const { stdout } = await runCli(["resume", firstRunId!, "--out", runsDir, "--report", "pretty"]);
+    
+    // Assert
+    expect(stdout).toContain("↻ my-tool tool cache hit");
+  });
+
+  it("AT-TOOL-02: Tool cache hit in JSONL events and report", async () => {
+    // Arrange
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-at-02.ts");
+    const configPath = path.join(TEMP_DIR, "config.yaml");
+    const runsDir = path.join(TEMP_DIR, "runs-tool-02");
+    const toolsDir = path.join(TEMP_DIR, "tools-02");
+    await fs.mkdir(toolsDir, { recursive: true });
+    await fs.writeFile(path.join(toolsDir, "tool-02.ts"), `
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "tool-02",
+  description: "test",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: () => "ok"
+};`);
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `export const meta = { name: "tool-at-02", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "tool-02", args: {}, id: "tool-instance" });
+  return "done";
+};`);
+
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Act
+    await runCli(["resume", firstRunId!, "--out", runsDir]);
+    
+    // Assert
+    const runDirs = await listRunDirs(runsDir);
+    const secondRunId = runDirs.find(id => id !== firstRunId)!;
+    
+    const events = await fs.readFile(path.join(runsDir, secondRunId, "events.jsonl"), "utf8");
+    expect(events).toContain('"type":"tool.cache_hit"');
+    expect(events).toContain('"definition":"tool-02"');
+    
+    const report = JSON.parse(await fs.readFile(path.join(runsDir, secondRunId, "report.json"), "utf8"));
+    expect(report.tools).toBeDefined();
+    expect(report.tools[0].definition).toBe("tool-02");
+    expect(report.tools[0].cache.hit).toBe(true);
+    expect(report.tools[0].cache.previousRunId).toBe(firstRunId);
   });
 });

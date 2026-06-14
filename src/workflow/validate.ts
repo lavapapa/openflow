@@ -860,7 +860,7 @@ export function validateWorkflow(
     if (ts.isNewExpression(node)) {
       const expression = node.expression;
       if (ts.isIdentifier(expression) && expression.text === "Date" && (!node.arguments || node.arguments.length === 0)) {
-        report(node, "Using new Date() prevents resume and cache support.", "warning");
+        report(node, "Avoid new Date(): it prevents deterministic resume/cache behavior. Use tool() instead.", "warning");
       }
     }
 
@@ -874,9 +874,9 @@ export function validateWorkflow(
         report(node, "Access to '__proto__' is not allowed.");
       } else if (ts.isIdentifier(expr)) {
         if (expr.text === "Date" && name.text === "now") {
-          report(node, "Using Date.now() prevents resume and cache support.", "warning");
+          report(node, "Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead.", "warning");
         } else if (expr.text === "Math" && name.text === "random") {
-          report(node, "Using Math.random() prevents resume and cache support.", "warning");
+          report(node, "Avoid Math.random(): it prevents deterministic resume/cache behavior. Use tool() instead.", "warning");
         }
       }
     }

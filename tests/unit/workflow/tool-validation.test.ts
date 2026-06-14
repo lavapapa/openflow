@@ -13,6 +13,8 @@ describe("Workflow Tool Input Validation", () => {
       abortController: new AbortController(),
       toolCallIds: new Set(["duplicate-id"]),
       toolCounter: 0,
+      agentResults: [],
+      toolResults: [],
       toolRegistry: {
         require: () => ({
           definition: { id: "test-tool", defaultTimeoutMs: 1000, run: () => ({}) },

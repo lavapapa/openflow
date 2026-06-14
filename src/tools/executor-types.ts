@@ -40,4 +40,5 @@ export interface ToolExecutor {
   cancel(reason: SerializedError): void;
   close(): Promise<void>;
   getSummaries(): readonly ToolSummary[];
+  addSummary(summary: ToolSummary): void;
 }

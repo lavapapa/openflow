@@ -12,17 +12,21 @@ import { createPipelineAgentId } from "../pipeline/id.js";
 import { isStructuredOutputTransport } from "../structured/structured-output.js";
 import {
   computeAgentFingerprint,
+  computeToolFingerprint,
   findPrefixCacheHit,
   materializeCachedAgentResult,
-  recordCall,
-  resolveCallId
+  materializeCachedToolResult,
+  recordAgentCall,
+  recordToolCall,
+  resolveCallId,
+  type ToolCallCacheEntry
 } from "../artifacts/call-cache.js";
 import { executeSharedAgent } from "../shared-agents/execute.js";
 import { serializeError } from "../errors/serialize.js";
 import { cloneJsonValue } from "./json.js";
 import { getActiveWorkflowInvocation } from "./invocation-types.js";
 import { assertToolAllowed, withToolForbidden } from "./scope.js";
-import type { ToolCallInput, ToolExecutionResult, ToolSettledResult } from "../types/tool.js";
+import type { ToolCallInput, ToolExecutionResult, ToolSettledResult, ToolFailureMode } from "../types/tool.js";
 import type { PreparedToolCall } from "../tools/executor-types.js";
 import type { 
   PipelineStage, 
@@ -233,6 +237,7 @@ export function createDsl(runtime: RuntimeState) {
 
     const cachedEntry = findPrefixCacheHit({
       cache: runtime.callCache,
+      kind: "agent",
       sequence,
       callId,
       fingerprint
@@ -261,7 +266,7 @@ export function createDsl(runtime: RuntimeState) {
         previousAgentId: cachedEntry.agentId,
         artifacts: cachedResult.artifacts
       });
-      await recordCall({
+      await recordAgentCall({
         store: runtime.artifactStore,
         cache: runtime.callCache,
         sequence,
@@ -360,7 +365,7 @@ export function createDsl(runtime: RuntimeState) {
     try {
       const result = await runtime.scheduler.schedule(task, scheduleOptions);
       runtime.agentResults.push(result);
-      await recordCall({
+      await recordAgentCall({
         store: runtime.artifactStore,
         cache: runtime.callCache,
         sequence,
@@ -523,19 +528,118 @@ export function createDsl(runtime: RuntimeState) {
       workflowInvocationId: scope.workflowInvocationId,
       parentWorkflowInvocationId: scope.parentWorkflowInvocationId,
       queuedAt: new Date().toISOString(),
-      artifactPath: `tools/${toolCallId}`,
+      artifactPath: `tools/${toolCallId}/output.json`,
       invocationSignal: activeInvocation?.signal || runtime.abortController.signal
     };
 
+    const isCacheable = !!definition.definition.cacheable;
+    let sequence: number | undefined;
+    let fingerprint: string | undefined;
+    let callId: string | undefined;
+
+    if (isCacheable) {
+      sequence = (runtime.callSequence ?? 0) + 1;
+      runtime.callSequence = sequence;
+      callId = normalizedInput.id ?? normalizedInput.label;
+      fingerprint = computeToolFingerprint({
+        definitionId: definition.definition.id,
+        args: preparedCall.args,
+        timeoutMs: preparedCall.timeoutMs,
+        metadata: preparedCall.metadata,
+        sourcePath: definition.sourcePath,
+        definitionVersion: definition.definition.metadata?.version
+      });
+
+      const cachedEntry = findPrefixCacheHit({
+        cache: runtime.callCache,
+        kind: "tool",
+        sequence,
+        callId,
+        fingerprint
+      });
+
+      if (cachedEntry && runtime.artifactStore && runtime.callCache?.previousRunRoot) {
+        const cachedResult = await materializeCachedToolResult({
+          store: runtime.artifactStore,
+          previousRunRoot: runtime.callCache.previousRunRoot,
+          previousRunId: runtime.callCache.previousRunId,
+          entry: cachedEntry,
+          currentToolCallId: toolCallId,
+          definitionId: definition.definition.id,
+          failureMode,
+          label: normalizedInput.label,
+          workflowInvocationId: scope.workflowInvocationId,
+          parentWorkflowInvocationId: scope.parentWorkflowInvocationId
+        });
+
+        runtime.eventSink?.emit("tool.cache_hit", {
+          toolCallId,
+          definition: definition.definition.id,
+          label: normalizedInput.label,
+          sequence,
+          callId,
+          previousRunId: runtime.callCache.previousRunId,
+          previousToolCallId: cachedEntry.toolCallId,
+          artifactPath: cachedResult.artifactPath
+        });
+
+        await recordToolCall({
+          store: runtime.artifactStore,
+          cache: runtime.callCache,
+          sequence,
+          callId,
+          fingerprint,
+          result: cachedResult
+        });
+
+        const toolResult = returnToolResult(cachedResult, failureMode);
+        runtime.toolResults.push(cachedResult);
+        if (runtime.toolExecutor) {
+          runtime.toolExecutor.addSummary({
+            toolCallId: cachedResult.toolCallId,
+            definition: cachedResult.definitionId,
+            status: cachedResult.status,
+            ok: cachedResult.ok,
+            workflowInvocationId: cachedResult.workflowInvocationId,
+            parentWorkflowInvocationId: cachedResult.parentWorkflowInvocationId,
+            durationMs: cachedResult.durationMs,
+            artifactPath: cachedResult.artifactPath!,
+            cache: cachedResult.cache
+          });
+        }
+        return toolResult;
+      }
+    } else {
+      if (runtime.callCache) {
+        runtime.callCache.prefixCacheUsable = false;
+      }
+    }
+
     const result = await runtime.toolExecutor.execute(preparedCall);
 
+    if (isCacheable && sequence !== undefined && fingerprint !== undefined) {
+      await recordToolCall({
+        store: runtime.artifactStore,
+        cache: runtime.callCache,
+        sequence,
+        callId,
+        fingerprint,
+        result
+      });
+    }
+
+    runtime.toolResults.push(result);
+    return returnToolResult(result, failureMode);
+  };
+
+  function returnToolResult(result: ToolExecutionResult, failureMode: ToolFailureMode): unknown {
     if (failureMode === "throw") {
       if (!result.ok) {
         let code: ErrorCode = ErrorCode.TOOL_EXECUTION_FAILED;
         if (result.status === "cancelled") code = ErrorCode.TOOL_CANCELLED;
         if (result.status === "timed_out") code = ErrorCode.TOOL_TIMEOUT;
 
-        const error = result.error || { name: "ToolExecutionError", message: `Tool '${normalizedInput.definition}' failed` };
+        const error = result.error || { name: "ToolExecutionError", message: `Tool execution failed` };
         throw new OpenFlowError(
           code,
           `Tool execution ${result.status}: ${error.message}`,
@@ -566,7 +670,7 @@ export function createDsl(runtime: RuntimeState) {
       definition: result.definitionId,
       error: result.error?.error || {
         name: "ToolExecutionError",
-        message: result.error?.message || `Tool '${normalizedInput.definition}' failed`,
+        message: result.error?.message || `Tool failed`,
         code: result.error?.code
       },
       startedAt: result.startedAt,
@@ -574,7 +678,8 @@ export function createDsl(runtime: RuntimeState) {
       durationMs: result.durationMs,
       artifactPath: result.artifactPath!
     } as ToolSettledResult;
-  };
+  }
+
 
   return {
     phase: (name: string): void => {

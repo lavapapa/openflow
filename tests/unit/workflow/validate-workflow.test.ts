@@ -95,7 +95,7 @@ describe("Validate Workflow Restrictions", () => {
       const time = Date.now();
     `);
     const issues = validateWorkflow(parsed, options);
-    expect(issues.some(i => i.message.includes("Using Date.now() prevents resume and cache support.") && i.severity === "warning")).toBe(true);
+    expect(issues.some(i => i.message.includes("Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead.") && i.severity === "warning")).toBe(true);
   });
 
   it("flags Math.random() calls", () => {
@@ -103,7 +103,7 @@ describe("Validate Workflow Restrictions", () => {
       const rand = Math.random();
     `);
     const issues = validateWorkflow(parsed, options);
-    expect(issues.some(i => i.message.includes("Using Math.random() prevents resume and cache support.") && i.severity === "warning")).toBe(true);
+    expect(issues.some(i => i.message.includes("Avoid Math.random(): it prevents deterministic resume/cache behavior. Use tool() instead.") && i.severity === "warning")).toBe(true);
   });
 
   it("flags new Date() without arguments", () => {
@@ -111,7 +111,7 @@ describe("Validate Workflow Restrictions", () => {
       const now = new Date();
     `);
     const issues = validateWorkflow(parsed, options);
-    expect(issues.some(i => i.message.includes("Using new Date() prevents resume and cache support.") && i.severity === "warning")).toBe(true);
+    expect(issues.some(i => i.message.includes("Avoid new Date(): it prevents deterministic resume/cache behavior. Use tool() instead.") && i.severity === "warning")).toBe(true);
   });
 
   it("flags constructor access", () => {

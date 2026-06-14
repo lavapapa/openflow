@@ -101,6 +101,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       cwd,
       artifactsDir,
       agentResults: [],
+      toolResults: [],
       scheduler,
       agentExecutor: deps.agentExecutor,
       eventSink: deps.eventSink,

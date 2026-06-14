@@ -280,12 +280,14 @@ After the first mismatch (e.g., you changed a prompt in the middle of a workflow
 
 #### Resume Requires Deterministic Replay
 
-For resume to work correctly, your workflow **must remain deterministic** outside of `agent()` calls. Using non-deterministic APIs outside of `agent()` calls will make resume unsupported.
+For resume to work correctly, your workflow **must remain deterministic** outside of `agent()` calls. Using non-deterministic APIs outside of `agent()` calls will prevent deterministic resume and cache behavior.
 
-Do not use APIs that break replay stability, including:
-
-- `Date.now()` and `new Date()` without arguments
+The validator will issue warnings if it detects:
+- `Date.now()`
+- `new Date()` without arguments
 - `Math.random()`
+
+Tip: Because tool calls are cached and replayed, running non-deterministic code inside a custom tool is safe. On resume, the cached tool result (e.g., the timestamp or random value from the original run) is reused, keeping the workflow deterministic.
 
 Loops should also **use stable `id` values**, such as: `id: \`round-${i}\``.
 

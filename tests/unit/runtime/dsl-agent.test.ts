@@ -516,6 +516,7 @@ describe("DSL: agent()", () => {
         previousRunRoot: runRoot,
         previousRunId: "prev-run",
         previousEntries: new Map([[1, {
+          kind: "agent",
           sequence: 1,
           callId: "call-1",
           fingerprint,

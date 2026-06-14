@@ -398,6 +398,13 @@ export class DefaultToolExecutor implements ToolExecutor {
     return this.summaries;
   }
 
+  addSummary(summary: ToolSummary): void {
+    const existingIndex = this.summaries.findIndex(s => s.toolCallId === summary.toolCallId);
+    if (existingIndex === -1) {
+      this.summaries.push(summary);
+    }
+  }
+
   private async terminalFailure(
     call: PreparedToolCall,
     error: SerializedError,

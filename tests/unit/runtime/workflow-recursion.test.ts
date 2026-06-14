@@ -123,6 +123,7 @@ describe("workflow recursion and depth", () => {
         },
         workflowSummaries: [],
         agentResults: [],
+        toolResults: [],
         abortController: new AbortController()
       } as any;
 
@@ -165,9 +166,9 @@ describe("workflow recursion and depth", () => {
         readEnabled: true,
         previousRunRoot: "/tmp/prev",
         previousEntries: new Map([
-          [1, { sequence: 1, fingerprint: "fp-root-1", status: "succeeded" }],
-          [2, { sequence: 2, fingerprint: "fp-child-1-MISMATCH", status: "succeeded" }],
-          [3, { sequence: 3, fingerprint: "fp-root-2", status: "succeeded" }]
+          [1, { sequence: 1, fingerprint: "fp-root-1", status: "succeeded", kind: "agent" }],
+          [2, { sequence: 2, fingerprint: "fp-child-1-MISMATCH", status: "succeeded", kind: "agent" }],
+          [3, { sequence: 3, fingerprint: "fp-root-2", status: "succeeded", kind: "agent" }]
         ]),
         prefixCacheUsable: true,
         currentEntries: []
@@ -186,6 +187,7 @@ describe("workflow recursion and depth", () => {
         },
         workflowSummaries: [],
         agentResults: [],
+        toolResults: [],
         abortController: new AbortController()
       } as any;
 

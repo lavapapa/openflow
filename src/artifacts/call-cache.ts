@@ -2,19 +2,41 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentCallInput, AgentPermissions, AgentResult, AgentSuccessResult } from "../types/agent.js";
+import type { ToolExecutionResult, ToolFailureMode } from "../types/tool.js";
 import type { ArtifactStore } from "../types/artifacts.js";
 import { OpenFlowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
-export interface CallCacheEntry {
+export type CallCacheStatus =
+  | "succeeded"
+  | "failed"
+  | "timed_out"
+  | "cancelled"
+  | "skipped";
+
+export interface BaseCallCacheEntry {
+  kind: "agent" | "tool";
   sequence: number;
   callId?: string | undefined;
   fingerprint: string;
-  status: "succeeded" | "failed" | "timed_out" | "cancelled" | "skipped";
+  status: CallCacheStatus;
   resultPath: string;
-  agentResultPath?: string | undefined;
-  agentId: string;
 }
+
+export interface AgentCallCacheEntry extends BaseCallCacheEntry {
+  kind: "agent";
+  agentId: string;
+  agentResultPath?: string | undefined;
+}
+
+export interface ToolCallCacheEntry extends BaseCallCacheEntry {
+  kind: "tool";
+  toolCallId: string;
+  definitionId: string;
+  toolResultPath?: string | undefined;
+}
+
+export type CallCacheEntry = AgentCallCacheEntry | ToolCallCacheEntry;
 
 export interface CallCacheIndex {
   schemaVersion: "openflow.cache-index.v1";
@@ -91,12 +113,48 @@ export function computeAgentFingerprint(input: {
     .digest("hex");
 }
 
+export function computeToolFingerprint(input: {
+  definitionId: string;
+  args: unknown;
+  timeoutMs?: number | undefined;
+  metadata?: Record<string, unknown> | undefined;
+  sourcePath?: string | undefined;
+  definitionVersion?: unknown;
+}): string {
+  return crypto
+    .createHash("sha256")
+    .update(stableStringify({
+      definitionId: input.definitionId,
+      args: input.args,
+      timeoutMs: input.timeoutMs,
+      metadata: input.metadata,
+      sourcePath: input.sourcePath,
+      definitionVersion: input.definitionVersion
+    }))
+    .digest("hex");
+}
+
 export function resolveCallId(input: AgentCallInput): string | undefined {
   return input.id ?? input.label;
 }
 
 export function findPrefixCacheHit(input: {
   cache?: RuntimeCallCache | undefined;
+  kind: "agent";
+  sequence: number;
+  callId?: string | undefined;
+  fingerprint: string;
+}): AgentCallCacheEntry | undefined;
+export function findPrefixCacheHit(input: {
+  cache?: RuntimeCallCache | undefined;
+  kind: "tool";
+  sequence: number;
+  callId?: string | undefined;
+  fingerprint: string;
+}): ToolCallCacheEntry | undefined;
+export function findPrefixCacheHit(input: {
+  cache?: RuntimeCallCache | undefined;
+  kind: "agent" | "tool";
   sequence: number;
   callId?: string | undefined;
   fingerprint: string;
@@ -109,6 +167,7 @@ export function findPrefixCacheHit(input: {
   const entry = cache.previousEntries.get(input.sequence);
   if (
     !entry ||
+    entry.kind !== input.kind ||
     entry.status !== "succeeded" ||
     entry.fingerprint !== input.fingerprint ||
     !callIdsCompatible(entry.callId, input.callId)
@@ -124,7 +183,7 @@ export async function materializeCachedAgentResult(input: {
   store: ArtifactStore;
   previousRunRoot: string;
   previousRunId?: string | undefined;
-  entry: CallCacheEntry;
+  entry: AgentCallCacheEntry;
   currentAgentId: string;
   label?: string | undefined;
   provider: string;
@@ -233,7 +292,55 @@ export async function materializeCachedAgentResult(input: {
   return success;
 }
 
-export async function recordCall(input: {
+export async function materializeCachedToolResult(input: {
+  store: ArtifactStore;
+  previousRunRoot: string;
+  previousRunId?: string | undefined;
+  entry: ToolCallCacheEntry;
+  currentToolCallId: string;
+  definitionId: string;
+  failureMode: ToolFailureMode;
+  label?: string | undefined;
+  workflowInvocationId: string;
+  parentWorkflowInvocationId?: string | undefined;
+}): Promise<ToolExecutionResult> {
+  const previousResultPath = resolvePreviousRunPath(input.previousRunRoot, input.entry.resultPath);
+  const output = JSON.parse(await fs.readFile(previousResultPath, "utf8"));
+
+  const toolDir = `tools/${input.currentToolCallId}`;
+  await input.store.writeJson(`${toolDir}/output.json`, output);
+  await input.store.writeJson(`${toolDir}/cache-hit.json`, {
+    sequence: input.entry.sequence,
+    callId: input.entry.callId,
+    previousToolCallId: input.entry.toolCallId,
+    previousRunId: input.previousRunId,
+    resultPath: input.entry.resultPath,
+    definitionId: input.definitionId
+  });
+
+  const success: ToolExecutionResult = {
+    ok: true,
+    status: "succeeded",
+    toolCallId: input.currentToolCallId,
+    definitionId: input.definitionId,
+    output,
+    durationMs: 0,
+    artifactPath: `${toolDir}/output.json`,
+    workflowInvocationId: input.workflowInvocationId,
+    parentWorkflowInvocationId: input.parentWorkflowInvocationId,
+    cache: {
+      hit: true,
+      callId: input.entry.callId,
+      previousRunId: input.previousRunId,
+      previousToolCallId: input.entry.toolCallId
+    }
+  };
+
+  await input.store.writeJson(`${toolDir}/tool-result.json`, success);
+  return success;
+}
+
+export async function recordAgentCall(input: {
   store?: ArtifactStore | undefined;
   cache?: RuntimeCallCache | undefined;
   sequence: number;
@@ -241,22 +348,12 @@ export async function recordCall(input: {
   fingerprint: string;
   result: AgentResult;
 }): Promise<void> {
-  if (!input.store) {
-    return;
-  }
-  if (typeof input.store.isRunCreated === "function" && !input.store.isRunCreated()) {
-    return;
-  }
-  if (typeof input.store.appendJsonl !== "function") {
-    return;
-  }
+  if (!input.store || typeof input.store.getRunArtifacts !== "function") return;
 
   const rootDir = input.store.getRunArtifacts().rootDir;
   const normalizePath = (p: string | undefined) => {
     if (!p) return undefined;
-    if (path.isAbsolute(p)) {
-      return path.relative(rootDir, p);
-    }
+    if (path.isAbsolute(p)) return path.relative(rootDir, p);
     return p;
   };
 
@@ -265,11 +362,12 @@ export async function recordCall(input: {
                      (artifacts?.rawResultPath ? normalizePath(artifacts.rawResultPath) : undefined) ??
                      `agents/${input.result.id}/raw-result.json`;
 
-  const entry: CallCacheEntry = {
+  const entry: AgentCallCacheEntry = {
+    kind: "agent",
     sequence: input.sequence,
     ...(input.callId !== undefined ? { callId: input.callId } : {}),
     fingerprint: input.fingerprint,
-    status: input.result.status,
+    status: input.result.status as CallCacheStatus,
     resultPath: resultPath as string,
     agentId: input.result.id
   };
@@ -280,11 +378,73 @@ export async function recordCall(input: {
     await input.store.writeJson(agentResultRelPath, input.result);
   }
 
-  await input.store.appendJsonl("calls.jsonl", entry);
+  await recordCallEntry({
+    store: input.store,
+    cache: input.cache,
+    entry
+  });
+}
+
+export async function recordToolCall(input: {
+  store?: ArtifactStore | undefined;
+  cache?: RuntimeCallCache | undefined;
+  sequence: number;
+  callId?: string | undefined;
+  fingerprint: string;
+  result: ToolExecutionResult;
+}): Promise<void> {
+  if (!input.store || typeof input.store.getRunArtifacts !== "function") return;
+
+  const rootDir = input.store.getRunArtifacts().rootDir;
+  const normalizePath = (p: string | undefined) => {
+    if (!p) return undefined;
+    if (path.isAbsolute(p)) return path.relative(rootDir, p);
+    return p;
+  };
+
+  const resultPath = input.result.artifactPath ? normalizePath(input.result.artifactPath) : `tools/${input.result.toolCallId}/output.json`;
+
+  const entry: ToolCallCacheEntry = {
+    kind: "tool",
+    sequence: input.sequence,
+    ...(input.callId !== undefined ? { callId: input.callId } : {}),
+    fingerprint: input.fingerprint,
+    status: input.result.status as CallCacheStatus,
+    resultPath: resultPath as string,
+    toolCallId: input.result.toolCallId,
+    definitionId: input.result.definitionId
+  };
+
+  if (input.result.ok && typeof input.store.writeJson === "function") {
+    const toolResultRelPath = `tools/${input.result.toolCallId}/tool-result.json`;
+    entry.toolResultPath = toolResultRelPath;
+    await input.store.writeJson(toolResultRelPath, input.result);
+  }
+
+  await recordCallEntry({
+    store: input.store,
+    cache: input.cache,
+    entry
+  });
+}
+
+async function recordCallEntry(input: {
+  store: ArtifactStore;
+  cache?: RuntimeCallCache | undefined;
+  entry: CallCacheEntry;
+}): Promise<void> {
+  if (typeof input.store.isRunCreated === "function" && !input.store.isRunCreated()) {
+    return;
+  }
+  if (typeof input.store.appendJsonl !== "function") {
+    return;
+  }
+
+  await input.store.appendJsonl("calls.jsonl", input.entry);
 
   if (input.cache) {
-    if (input.result.ok && input.cache.writeIndex) {
-      input.cache.currentEntries.push(entry);
+    if (input.entry.status === "succeeded" && input.cache.writeIndex) {
+      input.cache.currentEntries.push(input.entry);
       await input.store.writeJson("cache-index.json", {
         schemaVersion: "openflow.cache-index.v1",
         previousRunId: input.cache.previousRunId,
@@ -297,6 +457,9 @@ export async function recordCall(input: {
     }
   }
 }
+
+/** @deprecated Use recordAgentCall or recordToolCall */
+export const recordCall = recordAgentCall;
 
 async function loadCacheIndex(previousRunRoot: string): Promise<CallCacheIndex> {
   const indexPath = path.join(previousRunRoot, "cache-index.json");
@@ -325,8 +488,9 @@ async function rebuildCacheIndexFromCalls(previousRunRoot: string): Promise<Call
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
-      if (isCallCacheEntry(parsed) && parsed.status === "succeeded") {
-        entries[parsed.sequence] = parsed;
+      const entry = normalizeCallCacheEntry(parsed);
+      if (entry && entry.status === "succeeded") {
+        entries[entry.sequence] = entry;
       }
     } catch {
       // Ignore malformed audit lines; calls.jsonl is append-only.
@@ -342,27 +506,68 @@ async function rebuildCacheIndexFromCalls(previousRunRoot: string): Promise<Call
 function filterSucceededEntries(values: unknown[]): CallCacheEntry[] {
   const entries: CallCacheEntry[] = [];
   for (const value of values) {
-    if (isCallCacheEntry(value) && value.status === "succeeded") {
-      entries[value.sequence] = value;
+    const entry = normalizeCallCacheEntry(value);
+    if (entry && entry.status === "succeeded") {
+      entries[entry.sequence] = entry;
     }
   }
   return entries.filter(Boolean);
 }
 
-function isCallCacheEntry(value: unknown): value is CallCacheEntry {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  return (
-    typeof record.sequence === "number" &&
-    Number.isInteger(record.sequence) &&
-    record.sequence > 0 &&
-    (record.callId === undefined || typeof record.callId === "string") &&
-    typeof record.fingerprint === "string" &&
-    typeof record.status === "string" &&
-    typeof record.resultPath === "string" &&
-    typeof record.agentId === "string" &&
-    (record.agentResultPath === undefined || typeof record.agentResultPath === "string")
-  );
+
+  // Detect kind or fallback to legacy agent detection
+  const kind = record.kind === "tool" ? "tool" : "agent";
+
+  if (kind === "agent") {
+    if (
+      typeof record.sequence === "number" &&
+      typeof record.fingerprint === "string" &&
+      typeof record.status === "string" &&
+      typeof record.resultPath === "string" &&
+      typeof record.agentId === "string"
+    ) {
+      return {
+        kind: "agent",
+        sequence: record.sequence,
+        callId: typeof record.callId === "string" ? record.callId : undefined,
+        fingerprint: record.fingerprint,
+        status: record.status as CallCacheStatus,
+        resultPath: record.resultPath,
+        agentId: record.agentId,
+        agentResultPath: typeof record.agentResultPath === "string" ? record.agentResultPath : undefined
+      };
+    }
+  } else if (kind === "tool") {
+    if (
+      typeof record.sequence === "number" &&
+      typeof record.fingerprint === "string" &&
+      typeof record.status === "string" &&
+      typeof record.resultPath === "string" &&
+      typeof record.toolCallId === "string" &&
+      typeof record.definitionId === "string"
+    ) {
+      return {
+        kind: "tool",
+        sequence: record.sequence,
+        callId: typeof record.callId === "string" ? record.callId : undefined,
+        fingerprint: record.fingerprint,
+        status: record.status as CallCacheStatus,
+        resultPath: record.resultPath,
+        toolCallId: record.toolCallId,
+        definitionId: record.definitionId,
+        toolResultPath: typeof record.toolResultPath === "string" ? record.toolResultPath : undefined
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function isCallCacheEntry(value: unknown): value is CallCacheEntry {
+  return normalizeCallCacheEntry(value) !== undefined;
 }
 
 function callIdsCompatible(previous?: string, current?: string): boolean {

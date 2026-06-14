@@ -11,7 +11,7 @@ import type { SharedAgentRegistry } from "../shared-agents/registry.js";
 import type { WorkflowRegistry } from "./registry.js";
 import type { WorkflowInvocationManager, WorkflowInvocationContext } from "./invocation-types.js";
 import type { JsonObject } from "../types/common.js";
-import type { ToolRegistry } from "../types/tool.js";
+import type { ToolRegistry, ToolExecutionResult } from "../types/tool.js";
 import type { ToolExecutor } from "../tools/executor-types.js";
 
 export type { ParsedWorkflow, WorkflowMeta };
@@ -45,6 +45,7 @@ export interface RuntimeState {
   currentPhase?: string | undefined;
   startedAt: string;
   agentResults: AgentResult[];
+  toolResults: ToolExecutionResult[];
   scheduler: Scheduler;
   agentExecutor: AgentExecutor;
   eventSink: RuntimeEventSink;

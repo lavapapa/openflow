@@ -86,6 +86,18 @@ describe("PrettyReporter", () => {
     expect(getStdout()).toBe("↻ my-label cache hit [mock]\n");
   });
 
+  it("tool.cache_hit prints cache hit mark", () => {
+    const { streams, getStdout } = createMockStreams();
+    const reporter = new PrettyReporter(streams);
+
+    reporter.handle({
+      type: "tool.cache_hit",
+      payload: { toolCallId: "tool-1", label: "my-tool", definition: "read-json" }
+    } as any);
+
+    expect(getStdout()).toBe("↻ my-tool tool cache hit\n");
+  });
+
   it("agent.failed prints failure mark and message", () => {
     const { streams, getStdout } = createMockStreams();
     const reporter = new PrettyReporter(streams);

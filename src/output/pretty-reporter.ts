@@ -173,6 +173,11 @@ export class PrettyReporter implements Reporter {
         }
         break;
       }
+      case "tool.cache_hit": {
+        const label = payload.label ?? payload.definition;
+        this.stdout.write(`↻ ${label} tool cache hit\n`);
+        break;
+      }
       case "pipeline.started": {
         const labelStr = payload.label ? ` (${payload.label})` : "";
         this.stdout.write(`◇ Pipeline ${payload.pipelineId}${labelStr} started [strategy: ${payload.strategy}, items: ${payload.itemCount}]\n`);

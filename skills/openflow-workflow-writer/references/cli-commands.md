@@ -71,7 +71,7 @@ openflow resume <previous-run-id>
 
 Resume/cache is intentionally conservative. OpenFlow replays the workflow script and compares each `agent()` call in order. A cached result is reused only while the prefix is unchanged: the call sequence must match, `id` or `label` must match when present, and the call fingerprint must match.
 
-Use stable `id` values for loops, such as `id: \`round-${i}\``. `Date.now()`, `Math.random()`, and argument-free `new Date()` are rejected because they break deterministic replay.
+Use stable `id` values for loops, such as `id: \`round-${i}\``. Using `Date.now()`, `Math.random()`, and argument-free `new Date()` will trigger validation warnings (e.g., `Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead.`) because they prevent deterministic replay. If you need non-deterministic values like timestamps or random numbers, wrap them in a custom `tool()` call so they are cached on the first run and replayed deterministically on subsequent runs.
 
 ---
 

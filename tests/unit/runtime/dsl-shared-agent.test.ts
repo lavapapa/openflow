@@ -194,6 +194,7 @@ describe("DSL shared-agent calls", () => {
         readEnabled: true,
         previousRunRoot: "/tmp/prev",
         previousEntries: new Map([[1, {
+          kind: "agent",
           sequence: 1,
           callId: "cached-wrapper",
           fingerprint,

@@ -841,10 +841,12 @@ To ensure a safe and predictable resume, OpenFlow uses a **deterministic replay*
 ### Requirements for Workflow Authors
 
 * **Stable IDs**: Always use stable `id` values, especially in loops. For example: `id: \`review-${file}\`` or `id: \`step-${i}\``.
-* **Avoid Nondeterminism**: Do not use APIs that produce different values on each run. The following are flagged as **warnings** (non-blocking) during validation:
+* **Avoid Nondeterminism**: Do not use APIs that produce different values on each run. The following are flagged as **warnings** (non-blocking, format: `Avoid <expression>: it prevents deterministic resume/cache behavior. Use tool() instead.`) during validation:
     * `Date.now()`
     * `new Date()` (without arguments)
     * `Math.random()`
+    
+    Tip: Because tool calls are cached and replayed, running non-deterministic code inside a custom tool is safe. On resume, the cached tool result (e.g., the timestamp or random value from the original run) is reused, keeping the workflow deterministic.
 * **No Side Effects during Replay**: Workflow code outside of DSL calls (like `agent()`) should be pure and not depend on external state that changes between runs (like current time or environment variables not pass-through).
 
 ---

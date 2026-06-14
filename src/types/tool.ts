@@ -29,6 +29,7 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   inputSchema: unknown;
   outputSchema?: unknown;
   defaultTimeoutMs?: number;
+  cacheable?: boolean;
   metadata?: Record<string, unknown>;
   run(input: TInput, context: ToolExecutionContext): Promise<TOutput> | TOutput;
 }
@@ -80,6 +81,12 @@ export interface ToolExecutionResult<TOutput = unknown> {
   durationMs: number;
   workflowInvocationId: string;
   parentWorkflowInvocationId?: string | undefined;
+  cache?: {
+    hit: boolean;
+    callId?: string | undefined;
+    previousRunId?: string | undefined;
+    previousToolCallId?: string | undefined;
+  } | undefined;
 }
 
 export type ToolSettledResult<TOutput = unknown> =
@@ -118,6 +125,12 @@ export interface ToolSummary {
   queueDurationMs?: number | undefined;
   durationMs: number;
   artifactPath: string;
+  cache?: {
+    hit: boolean;
+    callId?: string | undefined;
+    previousRunId?: string | undefined;
+    previousToolCallId?: string | undefined;
+  } | undefined;
   error?: {
     code: string;
     message: string;

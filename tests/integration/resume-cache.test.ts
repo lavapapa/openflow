@@ -351,6 +351,532 @@ export default async (ctx) => {
     expect(report.agents.map((a: any) => a.cache?.hit)).toEqual([true, true, true]);
   });
 
+  it("resumes a cacheable tool on the next run without re-executing it", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-cache.ts");
+    const configPath = path.join(TEMP_DIR, "tool-cache.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-cache-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-counter.txt");
+    await writeConfig(configPath);
+    
+    // We'll use a tool that writes to a file to count executions
+    const content = `
+export const meta = { name: "tool-cache", description: "tool cache test" };
+export default async (ctx) => {
+  const res = await ctx.tool({
+    definition: "count-tool",
+    args: { foo: "bar" }
+  });
+  return res;
+};`;
+    await fs.writeFile(workflowPath, content, "utf8");
+
+    // We need to register the tool. We can do this by creating a tool file and adding it to the config.
+    const toolsDir = path.join(TEMP_DIR, "tools");
+    await fs.mkdir(toolsDir, { recursive: true });
+    await fs.writeFile(path.join(toolsDir, "count-tool.ts"), `
+import * as fs from "node:fs";
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "count-tool",
+  description: "counts executions",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: (args) => {
+    const counterPath = ${JSON.stringify(counterPath)};
+    let count = 0;
+    try {
+      count = parseInt(fs.readFileSync(counterPath, "utf8"));
+    } catch {}
+    count++;
+    fs.writeFileSync(counterPath, count.toString());
+    return { count, args };
+  }
+};`, "utf8");
+
+    // Update config to include tools
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+  maxDefinitions: 10
+  concurrency: 1
+`, "utf8");
+
+    // First run
+    expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1");
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Second run (Resume)
+    expect((await runCli(["resume", firstRunId!, "--out", runsDir])).error).toBeNull();
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1"); // Should NOT have incremented
+
+    const runIds = await listRunDirs(runsDir);
+    const secondRunId = runIds.find((id) => id !== firstRunId)!;
+    
+    // Check report for cache hit
+    const report = JSON.parse(await fs.readFile(path.join(runsDir, secondRunId, "report.json"), "utf8"));
+    expect(report.tools).toBeDefined();
+    expect(report.tools[0].cache?.hit).toBe(true);
+    expect(report.tools[0].status).toBe("succeeded");
+
+    // Verify current-run artifacts
+    const toolCallId = report.tools[0].toolCallId;
+    const toolArtifactDir = path.join(runsDir, secondRunId, "tools", toolCallId);
+    expect(await fs.stat(path.join(toolArtifactDir, "output.json"))).toBeDefined();
+    expect(await fs.stat(path.join(toolArtifactDir, "cache-hit.json"))).toBeDefined();
+    
+    const output = JSON.parse(await fs.readFile(path.join(toolArtifactDir, "output.json"), "utf8"));
+    expect(output).toEqual({ count: 1, args: { foo: "bar" } });
+  });
+
+  it("misses tool cache when arguments change", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-miss.ts");
+    const configPath = path.join(TEMP_DIR, "tool-miss.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-miss-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-miss-counter.txt");
+    const toolsDir = path.join(TEMP_DIR, "tools-miss");
+    await fs.mkdir(toolsDir, { recursive: true });
+    
+    await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
+import * as fs from "node:fs";
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "miss-tool",
+  description: "counts executions",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: (args) => {
+    const counterPath = ${JSON.stringify(counterPath)};
+    let count = 0;
+    try {
+      count = parseInt(fs.readFileSync(counterPath, "utf8"));
+    } catch {}
+    count++;
+    fs.writeFileSync(counterPath, count.toString());
+    return { count, args };
+  }
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+  maxDefinitions: 10
+  concurrency: 1
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss", description: "tool miss test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "miss-tool", args: { val: 1 } });
+  return "done";
+};`, "utf8");
+
+    // First run
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1");
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Edit workflow to change args
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss", description: "tool miss test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "miss-tool", args: { val: 2 } });
+  return "done";
+};`, "utf8");
+
+    // Resume
+    await runCli(["resume", firstRunId!, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("2"); // Should have incremented due to miss
+
+    const runIds = await listRunDirs(runsDir);
+    const secondRunId = runIds.find((id) => id !== firstRunId)!;
+    const report = JSON.parse(await fs.readFile(path.join(runsDir, secondRunId, "report.json"), "utf8"));
+    expect(report.tools[0].cache?.hit || false).toBe(false);
+  });
+
+  it("misses tool cache when timeout or metadata change", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-miss-meta.ts");
+    const configPath = path.join(TEMP_DIR, "tool-miss-meta.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-miss-meta-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-miss-meta-counter.txt");
+    const toolsDir = path.join(TEMP_DIR, "tools-miss-meta");
+    await fs.mkdir(toolsDir, { recursive: true });
+    
+    await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
+import * as fs from "node:fs";
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "miss-tool",
+  description: "counts executions",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: (args) => {
+    const counterPath = ${JSON.stringify(counterPath)};
+    let count = 0;
+    try {
+      count = parseInt(fs.readFileSync(counterPath, "utf8"));
+    } catch {}
+    count++;
+    fs.writeFileSync(counterPath, count.toString());
+    return { count, args };
+  }
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss-meta", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "miss-tool", args: {}, timeoutMs: 1000 });
+  return "done";
+};`, "utf8");
+
+    // First run
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1");
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Edit workflow to change timeout
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss-meta", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "miss-tool", args: {}, timeoutMs: 2000 });
+  return "done";
+};`, "utf8");
+
+    // Resume
+    await runCli(["resume", firstRunId!, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("2"); // Miss due to timeout change
+
+    const runIds = await listRunDirs(runsDir);
+    const secondRunId = runIds.find((id) => id !== firstRunId)!;
+    
+    // Change metadata
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss-meta", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "miss-tool", args: {}, timeoutMs: 2000, metadata: { foo: "bar" } });
+  return "done";
+};`, "utf8");
+
+    // Resume from second run
+    await runCli(["resume", secondRunId!, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("3"); // Miss due to metadata change
+  });
+
+  it("misses tool cache when call ID changes", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-miss-id.ts");
+    const configPath = path.join(TEMP_DIR, "tool-miss-id.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-miss-id-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-miss-id-counter.txt");
+    const toolsDir = path.join(TEMP_DIR, "tools-miss-id");
+    await fs.mkdir(toolsDir, { recursive: true });
+    
+    await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
+import * as fs from "node:fs";
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "miss-tool",
+  description: "counts executions",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: (args) => {
+    const counterPath = ${JSON.stringify(counterPath)};
+    let count = 0;
+    try {
+      count = parseInt(fs.readFileSync(counterPath, "utf8"));
+    } catch {}
+    count++;
+    fs.writeFileSync(counterPath, count.toString());
+    return { count };
+  }
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss-id", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ id: "call-1", definition: "miss-tool", args: {} });
+  return "done";
+};`, "utf8");
+
+    // First run
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1");
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Edit workflow to change call ID
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-miss-id", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ id: "call-2", definition: "miss-tool", args: {} });
+  return "done";
+};`, "utf8");
+
+    // Resume
+    await runCli(["resume", firstRunId!, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("2"); // Miss due to ID change
+  });
+
+  it("always executes non-cacheable tools live", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-non-cacheable.ts");
+    const configPath = path.join(TEMP_DIR, "tool-non-cacheable.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-non-cacheable-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-non-cacheable-counter.txt");
+    const toolsDir = path.join(TEMP_DIR, "tools-non-cacheable");
+    await fs.mkdir(toolsDir, { recursive: true });
+    
+    await fs.writeFile(path.join(toolsDir, "live-tool.ts"), `
+import * as fs from "node:fs";
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "live-tool",
+  description: "counts executions",
+  inputSchema: { type: "object" },
+  cacheable: false,
+  run: (args) => {
+    const counterPath = ${JSON.stringify(counterPath)};
+    let count = 0;
+    try {
+      count = parseInt(fs.readFileSync(counterPath, "utf8"));
+    } catch {}
+    count++;
+    fs.writeFileSync(counterPath, count.toString());
+    return { count };
+  }
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+  maxDefinitions: 10
+  concurrency: 1
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "non-cacheable", description: "test" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "live-tool", args: {} });
+  return "done";
+};`, "utf8");
+
+    // First run
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("1");
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    // Resume
+    await runCli(["resume", firstRunId!, "--out", runsDir]);
+    expect(await fs.readFile(counterPath, "utf8")).toBe("2"); // Should have incremented again
+  });
+
+  it("does not cache failed tool calls", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/tool-fail.ts");
+    const configPath = path.join(TEMP_DIR, "tool-fail.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "tool-fail-runs");
+    const counterPath = path.join(TEMP_DIR, "tool-fail-counter.txt");
+    const toolsDir = path.join(TEMP_DIR, "tools-fail");
+    await fs.mkdir(toolsDir, { recursive: true });
+    
+    await fs.writeFile(path.join(toolsDir, "fail-tool.ts"), `
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "fail-tool",
+  description: "fails on demand",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: (args) => {
+    if (args.fail) throw new Error("intentional failure");
+    return "ok";
+  }
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+defaultProvider: codex
+concurrency: 1
+providers:
+  codex:
+    command: node
+    args:
+      - ${JSON.stringify(FAKE_PROVIDER)}
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+  maxDefinitions: 10
+  concurrency: 1
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "tool-fail", description: "test" };
+export default async (ctx) => {
+  try {
+    await ctx.tool({ definition: "fail-tool", args: { fail: true } });
+  } catch (e) {}
+  await ctx.agent({ prompt: "after fail" });
+  return "done";
+};`, "utf8");
+
+    // First run
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    const [firstRunId] = await listRunDirs(runsDir);
+
+    const index = JSON.parse(await fs.readFile(path.join(runsDir, firstRunId!, "cache-index.json"), "utf8"));
+    // The failed tool should NOT be in the index. 
+    // The agent call after it MIGHT be in the index if it succeeded, BUT 
+    // according to the design, a non-success call disables further index growth.
+    // So only entries BEFORE the fail should be there. Here nothing is before.
+    expect(index.entries.filter((e: any) => e.kind === "tool")).toHaveLength(0);
+  });
+
+  it("loads legacy agent-only cache indexes", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/legacy.ts");
+    const configPath = path.join(TEMP_DIR, "legacy.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "legacy-runs");
+    await writeConfig(configPath);
+    await fs.writeFile(workflowPath, `export const meta = { name: "legacy", description: "legacy" };
+export default async (ctx) => {
+  await ctx.agent({ id: "agent-1", prompt: "legacy" });
+  return "done";
+};`, "utf8");
+
+    // First run to get a valid cache entry
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    const [runId] = await listRunDirs(runsDir);
+    const runPath = path.join(runsDir, runId!);
+
+    // Modify the cache index to remove "kind" field (simulating legacy)
+    const indexPath = path.join(runPath, "cache-index.json");
+    const index = JSON.parse(await fs.readFile(indexPath, "utf8"));
+    for (const entry of index.entries) {
+      delete entry.kind;
+    }
+    await fs.writeFile(indexPath, JSON.stringify(index), "utf8");
+
+    // Resume should still work and hit the cache
+    const { error } = await runCli(["resume", runId!, "--out", runsDir]);
+    expect(error).toBeNull();
+
+    const runIds = await listRunDirs(runsDir);
+    const secondRunId = runIds.find((id) => id !== runId)!;
+    const report = JSON.parse(await fs.readFile(path.join(runsDir, secondRunId, "report.json"), "utf8"));
+    expect(report.agents[0].cache?.hit).toBe(true);
+  });
+
+  it("rejects path traversal in tool cache entries", async () => {
+    const workflowPath = path.join(TEMP_DIR, "workflows/traversal.ts");
+    const configPath = path.join(TEMP_DIR, "traversal.config.yaml");
+    const runsDir = path.join(TEMP_DIR, "traversal-runs");
+    const toolsDir = path.join(TEMP_DIR, "tools-traversal");
+    await fs.mkdir(toolsDir, { recursive: true });
+    await fs.writeFile(path.join(toolsDir, "tool-1.ts"), `
+export default {
+  [Symbol.for("openflow.toolDefinition")]: true,
+  id: "tool-1",
+  description: "test",
+  inputSchema: { type: "object" },
+  cacheable: true,
+  run: () => "ok"
+};`, "utf8");
+
+    await fs.writeFile(configPath, `
+tools:
+  dir: ${JSON.stringify(toolsDir)}
+  maxDefinitions: 10
+  concurrency: 1
+workflow:
+  discovery:
+    include:
+      - ${JSON.stringify(path.join(TEMP_DIR, "workflows/**/*.ts"))}
+`, "utf8");
+
+    await fs.writeFile(workflowPath, `export const meta = { name: "traversal", description: "traversal" };
+export default async (ctx) => {
+  await ctx.tool({ definition: "tool-1", args: {} });
+  return "done";
+};`, "utf8");
+
+    // First run to get a valid cache entry
+    await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
+    const [runId] = await listRunDirs(runsDir);
+    const runPath = path.join(runsDir, runId!);
+
+    // Modify the cache index to include a traversal path
+    const indexPath = path.join(runPath, "cache-index.json");
+    const index = JSON.parse(await fs.readFile(indexPath, "utf8"));
+    index.entries[0].resultPath = "../../etc/passwd";
+    await fs.writeFile(indexPath, JSON.stringify(index), "utf8");
+
+    const { error } = await runCli(["resume", runId!, "--out", runsDir]);
+    // It should fail with a usage error about path traversal
+    expect(error).not.toBeNull();
+    expect(error.message).toContain("escapes previous run directory");
+  });
+
   it("reports a clear usage error for runs without run-input.json", async () => {
     const runsDir = path.join(TEMP_DIR, "bad-runs");
     await fs.mkdir(path.join(runsDir, "run-without-input"), { recursive: true });
