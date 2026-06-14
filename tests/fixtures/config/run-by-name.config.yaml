@@ -1,0 +1,33 @@
+defaultProvider: mock
+concurrency: 1
+timeoutMs: 10000
+
+providers:
+  mock:
+    command: mock
+    responses:
+      default:
+        text: "mock response"
+      review-auth:
+        json:
+          findings: []
+
+workflow:
+  discovery:
+    include:
+      - tests/fixtures/workflows/run-by-name/**/*.js
+  maxDepth: 5
+
+reporting:
+  mode: pretty
+
+security:
+  passEnv: []
+  redactEnv: []
+  allowWorkflowImports: false
+
+sharedAgents:
+  dir: tests/fixtures/agents
+  maxDefinitions: 100
+  allowDynamicIds: false
+  strictPromptTemplateVariables: true

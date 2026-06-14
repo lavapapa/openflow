@@ -54,6 +54,7 @@ export class FileSystemArtifactStore implements ArtifactStore {
       runId: input.runId,
       workflowPath: input.workflowPath,
       workflowHash: input.workflowHash,
+      workflow: input.workflow,
       openflowVersion: input.openflowVersion,
       cwd: input.cwd,
       configPath: input.configPath

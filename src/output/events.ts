@@ -4,6 +4,7 @@ import type { AgentPermissions } from "../types/agent.js";
 
 export type EventType =
   | "workflow.started"
+  | "workflow.resolved"
   | "workflow.completed"
   | "workflow.failed"
   | "workflow.cancelled"
@@ -60,6 +61,15 @@ export interface WorkflowStartedPayload {
   };
   workflowPath: string;
   artifactsDir: string;
+}
+
+export interface WorkflowResolvedPayload {
+  requestedTarget: string;
+  targetKind: "workflow-name" | "workflow-file";
+  workflowName: string;
+  workflowFile: string;
+  workflowFileRelative: string;
+  discoverySource: string;
 }
 
 export interface WorkflowCompletedPayload {

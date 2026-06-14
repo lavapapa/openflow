@@ -13,8 +13,12 @@ export interface DryRunSummary {
   verbose?: boolean;
 }
 
-export function printValidationSuccess(workflowName: string): void {
-  console.log(`✓ Workflow is valid: ${workflowName}`);
+export function printValidationSuccess(workflowName: string, workflowFile?: string): void {
+  if (workflowFile) {
+    console.log(`✓ Validated workflow "${workflowName}" at ${workflowFile}`);
+  } else {
+    console.log(`✓ Workflow is valid: ${workflowName}`);
+  }
 }
 
 export function printValidationIssues(issues: readonly { message: string }[]): void {

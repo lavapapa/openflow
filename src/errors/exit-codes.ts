@@ -29,6 +29,10 @@ export function exitCodeForError(error: unknown): ExitCode {
       case ErrorCode.WORKFLOW_INPUT_VALIDATION_FAILED:
       case ErrorCode.WORKFLOW_RECURSION_DETECTED:
       case ErrorCode.WORKFLOW_MAX_DEPTH_EXCEEDED:
+      case ErrorCode.WORKFLOW_DUPLICATE_NAME:
+      case ErrorCode.WORKFLOW_DISCOVERY_FAILED:
+      case ErrorCode.WORKFLOW_INVALID_METADATA:
+      case ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED:
       case ErrorCode.TOOL_DEFINITION_NOT_FOUND:
       case ErrorCode.TOOL_DUPLICATE_DEFINITION:
       case ErrorCode.TOOL_INVALID_DEFINITION:
@@ -36,6 +40,8 @@ export function exitCodeForError(error: unknown): ExitCode {
         return ExitCode.WorkflowInvalid;
 
       case ErrorCode.PROVIDER_UNAVAILABLE:
+      case ErrorCode.WORKFLOW_TARGET_NOT_FOUND:
+      case ErrorCode.WORKFLOW_FILE_NOT_FOUND:
         return ExitCode.ResourceNotFound;
 
       case ErrorCode.SECURITY_POLICY_VIOLATION:

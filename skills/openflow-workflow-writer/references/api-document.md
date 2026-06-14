@@ -23,7 +23,8 @@ export const meta = {
 Requirements:
 
 * `meta` must be the first top-level statement.
-* `meta.name` is required.
+* `meta.name` is required. It is exact and case-sensitive.
+* `openflow run <meta.name>` and `openflow validate <meta.name>` are supported when the workflow is in the configured discovery scope.
 * `meta.description` is required.
 * `meta.phases` is optional (array of phase name strings).
 * `meta.version` is optional (string).

@@ -111,11 +111,29 @@ export interface WorkflowRuntimeContext {
   workflow<T = JsonValue>(input: WorkflowCallInput): Promise<T | WorkflowSettledResult<T>>;
 }
 
+export interface WorkflowIdentity {
+  name: string;
+  file: string;
+  requestedTarget: string;
+  targetKind: "workflow-name" | "workflow-file";
+}
+
+export interface ResolvedWorkflowIdentity {
+  name: string;
+  file: string;
+  requestedTarget: string;
+  targetKind: "workflow-name" | "workflow-file";
+  workflowFile: string;
+  workflowFileRelative: string;
+  discoverySource: string;
+}
+
 export interface WorkflowRunResult {
   schemaVersion: "openflow.report.v1";
   runId: string;
   status: WorkflowStatus;
   meta: WorkflowMeta;
+  workflow?: WorkflowIdentity;
   result?: unknown | undefined;
   agents: AgentResult[];
   pipelines?: PipelineSummary[] | undefined;

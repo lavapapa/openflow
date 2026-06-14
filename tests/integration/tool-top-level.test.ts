@@ -126,7 +126,7 @@ describe("Tool Top-Level Integration", () => {
     const result = await runCli(["validate", wfPath], projectDir);
 
     expect(result.error).toBeNull();
-    expect(result.stdout).toContain("✓ Workflow is valid: validate-toplevel");
+    expect(result.stdout).toContain("✓ Validated workflow \"validate-toplevel\" at workflows/validate-toplevel.workflow.ts");
   });
 
   it("should succeed when child workflow uses module top-level tool()", async () => {

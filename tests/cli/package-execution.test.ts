@@ -57,7 +57,7 @@ describe("CLI package execution and installation", () => {
       cwd: WORKSPACE_DIR,
       encoding: "utf8"
     });
-    expect(stdout).toContain("Workflow is valid: simple-mock-workflow");
+    expect(stdout).toContain("Validated workflow \"simple-mock-workflow\" at tests/fixtures/simple-workflow.ts");
   });
 
   it("can install globally with a custom prefix and run", async () => {

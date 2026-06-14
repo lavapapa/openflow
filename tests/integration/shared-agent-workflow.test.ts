@@ -496,7 +496,7 @@ sharedAgents:
       ]);
 
       expect(result.error).toBeNull();
-      expect(result.stdout).toContain("Workflow is valid: test");
+      expect(result.stdout).toContain("Validated workflow \"test\" at workflow.js");
     });
 
     it("flags a missing definition during validation", async () => {

@@ -2,6 +2,7 @@ import { ErrorCode } from "../../errors/codes.js";
 import { OpenFlowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
 import { discoverWorkflowRegistry } from "../../workflow/discovery.js";
+import { resolveWorkflowTarget, type ResolvedWorkflowTarget } from "../../workflow/resolve-target.js";
 import { parseKeyValueArgs, parsePositiveInteger, parseReportMode } from "../args.js";
 import { printDryRunSummary } from "../print.js";
 import { DefaultRuntimeRunner, type RuntimeRunner, type WorkflowRunResult } from "../../runtime/public.js";
@@ -49,8 +50,6 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   const rawOptions = input.rawOptions || {};
   const cwd = rawOptions.cwd ?? process.cwd();
 
-  const workflowPath = resolveUserPath(input.workflowFile, cwd);
-
   // Parse option arguments cleanly
   const parsedArgs = parseKeyValueArgs(rawOptions.arg || []);
   const concurrency = rawOptions.concurrency !== undefined
@@ -94,6 +93,25 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
     cli: cliOverrides
   });
 
+  // Resolve workflow target
+  const resolved = await resolveWorkflowTarget({
+    target: input.workflowFile,
+    cwd: config.cwd,
+    config,
+    mode: "run"
+  });
+
+  // During resume, preserve original target metadata if provided
+  if (rawOptions.originalRequestedTarget) {
+    resolved.requestedTarget = rawOptions.originalRequestedTarget;
+  }
+  if (rawOptions.originalTargetKind) {
+    resolved.targetKind = rawOptions.originalTargetKind;
+  }
+  if (rawOptions.originalWorkflowName) {
+    resolved.workflowName = rawOptions.originalWorkflowName;
+  }
+
   // Load shared agent registry
   const sharedAgentRegistry = await loadSharedAgentRegistry({
     cwd: config.cwd,
@@ -111,16 +129,17 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
 
   // Discover and validate workflow registry
   const workflowRegistry = await discoverWorkflowRegistry({
-    rootWorkflowPath: workflowPath,
+    rootWorkflowPath: resolved.workflowFile,
     cwd: config.cwd,
     include: config.workflow.discovery.include,
+    candidatePaths: resolved.candidatePaths,
     sharedAgentRegistry,
     toolRegistry,
     allowDynamicSharedAgentIds: config.sharedAgents?.allowDynamicIds
   });
 
   // Retrieve root workflow
-  const absoluteRootPath = path.resolve(config.cwd, workflowPath);
+  const absoluteRootPath = path.resolve(config.cwd, resolved.workflowFile);
   const rootDefinition = workflowRegistry.list().find(d => d.sourcePath === absoluteRootPath);
   if (!rootDefinition) {
     throw new OpenFlowError(
@@ -133,8 +152,8 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   // Dry run check
   if (rawOptions.dryRun) {
     printDryRunSummary({
-      workflowFile: rootDefinition.sourcePath,
-      workflowName: parsed.meta.name,
+      workflowFile: resolved.workflowFileRelative,
+      workflowName: resolved.workflowName,
       description: parsed.meta.description,
       phases: parsed.meta.phases || [],
       provider: config.defaultProvider,
@@ -160,13 +179,31 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   };
   process.on("SIGINT", sigIntHandler);
 
+  const workflowIdentity = {
+    name: rawOptions.originalWorkflowName || resolved.workflowName,
+    file: resolved.workflowFileRelative,
+    requestedTarget: rawOptions.originalRequestedTarget || resolved.requestedTarget,
+    targetKind: rawOptions.originalTargetKind || resolved.targetKind
+  };
+
+  const runtimeWorkflowIdentity = {
+    name: workflowIdentity.name,
+    file: workflowIdentity.file,
+    requestedTarget: workflowIdentity.requestedTarget,
+    targetKind: workflowIdentity.targetKind,
+    workflowFile: resolved.workflowFile,
+    workflowFileRelative: resolved.workflowFileRelative,
+    discoverySource: resolved.discoverySource
+  };
+
   // Initialize artifact store before running so it's ready regardless of which runner is used.
   await artifactStore.createRun({
     runId: runIdGenerated,
     outDir: runOutDir,
-    workflowPath: rootDefinition.sourcePath,
+    workflowPath: resolved.workflowFile,
     workflowSource: rootDefinition.parsedWorkflow.sourceText || "",
     workflowHash: parsed.sourceHash,
+    workflow: workflowIdentity,
     resolvedConfig: config,
     openflowVersion: parsed.meta.version || "0.0.0",
     cwd,
@@ -175,7 +212,10 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   await artifactStore.writeJson("run-input.json", {
     schemaVersion: "openflow.run-input.v1",
     runId: runIdGenerated,
-    workflowFile: rootDefinition.sourcePath,
+    workflowFile: resolved.workflowFile,
+    requestedTarget: resolved.requestedTarget,
+    targetKind: resolved.targetKind,
+    workflowName: resolved.workflowName,
     cwd: config.cwd,
     outDir: config.outDir,
     configPath: config.configPath,
@@ -213,6 +253,8 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
     ]
   });
 
+  // Note: workflow.resolved is now emitted inside the runtime runner execution boundary.
+
   const agentExecutor = new DefaultAgentExecutor({
     config: config as any,
     artifactStore,
@@ -245,6 +287,7 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
   reporter.start({
     runId: runIdGenerated,
     meta: parsed.meta,
+    workflow: workflowIdentity,
     artifactsDir: runOutDir
   });
 
@@ -255,6 +298,7 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
     const result = await runner.run({
       parsedWorkflow: parsed,
       workflowRegistry,
+      workflowIdentity: runtimeWorkflowIdentity,
       config: config as any,
       cli: {
         workflowFile: rootDefinition.sourcePath,
@@ -296,6 +340,9 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
     })());
 
     await eventBus.drain();
+
+    // Attach workflow identity to result
+    result.workflow = workflowIdentity;
 
     if (artifactStore.isRunCreated()) {
       await artifactStore.writeFinalReport(result);

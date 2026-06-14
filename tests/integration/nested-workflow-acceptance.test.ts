@@ -78,7 +78,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     ]);
 
     expect(result.error).toBeNull();
-    expect(result.stdout).toContain("Workflow is valid");
+    expect(result.stdout).toContain("Validated workflow");
   });
 
   it("openflow validate rejects duplicate workflow definitions", async () => {
@@ -92,7 +92,7 @@ describe("Nested Workflow Acceptance Integration", () => {
       }
     }));
 
-    const workflowPath = "tests/fixtures/workflows/nested-acceptance/valid-root.workflow.js";
+    const workflowPath = "dup";
     const result = await runCli([
       "validate",
       workflowPath,
@@ -100,8 +100,8 @@ describe("Nested Workflow Acceptance Integration", () => {
     ]);
 
     expect(result.error).not.toBeNull();
-    expect(result.error.code).toBe("WORKFLOW_DUPLICATE_DEFINITION");
-    expect(result.error.message).toContain("Duplicate workflow name 'dup'");
+    expect(result.error.code).toBe("WORKFLOW_DUPLICATE_NAME");
+    expect(result.error.message).toContain('Multiple workflows found with name "dup"');
     expect(result.error.message).toContain("a.workflow.js");
     expect(result.error.message).toContain("b.workflow.js");
   });

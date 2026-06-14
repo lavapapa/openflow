@@ -1,5 +1,6 @@
 import ts from "typescript";
 import AjvModule from "ajv";
+import { resolve } from "node:path";
 import type { SharedAgentRegistry } from "../shared-agents/registry.js";
 import { ErrorCode } from "../errors/codes.js";
 import { OpenFlowError } from "../errors/types.js";
@@ -1025,6 +1026,7 @@ export function validateRegistryDependencies(
     sharedAgentRegistry?: SharedAgentRegistry | undefined;
     allowDynamicSharedAgentIds?: boolean | undefined;
     toolRegistry?: ToolRegistry | undefined;
+    rootWorkflowPath?: string | undefined;
   }
 ): void {
   const definitions = registry.list();
@@ -1042,6 +1044,12 @@ export function validateRegistryDependencies(
 
   const knownWorkflowNames = registry.names();
   const workflowInputSchemas = registry.inputSchemas();
+
+  // Find root workflow name if rootWorkflowPath is provided
+  const rootDef = options.rootWorkflowPath 
+    ? definitions.find(d => resolve(d.sourcePath) === resolve(options.rootWorkflowPath!))
+    : undefined;
+  const rootName = rootDef?.name;
 
   // DFS function for cycle detection and transitive validation
   function check(
@@ -1088,6 +1096,17 @@ export function validateRegistryDependencies(
 
     const localErrors = issues.filter(issue => issue.severity !== "warning").map(issue => issue.message);
 
+    // Log warnings for checked workflows. To avoid duplicate warnings for root workflow (which was
+    // validated standalone in discovery phase), we skip root if rootName is set.
+    if (currentName !== rootName) {
+      const warnings = issues.filter(issue => issue.severity === "warning");
+      if (warnings.length > 0) {
+        for (const warning of warnings) {
+          console.warn(`Warning: ${warning.message} (at line ${warning.line}, col ${warning.column})`);
+        }
+      }
+    }
+
     // 3. Recurse to check dependencies
     const deps = dependencyMap.get(currentName) || [];
     const childErrors: string[] = [];
@@ -1118,12 +1137,19 @@ export function validateRegistryDependencies(
     return allErrors;
   }
 
-  // Run validation on all definitions
+  // Run validation only starting from root workflow if rootDef is found, otherwise fallback to all definitions.
   const allRegistryErrors: string[] = [];
-  for (const def of definitions) {
-    const errors = check(def.name, []);
+  if (rootDef) {
+    const errors = check(rootDef.name, []);
     if (errors.length > 0) {
-      allRegistryErrors.push(`Workflow '${def.name}' validation failed:\n` + errors.map(e => `  - ${e}`).join("\n"));
+      allRegistryErrors.push(`Workflow '${rootDef.name}' validation failed:\n` + errors.map(e => `  - ${e}`).join("\n"));
+    }
+  } else {
+    for (const def of definitions) {
+      const errors = check(def.name, []);
+      if (errors.length > 0) {
+        allRegistryErrors.push(`Workflow '${def.name}' validation failed:\n` + errors.map(e => `  - ${e}`).join("\n"));
+      }
     }
   }
 

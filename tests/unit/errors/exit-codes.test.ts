@@ -31,12 +31,28 @@ describe("Exit Codes Mapping", () => {
       ErrorCode.WORKFLOW_INVALID_CALL,
       ErrorCode.WORKFLOW_INPUT_VALIDATION_FAILED,
       ErrorCode.WORKFLOW_RECURSION_DETECTED,
-      ErrorCode.WORKFLOW_MAX_DEPTH_EXCEEDED
+      ErrorCode.WORKFLOW_MAX_DEPTH_EXCEEDED,
+      ErrorCode.WORKFLOW_DUPLICATE_NAME,
+      ErrorCode.WORKFLOW_DISCOVERY_FAILED,
+      ErrorCode.WORKFLOW_INVALID_METADATA,
+      ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED
     ];
 
     for (const code of codes) {
       const err = new OpenFlowError(code, "test error");
       expect(exitCodeForError(err)).toBe(ExitCode.WorkflowInvalid);
+    }
+  });
+
+  it("maps workflow target and file not found to ResourceNotFound (4)", () => {
+    const codes = [
+      ErrorCode.WORKFLOW_TARGET_NOT_FOUND,
+      ErrorCode.WORKFLOW_FILE_NOT_FOUND
+    ];
+
+    for (const code of codes) {
+      const err = new OpenFlowError(code, "test error");
+      expect(exitCodeForError(err)).toBe(ExitCode.ResourceNotFound);
     }
   });
 

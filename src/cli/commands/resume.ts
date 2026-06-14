@@ -6,6 +6,8 @@ import { defaultRunsDir } from "../../artifacts/run-store.js";
 import { parseReportMode } from "../args.js";
 import { resolveUserPath } from "../paths.js";
 import { runCommand } from "./run.js";
+import { loadWorkflow } from "../../workflow/load.js";
+import { parseWorkflow } from "../../workflow/parse.js";
 
 export interface ResumeCommandInput {
   runIdOrPath: string;
@@ -36,6 +38,27 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
     );
   }
 
+  // Identity validation
+  if (runInput.workflowName) {
+    try {
+      const loaded = await loadWorkflow(runInput.workflowFile, runInput.cwd || cwd);
+      const parsed = parseWorkflow(loaded);
+      if (parsed.meta.name !== runInput.workflowName) {
+        throw new OpenFlowError(
+          ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED,
+          `The recorded workflow file exists, but its meta.name changed from "${runInput.workflowName}" to "${parsed.meta.name}".`
+        );
+      }
+    } catch (err) {
+      if (err instanceof OpenFlowError && err.code === ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED) {
+        throw err;
+      }
+      // If file is missing or unparseable, let runCommand handle it or re-throw as validation error.
+      if (err instanceof OpenFlowError) throw err;
+      throw new OpenFlowError(ErrorCode.WORKFLOW_VALIDATION_ERROR, `Failed to validate workflow identity during resume: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const storedOptions = runInput.rawOptions && typeof runInput.rawOptions === "object" ? runInput.rawOptions : {};
   
   // Resolve noCache: command line overrides stored options
@@ -52,7 +75,11 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
     cwd: runInput.cwd ?? storedOptions.cwd ?? cwd,
     out: rawOptions.out ? resolveUserPath(rawOptions.out, cwd) : storedOptions.out,
     noCache,
-    report: rawOptions.report !== undefined ? parseReportMode(rawOptions.report) : storedOptions.report
+    report: rawOptions.report !== undefined ? parseReportMode(rawOptions.report) : storedOptions.report,
+    // Preserve target metadata for runCommand to use in artifacts
+    originalRequestedTarget: runInput.requestedTarget,
+    originalTargetKind: runInput.targetKind,
+    originalWorkflowName: runInput.workflowName
   };
 
   await runCommand({

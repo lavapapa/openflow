@@ -28,9 +28,9 @@ OpenFlow does **not** implement its own coding agent. It coordinates external pr
 
 OpenFlow supports:
 
-- `openflow run <workflow-file>`
+- `openflow run <workflow-name-or-file>`
 - `openflow resume <runId-or-path>`
-- `openflow validate <workflow-file>`
+- `openflow validate <workflow-name-or-file>`
 - `openflow doctor`
 - Constrained workflow metadata parsing
 - Workflow DSL functions:
@@ -92,7 +92,8 @@ Run without installing globally:
 ```bash
 npx @prmflow/openflow --help
 npx @prmflow/openflow doctor
-npx @prmflow/openflow validate workflows/review.ts
+npx @prmflow/openflow validate review
+npx @prmflow/openflow run review
 npx @prmflow/openflow run workflows/review.ts
 ```
 
@@ -218,11 +219,16 @@ openflow run workflows/mock-review.ts --provider mock
 
 ### `openflow run`
 
-Runs a workflow file.
+Runs a workflow by name or file path.
 
 ```bash
-openflow run <workflow-file> [options]
+openflow run <workflow-name-or-file> [options]
 ```
+
+OpenFlow resolves the target using these rules:
+1. **Path-like targets** (containing `/`, starting with `./`, or ending in `.ts`/`.js`) are treated as file paths.
+2. **Bare targets** are resolved by exact `meta.name` first, using the same discovery patterns as `openflow list workflows`.
+3. If no workflow name matches a bare target, it falls back to a file-path resolution relative to the `cwd`.
 
 Common options:
 
@@ -245,14 +251,12 @@ Common options:
 Examples:
 
 ```bash
+openflow run review
 openflow run workflows/review.ts
-openflow run workflows/review.ts --provider codex
-openflow run workflows/review.ts --concurrency 2
-openflow run workflows/review.ts --timeout-ms 600000
-openflow run workflows/review.ts --report json
-openflow run workflows/review.ts --report jsonl
-openflow run workflows/review.ts --fail-fast
-openflow run workflows/review.ts --resume <previous-run-id>
+openflow run review --provider codex
+openflow run review --concurrency 2
+openflow run review --report json
+openflow run review --resume <previous-run-id>
 ```
 
 ### `openflow resume`
@@ -294,7 +298,7 @@ Loops should also **use stable `id` values**, such as: `id: \`round-${i}\``.
 #### Artifacts
 
 Each resumable run utilizes these key artifacts in the `.openflow/runs/<runId>` directory:
-- `run-input.json`: Records the original workflow path, working directory, output directory, configuration path, and selected CLI options.
+- `run-input.json`: Records the `requestedTarget`, `targetKind`, `workflowName`, `workflowFile`, working directory, output directory, configuration path, and selected CLI options.
 - `calls.jsonl`: Audit log of all agent calls and their results.
 - `cache-index.json`: A searchable index of call fingerprints used for fast cache lookups.
 
@@ -307,12 +311,13 @@ The `--no-cache` flag disables cache lookups and does not update the `cache-inde
 Validates workflow metadata, syntax, and restricted behavior.
 
 ```bash
-openflow validate <workflow-file>
+openflow validate <workflow-name-or-file>
 ```
 
 Example:
 
 ```bash
+openflow validate review
 openflow validate workflows/review.ts
 ```
 
@@ -346,7 +351,7 @@ Typical checks:
 
 ## Workflow Metadata
 
-Every workflow must begin with a static metadata export.
+Every workflow must begin with a static metadata export. The `meta.name` field is used as the runnable target name from the CLI.
 
 ```ts
 export const meta = {
@@ -359,10 +364,18 @@ export const meta = {
 Rules:
 
 - `meta` must be the first top-level statement.
-- `meta.name` is required.
+- `meta.name` is required. It is case-sensitive and must be unique within your discovery scope.
 - `meta.description` is required.
 - `meta.phases` is optional.
 - Dynamic expressions are rejected.
+
+### Duplicate Names
+
+If multiple workflow files in your discovery scope declare the same `meta.name`, OpenFlow will fail when you attempt to run that name. To fix this:
+1. Rename one of the workflows in its `meta` export.
+2. Or, run the workflow by its explicit file path to bypass name lookup.
+
+Run `openflow list workflows` to see all discovered workflow names and their file paths.
 
 Valid:
 

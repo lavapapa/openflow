@@ -19,6 +19,12 @@ export interface RunManifest {
   updatedAt: string;
   workflowPath: string;
   workflowHash: string;
+  workflow?: {
+    name: string;
+    file: string;
+    requestedTarget: string;
+    targetKind: "workflow-name" | "workflow-file";
+  } | undefined;
   openflowVersion: string;
   cwd: string;
   configPath?: string | undefined;
@@ -31,6 +37,12 @@ export interface CreateRunInput {
   workflowPath: string;
   workflowSource: string;
   workflowHash: string;
+  workflow?: {
+    name: string;
+    file: string;
+    requestedTarget: string;
+    targetKind: "workflow-name" | "workflow-file";
+  } | undefined;
   resolvedConfig: unknown;
   openflowVersion: string;
   cwd: string;

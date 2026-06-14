@@ -49,6 +49,16 @@ export class PrettyReporter implements Reporter {
         this.stdout.write(`→ Phase: ${payload.name}\n`);
         break;
       }
+      case "workflow.resolved": {
+        if (this.verbose) {
+          const strategy = payload.targetKind === "workflow-name"
+            ? `workflow name using workflow discovery patterns`
+            : `direct file path`;
+          this.stdout.write(`• Resolved target "${payload.requestedTarget}" as ${strategy}.\n`);
+        }
+        this.stdout.write(`  Workflow: ${payload.workflowFileRelative}\n`);
+        break;
+      }
       case "workflow.log": {
         this.stdout.write(`• ${payload.message}\n`);
         break;

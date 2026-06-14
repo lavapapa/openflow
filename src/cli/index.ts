@@ -60,8 +60,7 @@ Examples:
 
   program
     .command("run")
-
-    .argument("<workflow-file>", "Path to workflow file")
+    .argument("<workflow-name-or-file>", "Workflow name or workflow file path")
     .option("-p, --provider <name>", "Default agent provider name")
     .option("-m, --model <model>", "Default model for agent calls")
     .option("-a, --arg <key=value>", "Workflow input argument (can be repeated)", collectArgs, [])
@@ -93,15 +92,15 @@ Examples:
 
   program
     .command("validate")
-    .argument("<workflow-file>", "Path to workflow file")
+    .argument("<workflow-name-or-file>", "Workflow name or workflow file path")
     .option("-c, --config <path>", "Path to config file")
     .option("--cwd <path>", "Custom working directory")
     .option("-v, --verbose", "Enable verbose logging")
-    .action(async (workflowFile, options) => {
-      if (!workflowFile) {
-        throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Missing <workflow-file>");
+    .action(async (target, options) => {
+      if (!target) {
+        throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Missing <workflow-name-or-file>");
       }
-      await validateCommand({ workflowFile, rawOptions: options });
+      await validateCommand({ workflowFile: target, rawOptions: options });
     });
 
   program

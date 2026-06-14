@@ -4,6 +4,12 @@ export interface CreateManifestInput {
   runId: string;
   workflowPath: string;
   workflowHash: string;
+  workflow?: {
+    name: string;
+    file: string;
+    requestedTarget: string;
+    targetKind: "workflow-name" | "workflow-file";
+  } | undefined;
   openflowVersion: string;
   cwd: string;
   configPath?: string | undefined;
@@ -20,6 +26,7 @@ export function createInitialManifest(input: CreateManifestInput): RunManifest {
     updatedAt: timestamp,
     workflowPath: input.workflowPath,
     workflowHash: input.workflowHash,
+    workflow: input.workflow,
     openflowVersion: input.openflowVersion,
     cwd: input.cwd,
     configPath: input.configPath

@@ -15,7 +15,7 @@ describe("Validate Command", () => {
       })
     ).resolves.not.toThrow();
 
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("✓ Workflow is valid: valid-simple"));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("✓ Validated workflow \"valid-simple\" at"));
     logSpy.mockRestore();
   });
 

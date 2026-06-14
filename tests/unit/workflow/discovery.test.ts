@@ -38,6 +38,154 @@ describe("Workflow Discovery", () => {
     expect(vi.mocked(assertWorkflowValid)).toHaveBeenCalled();
   });
 
+  it("discovers workflows via include patterns when candidatePaths is omitted", async () => {
+    const { mkdtemp, rm, writeFile, mkdir, realpath } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-omit-cp-")));
+
+    try {
+      const rootPath = join(tempWorkspaceDir, "root.ts");
+      await writeFile(rootPath, "export const meta = { name: 'root', description: 'test' };");
+
+      await mkdir(join(tempWorkspaceDir, "workflows"));
+      await writeFile(join(tempWorkspaceDir, "workflows/child.ts"), "export const meta = { name: 'child', description: 'test' };");
+
+      // Setup the mocks for load/parse to return names based on filename
+      vi.mocked(loadWorkflow).mockImplementation(async (p) => ({
+        sourcePath: p,
+        sourceText: "content"
+      }));
+
+      vi.mocked(parseWorkflow).mockImplementation((loaded) => ({
+        meta: { name: loaded.sourcePath.endsWith("root.ts") ? "root" : "child", description: "test" },
+        body: "",
+        sourcePath: loaded.sourcePath,
+        sourceText: loaded.sourceText,
+        sourceHash: "123"
+      }));
+
+      const registry = await discoverWorkflowRegistry({
+        rootWorkflowPath: rootPath,
+        cwd: tempWorkspaceDir,
+        include: ["workflows/*.ts"],
+        candidatePaths: undefined // Omitted
+      });
+
+      expect(registry.names()).toEqual(new Set(["root", "child"]));
+    } finally {
+      await rm(tempWorkspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("gracefully skips invalid workflows when scanning from include patterns", async () => {
+    const { mkdtemp, rm, writeFile, mkdir, realpath } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-invalid-")));
+
+    try {
+      const rootPath = join(tempWorkspaceDir, "root.ts");
+      await writeFile(rootPath, "export const meta = { name: 'root', description: 'test' };");
+
+      await mkdir(join(tempWorkspaceDir, "workflows"));
+      await writeFile(join(tempWorkspaceDir, "workflows/child.ts"), "export const meta = { name: 'child', description: 'test' };");
+      // This file will fail parseWorkflow
+      await writeFile(join(tempWorkspaceDir, "workflows/helper.ts"), "console.log('not a workflow');");
+
+      // Setup the mocks for load/parse
+      vi.mocked(loadWorkflow).mockImplementation(async (p) => ({
+        sourcePath: p,
+        sourceText: p.endsWith("helper.ts") ? "console.log('not a workflow');" : "content"
+      }));
+
+      vi.mocked(parseWorkflow).mockImplementation((loaded) => {
+        if (loaded.sourcePath.endsWith("helper.ts")) {
+          throw new OpenFlowError(ErrorCode.WORKFLOW_PARSE_ERROR, "Metadata name is required");
+        }
+        return {
+          meta: { name: loaded.sourcePath.endsWith("root.ts") ? "root" : "child", description: "test" },
+          body: "",
+          sourcePath: loaded.sourcePath,
+          sourceText: loaded.sourceText,
+          sourceHash: "123"
+        };
+      });
+
+      const registry = await discoverWorkflowRegistry({
+        rootWorkflowPath: rootPath,
+        cwd: tempWorkspaceDir,
+        include: ["workflows/*.ts"],
+        candidatePaths: undefined
+      });
+
+      expect(registry.names()).toEqual(new Set(["root", "child"]));
+    } finally {
+      await rm(tempWorkspaceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("prioritizes root workflow and skips other duplicates when scanning from include patterns", async () => {
+    const { mkdtemp, rm, writeFile, mkdir, realpath } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-duplicates-")));
+
+    try {
+      const rootPath = join(tempWorkspaceDir, "root.ts");
+      // Root workflow named 'duplicate'
+      await writeFile(rootPath, "export const meta = { name: 'duplicate', description: 'root' };");
+
+      await mkdir(join(tempWorkspaceDir, "workflows"));
+      // Another workflow also named 'duplicate'
+      await writeFile(join(tempWorkspaceDir, "workflows/other.ts"), "export const meta = { name: 'duplicate', description: 'other' };");
+      
+      // A unique child workflow
+      await writeFile(join(tempWorkspaceDir, "workflows/child.ts"), "export const meta = { name: 'child', description: 'test' };");
+      
+      // Three workflows with same name 'ambiguous' (neither is root)
+      await writeFile(join(tempWorkspaceDir, "workflows/ambiguous-1.ts"), "export const meta = { name: 'ambiguous', description: 'a1' };");
+      await writeFile(join(tempWorkspaceDir, "workflows/ambiguous-2.ts"), "export const meta = { name: 'ambiguous', description: 'a2' };");
+      await writeFile(join(tempWorkspaceDir, "workflows/ambiguous-3.ts"), "export const meta = { name: 'ambiguous', description: 'a3' };");
+
+      vi.mocked(loadWorkflow).mockImplementation(async (p) => ({ sourcePath: p, sourceText: "content" }));
+
+      vi.mocked(parseWorkflow).mockImplementation((loaded) => {
+        let name = "unknown";
+        if (loaded.sourcePath.endsWith("root.ts")) name = "duplicate";
+        else if (loaded.sourcePath.endsWith("other.ts")) name = "duplicate";
+        else if (loaded.sourcePath.endsWith("child.ts")) name = "child";
+        else if (loaded.sourcePath.includes("ambiguous")) name = "ambiguous";
+        return {
+          meta: { name, description: "test" },
+          body: "",
+          sourcePath: loaded.sourcePath,
+          sourceText: loaded.sourceText,
+          sourceHash: "123"
+        };
+      });
+
+      const registry = await discoverWorkflowRegistry({
+        rootWorkflowPath: rootPath,
+        cwd: tempWorkspaceDir,
+        include: ["workflows/*.ts"],
+        candidatePaths: undefined
+      });
+
+      // 'duplicate' should be the root one
+      expect(registry.names()).toEqual(new Set(["duplicate", "child"]));
+      expect(registry.get("duplicate")?.sourcePath).toBe(rootPath);
+      // 'ambiguous' should have been removed because it was a duplicate and neither was root
+      expect(registry.get("ambiguous")).toBeUndefined();
+
+    } finally {
+      await rm(tempWorkspaceDir, { recursive: true, force: true });
+    }
+  });
+
   it("fails on duplicate names during discovery", async () => {
     const rootPath = "root.ts";
     const childPath = "child.ts";

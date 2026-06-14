@@ -100,7 +100,7 @@ describe("Tool CLI Integration", () => {
     const result = await runCli(["validate", wfPath], projectDir);
 
     expect(result.error).toBeNull();
-    expect(result.stdout).toContain("✓ Workflow is valid: marker");
+    expect(result.stdout).toContain("✓ Validated workflow \"marker\" at workflows/marker.workflow.ts");
     
     // Ensure run() was NOT called
     await expect(fs.stat(markerFile)).rejects.toThrow();
@@ -275,6 +275,6 @@ describe("Tool CLI Integration", () => {
 
     const result = await runCli(["validate", wfPath], projectDir);
     expect(result.error).toBeNull();
-    expect(result.stdout).toContain("✓ Workflow is valid: bare");
+    expect(result.stdout).toContain("✓ Validated workflow \"bare\" at workflows/bare.workflow.ts");
   });
 });

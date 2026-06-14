@@ -6,40 +6,35 @@ This document summarizes the command-line interface (CLI) commands and options f
 
 ## Run a workflow
 
+Runs a workflow by name or file path.
+
 ```bash
-openflow run <workflow-file>
+openflow run <workflow-name-or-file>
 ```
+
+### Resolution Rules
+
+* **Path-like targets**: Targets containing `/`, starting with `./` or `../`, absolute paths, or ending with workflow extensions (`.ts`, `.js`, etc.) are resolved as file paths directly.
+* **Bare targets**: Targets without path separators or extensions are resolved by exact `meta.name` first. If no name matches, OpenFlow falls back to resolving the target as a file path relative to the `cwd`.
+* **Duplicate names**: If multiple workflows in the discovery scope share the same `meta.name`, the command will fail with a listing of matching files.
+
+Use `openflow list workflows` to see runnable names and their resolved paths.
 
 ### Common options
-
-```bash
---provider <codex|gemini|copilot|mock>
---arg key=value
---config <path>
---cwd <path>
---out <path>
---report <pretty|json|jsonl>
---concurrency <number>
---timeout-ms <number>
---resume <runId-or-path>
---no-cache
---dry-run
---fail-fast
---verbose
-```
-
+...
 ### Examples
 
 ```bash
+openflow run review
 openflow run workflows/review.ts
-openflow run workflows/review.ts --provider codex
-openflow run workflows/review.ts --provider mock
-openflow run workflows/review.ts --concurrency 2
-openflow run workflows/review.ts --timeout-ms 600000
-openflow run workflows/review.ts --report json
-openflow run workflows/review.ts --report jsonl
-openflow run workflows/review.ts --fail-fast
-openflow run workflows/review.ts --resume <previous-run-id>
+openflow run review --provider codex
+openflow run review --provider mock
+openflow run review --concurrency 2
+openflow run review --timeout-ms 600000
+openflow run review --report json
+openflow run review --report jsonl
+openflow run review --fail-fast
+openflow run review --resume <previous-run-id>
 ```
 
 ---
@@ -53,14 +48,7 @@ openflow resume <runId-or-path> [options]
 ```
 
 ### Common options
-
-```bash
---out <path>             # Parent directory for the new run
---report <pretty|json|jsonl>
---no-cache               # Re-run all steps but still write audit logs
---cwd <path>
-```
-
+...
 ### Example
 
 ```bash
@@ -71,19 +59,24 @@ openflow resume <previous-run-id>
 
 Resume/cache is intentionally conservative. OpenFlow replays the workflow script and compares each `agent()` call in order. A cached result is reused only while the prefix is unchanged: the call sequence must match, `id` or `label` must match when present, and the call fingerprint must match.
 
+`openflow resume` reuses the exact `workflowFile` recorded in the original run's `run-input.json`, even if the original run was started by name. This ensures deterministic replay even if name resolution would now point to a different file.
+
 Use stable `id` values for loops, such as `id: \`round-${i}\``. Using `Date.now()`, `Math.random()`, and argument-free `new Date()` will trigger validation warnings (e.g., `Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead.`) because they prevent deterministic replay. If you need non-deterministic values like timestamps or random numbers, wrap them in a custom `tool()` call so they are cached on the first run and replayed deterministically on subsequent runs.
 
 ---
 
 ## Validate a workflow
 
+Validates a workflow by name or file path.
+
 ```bash
-openflow validate <workflow-file>
+openflow validate <workflow-name-or-file>
 ```
 
 ### Example
 
 ```bash
+openflow validate review
 openflow validate workflows/review.ts
 ```
 

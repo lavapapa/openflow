@@ -12,6 +12,12 @@ export interface ReporterStartInput {
     description: string;
     phases?: string[];
   };
+  workflow?: {
+    name: string;
+    file: string;
+    requestedTarget: string;
+    targetKind: "workflow-name" | "workflow-file";
+  };
   artifactsDir: string;
 }
 

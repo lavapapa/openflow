@@ -39,6 +39,15 @@ graph TD
 
 ---
 
+### `workflow` Settings
+
+| Option | Type | Default | Validation Rules | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `discovery.include` | `string[]` | `[]` | Array of non-empty strings. | Glob patterns for workflow discovery. Used by `list workflows` and for name-based `run`/`validate` lookup. |
+| `maxDepth` | `integer` | `8` | Positive integer (>= 1). | Maximum recursion/invocation depth for nested workflows. |
+
+---
+
 ### `providers` Settings
 
 A dictionary mapping provider names to provider config objects.

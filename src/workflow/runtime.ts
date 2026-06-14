@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import * as vm from "node:vm";
-import type { ParsedWorkflow, WorkflowRunResult, WorkflowMeta } from "../types/workflow.js";
+import type { ParsedWorkflow, WorkflowRunResult, WorkflowMeta, ResolvedWorkflowIdentity } from "../types/workflow.js";
 import type { ResolvedConfig, CliRunOptions } from "../types/config.js";
 import type { AgentResult, AgentFailureResult } from "../types/agent.js";
 import type { SerializedError } from "../types/errors.js";
@@ -39,6 +39,7 @@ export interface IdGenerator {
 export interface RuntimeRunInput {
   parsedWorkflow: ParsedWorkflow;
   workflowRegistry?: WorkflowRegistry;
+  workflowIdentity?: ResolvedWorkflowIdentity;
   config: ResolvedConfig;
   cli: CliRunOptions;
   signal?: AbortSignal;
@@ -155,6 +156,18 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
           runtimeAbortController.abort(input.signal?.reason || "External cancellation");
         });
       }
+    }
+
+    // Emit workflow.resolved if present
+    if (deps.eventSink && input.workflowIdentity) {
+      deps.eventSink.emit("workflow.resolved", {
+        requestedTarget: input.workflowIdentity.requestedTarget,
+        targetKind: input.workflowIdentity.targetKind,
+        workflowName: input.workflowIdentity.name,
+        workflowFile: input.workflowIdentity.workflowFile,
+        workflowFileRelative: input.workflowIdentity.workflowFileRelative,
+        discoverySource: input.workflowIdentity.discoverySource
+      });
     }
 
     // Emit workflow.started
