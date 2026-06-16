@@ -1,15 +1,16 @@
 {
-  "name": "@prmflow/openflow",
+  "name": "@travisliu/open-dynamic-workflow",
   "version": "0.2.0",
   "description": "Local-first workflow CLI for orchestrating coding-agent CLIs.",
   "type": "module",
   "private": false,
   "license": "MIT",
-  "author": "OpenFlow contributors",
+  "author": "Open Dynamic Workflow contributors",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "openflow": "dist/bin/openflow.js"
+    "open-dynamic-workflow": "dist/bin/open-dynamic-workflow.js",
+    "odw": "dist/bin/open-dynamic-workflow.js"
   },
   "files": [
     "dist",
@@ -19,12 +20,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/travisliu/openflow.git"
+    "url": "git+https://github.com/travisliu/open-dynamic-workflow.git"
   },
   "bugs": {
-    "url": "https://github.com/travisliu/openflow/issues"
+    "url": "https://github.com/travisliu/open-dynamic-workflow/issues"
   },
-  "homepage": "https://github.com/travisliu/openflow#readme",
+  "homepage": "https://github.com/travisliu/open-dynamic-workflow#readme",
   "keywords": [
     "workflow",
     "cli",
@@ -39,8 +40,8 @@
     "clean": "rm -rf dist",
     "build": "tsc",
     "postbuild": "node scripts/fix-bin-permissions.mjs",
-    "dev": "tsx src/bin/openflow.ts",
-    "start": "node dist/bin/openflow.js",
+    "dev": "tsx src/bin/open-dynamic-workflow.ts",
+    "start": "node dist/bin/open-dynamic-workflow.js",
     "typecheck": "npm run check",
     "check": "tsc --noEmit",
     "lint": "npm run check",

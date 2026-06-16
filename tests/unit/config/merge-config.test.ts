@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeConfig } from "../../../src/config/merge.js";
 import { DEFAULT_CONFIG } from "../../../src/config/defaults.js";
-import type { OpenFlowConfig } from "../../../src/config/types.js";
+import type { OpenDynamicWorkflowConfig } from "../../../src/config/types.js";
 
 describe("Merge Config", () => {
   it("CLI provider overrides default provider", () => {
@@ -40,7 +40,7 @@ describe("Merge Config", () => {
   });
 
   it("provider configs merge instead of replace all providers", () => {
-    const fileConfig: Partial<OpenFlowConfig> = {
+    const fileConfig: Partial<OpenDynamicWorkflowConfig> = {
       providers: {
         codex: {
           command: "custom-codex",

@@ -3,7 +3,7 @@ import AjvModule from "ajv";
 import { resolve } from "node:path";
 import type { SharedAgentRegistry } from "../shared-agents/registry.js";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { ParsedWorkflow, WorkflowValidationIssue } from "./types.js";
 import type { WorkflowRegistry } from "./registry.js";
 import { isPathLikeWorkflowName } from "./workflow-call.js";
@@ -936,7 +936,7 @@ export function assertWorkflowValid(
 
   if (errors.length > 0) {
     const summary = errors.map((issue) => `${issue.message}`).join("\n");
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_VALIDATION_ERROR,
       `Workflow validation failed:\n${summary}`
     );
@@ -1063,7 +1063,7 @@ export function validateRegistryDependencies(
         .map(item => `${item.name} (${item.sourcePath}${item.line ? `:${item.line}:${item.character}` : ""})`)
         .join(" -> ");
       
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_VALIDATION_ERROR,
         `Static recursion cycle detected: ${chainStr} -> ${currentName}`
       );
@@ -1154,7 +1154,7 @@ export function validateRegistryDependencies(
   }
 
   if (allRegistryErrors.length > 0) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_VALIDATION_ERROR,
       allRegistryErrors.join("\n\n")
     );

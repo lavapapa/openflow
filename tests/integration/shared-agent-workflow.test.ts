@@ -27,7 +27,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -48,7 +48,7 @@ describe("Shared Agent Workflow Integration", () => {
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });
-    await fs.mkdir(path.join(TEMP_DIR, ".openflow/agents"), { recursive: true });
+    await fs.mkdir(path.join(TEMP_DIR, ".open-dynamic-workflow/agents"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -76,7 +76,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/security.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/security.agent.js"), agentDef);
 
     // 2. Create workflow
     const workflow = `
@@ -91,12 +91,12 @@ export default res;
     const config = `
 defaultProvider: mock
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 providers:
   mock:
     command: mock
 `;
-    const configPath = path.join(TEMP_DIR, "openflow.config.yaml");
+    const configPath = path.join(TEMP_DIR, "open-dynamic-workflow.config.yaml");
     await fs.writeFile(configPath, config);
 
     // 4. Run CLI
@@ -115,7 +115,7 @@ providers:
     expect(result.error).toBeNull();
 
     // 5. Verify results
-    const runs = (await fs.readdir(TEMP_DIR)).filter(d => d !== ".openflow" && d !== "workflow.js" && d !== "openflow.config.yaml");
+    const runs = (await fs.readdir(TEMP_DIR)).filter(d => d !== ".open-dynamic-workflow" && d !== "workflow.js" && d !== "open-dynamic-workflow.config.yaml");
     expect(runs.length).toBe(1);
     const runId = runs[0]!;
     const runDir = path.join(TEMP_DIR, runId);
@@ -162,7 +162,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/validated.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/validated.agent.js"), agentDef);
 
     // 2. Create workflow with invalid context (missing 'foo')
     const workflow = `
@@ -177,7 +177,7 @@ await agent({ definition: "validated-agent", ...input });
     const config = `
 defaultProvider: mock
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
     await fs.writeFile(configPath, config);
@@ -306,7 +306,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/test.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/test.agent.js"), agentDef);
 
     // 2. Setup workflow
     const workflow = `
@@ -319,7 +319,7 @@ await agent({ definition: "test-agent" });
     // 3. Setup config
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -363,7 +363,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/pretty.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/pretty.agent.js"), agentDef);
 
     // 2. Setup workflow
     const workflow = `
@@ -376,7 +376,7 @@ await agent({ definition: "pretty-agent" });
     // 3. Setup config
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 reporting:
   mode: pretty
@@ -400,7 +400,7 @@ reporting:
     expect(result.stdout).toContain("✓ pretty-agent  mock");
   });
 
-  it("fails openflow run before execution when registry contains an invalid definition schema", async () => {
+  it("fails open-dynamic-workflow run before execution when registry contains an invalid definition schema", async () => {
     // 1. Create a shared agent with invalid inputSchema
     const agentDef = `
 export default defineAgent({
@@ -418,7 +418,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/bad-schema.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/bad-schema.agent.js"), agentDef);
 
     // 2. Create workflow
     const workflow = `
@@ -431,7 +431,7 @@ await agent({ definition: "bad-schema-agent" });
     // 3. Create config
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -451,7 +451,7 @@ defaultProvider: mock
     expect(result.error.code).toBe("SHARED_AGENT_INVALID_DEFINITION");
   });
 
-  describe("openflow validate integration", () => {
+  describe("open-dynamic-workflow validate integration", () => {
     it("validates a valid literal definition reference successfully", async () => {
       const agentDef = `
 export default defineAgent({
@@ -472,7 +472,7 @@ export default defineAgent({
   }
 });
 `;
-      await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/valid.agent.js"), agentDef);
+      await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/valid.agent.js"), agentDef);
 
       const workflow = `
 export const meta = { name: "test", description: "test" };
@@ -483,7 +483,7 @@ await agent({ definition: "valid-agent", prompt: "world" });
 
       const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 `;
       const configPath = path.join(TEMP_DIR, "config.yaml");
       await fs.writeFile(configPath, config);
@@ -509,7 +509,7 @@ await agent({ definition: "missing-agent", prompt: "world" });
 
       const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 `;
       const configPath = path.join(TEMP_DIR, "config.yaml");
       await fs.writeFile(configPath, config);
@@ -565,7 +565,7 @@ export default defineAgent({
   }
 });
 `;
-      await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/invalid.agent.js"), agentDef);
+      await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/invalid.agent.js"), agentDef);
 
       const workflow = `
 export const meta = { name: "test", description: "test" };
@@ -576,7 +576,7 @@ await agent({ definition: "invalid-agent" });
 
       const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 `;
       const configPath = path.join(TEMP_DIR, "config.yaml");
       await fs.writeFile(configPath, config);
@@ -613,7 +613,7 @@ export default defineAgent({
   }
 });
 `;
-      await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/security.agent.ts"), agentDef);
+      await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/security.agent.ts"), agentDef);
 
       const workflow = `
 export const meta = { name: "shared-agent-ts-test", description: "test", version: "0.1.0" };
@@ -626,12 +626,12 @@ export default res;
       const config = `
 defaultProvider: mock
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 providers:
   mock:
     command: mock
 `;
-      const configPath = path.join(TEMP_DIR, "openflow.config.yaml");
+      const configPath = path.join(TEMP_DIR, "open-dynamic-workflow.config.yaml");
       await fs.writeFile(configPath, config);
 
       const result = await runCli([

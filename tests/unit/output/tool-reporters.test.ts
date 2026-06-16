@@ -6,7 +6,7 @@ import type { EventEnvelope } from "../../../src/output/events.js";
 
 describe("Tool Reporters", () => {
   const createToolEvent = (type: string, payload: any): EventEnvelope => ({
-    schemaVersion: "openflow.event.v1",
+    schemaVersion: "open-dynamic-workflow.event.v1",
     runId: "run-1",
     sequence: 1,
     timestamp: new Date().toISOString(),

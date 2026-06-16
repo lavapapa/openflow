@@ -41,7 +41,7 @@ describe("verbose event contracts", () => {
     };
 
     const envelope: EventEnvelope<AgentVerboseCommandPayload> = {
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 1,
       timestamp: new Date().toISOString(),
@@ -85,7 +85,7 @@ describe("verbose event contracts", () => {
     };
 
     const envelope: EventEnvelope<AgentVerboseResultPayload> = {
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 2,
       timestamp: new Date().toISOString(),
@@ -129,7 +129,7 @@ describe("verbose event contracts", () => {
     };
 
     const envelope: EventEnvelope<AgentVerboseResultPayload> = {
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 3,
       timestamp: new Date().toISOString(),

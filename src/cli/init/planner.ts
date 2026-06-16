@@ -193,13 +193,13 @@ export function buildNextSteps(input: {
   );
 
   const steps = [
-    "openflow doctor",
-    `openflow validate ${workflowPath}`,
-    `openflow run ${workflowPath} --provider mock`
+    "odw doctor",
+    `odw validate ${workflowPath}`,
+    `odw run ${workflowPath} --provider mock`
   ];
 
   if (providerSelection.defaultProvider !== "mock") {
-    steps.push(`openflow run ${workflowPath} --provider ${providerSelection.defaultProvider}`);
+    steps.push(`odw run ${workflowPath} --provider ${providerSelection.defaultProvider}`);
   }
 
   return steps;

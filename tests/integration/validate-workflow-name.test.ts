@@ -31,7 +31,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
     if (err instanceof Error && stderrData.length === 0) {
@@ -138,7 +138,7 @@ describe("Integration - validate workflow by name", () => {
     expect(result.stderr).toContain("Workflow validation failed");
   });
 
-  it("does not create .openflow artifacts during validation", async () => {
+  it("does not create .open-dynamic-workflow artifacts during validation", async () => {
     const result = await runCli([
       "validate",
       "review",
@@ -147,7 +147,7 @@ describe("Integration - validate workflow by name", () => {
     ]);
 
     expect(result.error).toBeNull();
-    const openflowDir = path.resolve(".openflow");
+    const openDynamicWorkflowDir = path.resolve(".open-dynamic-workflow");
     // We just check that it didn't create a run directory recently
     // or better, we check a temp dir that we KNOW is empty
     const TEST_TEMP_OUT = path.join(TEMP_DIR, "no-artifacts-test");

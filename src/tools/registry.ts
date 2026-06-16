@@ -10,7 +10,7 @@ import {
   isJsonCompatible,
   isSafeToolDefinitionId
 } from "./validate.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 
 const Ajv = (AjvModule as any).default || AjvModule;
 const ajv = new Ajv({ allErrors: true });
@@ -24,7 +24,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
   const { definitions, maxDefinitions } = input;
 
   if (definitions.length > maxDefinitions) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       "TOOL_INVALID_DEFINITION" as any,
       `Too many tool definitions. Maximum allowed is ${maxDefinitions}.`
     );
@@ -36,14 +36,14 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
   for (const { definition, sourcePath } of definitions) {
     // 1. Basic validation
     if (!isSafeToolDefinitionId(definition.id)) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_INVALID_DEFINITION" as any,
         `Invalid tool ID '${definition.id}' in ${sourcePath}. Tool IDs must be non-empty and not path-like.`
       );
     }
 
     if (ids.has(definition.id)) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_DUPLICATE_DEFINITION" as any,
         `Duplicate tool ID '${definition.id}' detected. Found in:\n  - ${ids.get(definition.id)}\n  - ${sourcePath}`
       );
@@ -51,21 +51,21 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
     ids.set(definition.id, sourcePath);
 
     if (!definition.description || typeof definition.description !== "string") {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_INVALID_DEFINITION" as any,
         `Tool '${definition.id}' in ${sourcePath} is missing a description.`
       );
     }
 
     if (!definition.inputSchema) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_INVALID_DEFINITION" as any,
         `Tool '${definition.id}' in ${sourcePath} is missing 'inputSchema'.`
       );
     }
 
     if (typeof definition.run !== "function") {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_INVALID_DEFINITION" as any,
         `Tool '${definition.id}' in ${sourcePath} is missing a 'run' function.`
       );
@@ -73,7 +73,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
 
     if (definition.defaultTimeoutMs !== undefined) {
       if (!Number.isInteger(definition.defaultTimeoutMs) || definition.defaultTimeoutMs <= 0) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           "TOOL_INVALID_DEFINITION" as any,
           `Tool '${definition.id}' in ${sourcePath} has an invalid 'defaultTimeoutMs'. It must be a positive integer.`
         );
@@ -82,7 +82,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
 
     if (definition.metadata !== undefined) {
       if (!isJsonCompatible(definition.metadata)) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           "TOOL_INVALID_DEFINITION" as any,
           `Tool '${definition.id}' in ${sourcePath} has metadata that is not JSON-compatible.`
         );
@@ -99,7 +99,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
         return { ok: false, errors: formatAjvErrors(ajvValidate.errors) };
       };
     } catch (err: any) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         "TOOL_INVALID_DEFINITION" as any,
         `Tool '${definition.id}' in ${sourcePath} has an invalid 'inputSchema': ${err.message}`
       );
@@ -115,7 +115,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
           return { ok: false, errors: formatAjvErrors(ajvValidate.errors) };
         };
       } catch (err: any) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           "TOOL_INVALID_DEFINITION" as any,
           `Tool '${definition.id}' in ${sourcePath} has an invalid 'outputSchema': ${err.message}`
         );
@@ -142,7 +142,7 @@ export function buildToolRegistry(input: BuildToolRegistryInput): ToolRegistry {
     require: (id: string) => {
       const tool = toolsMap.get(id);
       if (!tool) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           "TOOL_DEFINITION_NOT_FOUND" as any,
           `Tool definition '${id}' not found in registry.`
         );

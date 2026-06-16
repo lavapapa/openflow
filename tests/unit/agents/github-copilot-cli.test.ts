@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { GitHubCopilotCliAdapter } from "../../../src/agents/github-copilot-cli.js";
 import type { AgentRunInput, ProviderParseInput } from "../../../src/agents/types.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import * as processRunner from "../../../src/agents/process-runner.js";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -222,7 +222,7 @@ describe("GitHubCopilotCliAdapter", () => {
       });
 
       await expect(adapter.buildCommand(input)).rejects.toThrow(
-        new OpenFlowError(
+        new OpenDynamicWorkflowError(
           ErrorCode.CLI_USAGE_ERROR,
           'GitHub Copilot CLI does not support structuredOutput.transport="native" yet.'
         )

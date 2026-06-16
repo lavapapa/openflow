@@ -127,7 +127,7 @@ export function createDiscoveryService(input?: {
         }
 
         return {
-          schemaVersion: "openflow.list.v1",
+          schemaVersion: "open-dynamic-workflow.list.v1",
           status,
           resourceTypes,
           resources: dedupedResources,
@@ -146,7 +146,7 @@ export function createDiscoveryService(input?: {
         const normalized = normalizeDiagnosticSeverity(diag, true);
         
         return {
-          schemaVersion: "openflow.list.v1",
+          schemaVersion: "open-dynamic-workflow.list.v1",
           status: "failed",
           resourceTypes,
           resources: [],

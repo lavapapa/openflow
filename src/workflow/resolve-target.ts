@@ -1,12 +1,12 @@
 import { resolve, relative, isAbsolute } from "node:path";
 import { access, realpath } from "node:fs/promises";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { resolveDiscoveryDirectories } from "../discovery/directories.js";
 import { createDiscoveryService } from "../discovery/service.js";
 import { loadWorkflow } from "./load.js";
 import { parseWorkflow } from "./parse.js";
-import type { ResolvedOpenFlowConfig } from "../config/types.js";
+import type { ResolvedOpenDynamicWorkflowConfig } from "../config/types.js";
 import type { ListedWorkflow } from "../discovery/types.js";
 
 export type WorkflowTargetKind = "workflow-name" | "workflow-file";
@@ -41,7 +41,7 @@ export interface ResolvedWorkflowTarget {
 export interface ResolveWorkflowTargetInput {
   target: string;
   cwd: string;
-  config: ResolvedOpenFlowConfig;
+  config: ResolvedOpenDynamicWorkflowConfig;
   mode: "run" | "validate";
   allowPathLikeFastPath?: boolean | undefined;
 }
@@ -49,14 +49,14 @@ export interface ResolveWorkflowTargetInput {
 export interface ResolveWorkflowFileTargetInput {
   target: string;
   cwd: string;
-  config: ResolvedOpenFlowConfig;
+  config: ResolvedOpenDynamicWorkflowConfig;
   fallbackFromName?: boolean | undefined;
 }
 
 export interface ResolveWorkflowNameTargetInput {
   name: string;
   cwd: string;
-  config: ResolvedOpenFlowConfig;
+  config: ResolvedOpenDynamicWorkflowConfig;
 }
 
 export function isPathLikeWorkflowTarget(target: string): boolean {
@@ -80,7 +80,7 @@ export async function resolveWorkflowTarget(
   const { target, cwd, config, allowPathLikeFastPath = true } = input;
 
   if (!target || target.trim() === "") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_TARGET_NOT_FOUND,
       "Workflow target is required."
     );
@@ -112,9 +112,9 @@ export async function resolveWorkflowTarget(
     });
   } catch (err) {
     // If fallback fails, throw a target-not-found error that suggests list
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_TARGET_NOT_FOUND,
-      `Workflow "${target}" not found by name or file path. Try "openflow list workflows" to see available workflows.`,
+      `Workflow "${target}" not found by name or file path. Try "open-dynamic-workflow list workflows" to see available workflows.`,
       { cause: err }
     );
   }
@@ -130,7 +130,7 @@ export async function resolveWorkflowFileTarget(
   try {
     canonicalPath = await realpath(absolutePath);
   } catch (cause) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_FILE_NOT_FOUND,
       `Workflow file not found: ${absolutePath}`,
       { cause }
@@ -140,7 +140,7 @@ export async function resolveWorkflowFileTarget(
   const canonicalCwd = await realpath(resolve(cwd)).catch(() => resolve(cwd));
   const rel = relative(canonicalCwd, canonicalPath);
   if (rel.startsWith("..") || isAbsolute(rel)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SECURITY_POLICY_VIOLATION,
       `Workflow file outside project root: ${canonicalPath}`
     );
@@ -195,7 +195,7 @@ export async function resolveWorkflowNameTarget(
     const errorDetails = allDiags.length > 0
       ? allDiags.map((e) => `- ${e.path || "unknown"}: ${e.message}`).join("\n")
       : "- unknown error during directory scan";
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_DISCOVERY_FAILED,
       `Could not resolve workflow target "${name}" because workflow discovery failed.\n\nDiscovery errors:\n${errorDetails}\n\nCheck --cwd, --config, and workflow.discovery.include.`
     );
@@ -211,7 +211,7 @@ export async function resolveWorkflowNameTarget(
 
   if (matches.length > 1) {
     const paths = matches.map((m) => m.path).join(", ");
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_DUPLICATE_NAME,
       `Multiple workflows found with name "${name}": ${paths}`
     );

@@ -42,7 +42,7 @@ function makeRuntimeState(agentResults: AgentResult[] = []): RuntimeState {
     security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
     reporting: { mode: "pretty", verbose: false },
     cwd: "/workspace",
-    outDir: "/workspace/.openflow/runs",
+    outDir: "/workspace/.open-dynamic-workflow/runs",
     cliArgs: {}
   };
 
@@ -52,7 +52,7 @@ function makeRuntimeState(agentResults: AgentResult[] = []): RuntimeState {
     config,
     args: {},
     cwd: "/workspace",
-    artifactsDir: "/workspace/.openflow/runs/run-result-test",
+    artifactsDir: "/workspace/.open-dynamic-workflow/runs/run-result-test",
     agentResults,
     scheduler: {} as any,
     agentExecutor: {} as any,
@@ -77,7 +77,7 @@ describe("buildSucceededRunResult()", () => {
     const runtime = makeRuntimeState();
     const result = buildSucceededRunResult(runtime, undefined, 100, "2026-06-02T00:00:01.000Z");
 
-    expect(result.schemaVersion).toBe("openflow.report.v1");
+    expect(result.schemaVersion).toBe("open-dynamic-workflow.report.v1");
   });
 
   it("includes run ID from runtime", () => {

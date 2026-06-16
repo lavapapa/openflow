@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../types/artifacts.js";
 import { safeFileName } from "../artifacts/run-store.js";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { SerializedError } from "../types/errors.js";
 
 export function getToolRelativeDir(toolCallId: string): string {
@@ -18,7 +18,7 @@ async function writeToolJson(
   try {
     return await artifactStore.writeJson(relativePath, data);
   } catch (error) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.TOOL_ARTIFACT_WRITE_FAILED,
       `Failed to write tool artifact ${fileName} for ${toolCallId}: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error }

@@ -1,6 +1,6 @@
 export const meta = {
   name: "basic-workflow",
-  description: "Run a basic OpenFlow workflow",
+  description: "Run a basic Open Dynamic Workflow workflow",
   phases: ["execute"]
 };
 

@@ -26,7 +26,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -57,11 +57,11 @@ providers:
     defaultModel: null
 security:
   passEnv:
-    - OPENFLOW_FAKE_PROVIDER_COUNTER
-    - OPENFLOW_FAKE_PROVIDER_JSON
-    - OPENFLOW_FAKE_PROVIDER_INVALID_JSON
-    - OPENFLOW_FAKE_PROVIDER_FAIL_ON
-    - OPENFLOW_FAKE_PROVIDER_EXIT_CODE
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_JSON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_INVALID_JSON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_FAIL_ON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_EXIT_CODE
 workflow:
   discovery:
     include:
@@ -77,7 +77,7 @@ describe("Resumable Run Acceptance Tests", () => {
   });
 
   afterEach(async () => {
-    delete process.env.OPENFLOW_FAKE_PROVIDER_COUNTER;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER;
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
@@ -124,7 +124,7 @@ export default async (ctx) => {
     expect(runInputStr).not.toContain("secret-key-123");
     expect(runInputStr).not.toContain("bar");
     
-    expect(runInput.schemaVersion).toBe("openflow.run-input.v1");
+    expect(runInput.schemaVersion).toBe("open-dynamic-workflow.run-input.v1");
     expect(runInput.runId).toBe(runId);
     expect(runInput.rawOptions).toBeDefined();
     
@@ -151,7 +151,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "hello" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     // First run
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
@@ -302,7 +302,7 @@ export default async (ctx) => {
     }
   });
 
-  it("AT-02: openflow resume reuses a full unchanged prefix (AC1, AC3, AC4)", async () => {
+  it("AT-02: open-dynamic-workflow resume reuses a full unchanged prefix (AC1, AC3, AC4)", async () => {
     // Arrange
     const workflowPath = path.join(TEMP_DIR, "workflows/at-02.ts");
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -315,7 +315,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "call 2" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
     expect(await fs.readFile(counterPath, "utf8")).toBe("2");
@@ -348,7 +348,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "later" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
     const [firstRunId] = await listRunDirs(runsDir);
@@ -393,7 +393,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "parent agent 2" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     await runCli(["run", parentPath, "--config", configPath, "--out", runsDir]);
     const [firstRunId] = await listRunDirs(runsDir);
@@ -414,7 +414,7 @@ export default async (ctx) => {
     expect(sequences).toEqual([1, 2, 3]);
   });
 
-  it("AT-17: openflow run <workflow> --resume <run-id> uses cache (AC1)", async () => {
+  it("AT-17: open-dynamic-workflow run <workflow> --resume <run-id> uses cache (AC1)", async () => {
     // Arrange
     const workflowPath = path.join(TEMP_DIR, "workflows/at-17.ts");
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -426,7 +426,7 @@ export default async (ctx) => {
   await ctx.agent({ id: "agent-1", prompt: "hello" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     // Baseline run
     const { error: error1 } = await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
@@ -477,7 +477,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "parent 2" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     // Baseline
     const { error: error1 } = await runCli(["run", parentPath, "--config", configPath, "--out", runsDir]);
@@ -529,7 +529,7 @@ export default async (ctx) => {
   return "done";
 };`);
 
-    process.env.OPENFLOW_FAKE_PROVIDER_FAIL_ON = "fail-me";
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_FAIL_ON = "fail-me";
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
     
     const [runId] = await listRunDirs(runsDir);
@@ -550,7 +550,7 @@ export default async (ctx) => {
     const counterPath = path.join(TEMP_DIR, "counter-at-05.txt");
     
     // Shared agent definition
-    await fs.writeFile(agentPath, `import { defineAgent } from "@prmflow/openflow";
+    await fs.writeFile(agentPath, `import { defineAgent } from "@travisliu/open-dynamic-workflow";
 export default defineAgent({
   id: "reviewer",
   run: async (context, runtime) => {
@@ -567,7 +567,7 @@ providers:
     args:
       - ${JSON.stringify(FAKE_PROVIDER)}
 security:
-  passEnv: ["OPENFLOW_FAKE_PROVIDER_COUNTER"]
+  passEnv: ["OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER"]
 sharedAgents:
   dir: ${JSON.stringify(agentsDir)}
 `, "utf8");
@@ -577,7 +577,7 @@ export default async (ctx) => {
   await ctx.agent({ definition: "reviewer" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     // First run
     const { error: error1, stdout: stdout1 } = await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
@@ -616,7 +616,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "hello" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
     const [firstRunId] = await listRunDirs(runsDir);
@@ -644,7 +644,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "hello" });
   return "done";
 };`);
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir]);
     const [firstRunId] = await listRunDirs(runsDir);
@@ -698,7 +698,7 @@ export default async (ctx) => { "done" };`);
     await fs.mkdir(toolsDir, { recursive: true });
     await fs.writeFile(path.join(toolsDir, "tool-01.ts"), `
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "tool-01",
   description: "test",
   inputSchema: { type: "object" },
@@ -747,7 +747,7 @@ export default async (ctx) => {
     await fs.mkdir(toolsDir, { recursive: true });
     await fs.writeFile(path.join(toolsDir, "tool-02.ts"), `
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "tool-02",
   description: "test",
   inputSchema: { type: "object" },

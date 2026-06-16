@@ -1,4 +1,4 @@
-# AGENTS.md — OpenFlow Repository Guide
+# AGENTS.md — Open Dynamic Workflow Repository Guide
 
 This file contains repository-specific instructions for coding agents. Keep product usage, CLI examples, and general feature descriptions in `README.md`; keep this file focused on how agents should safely modify the codebase.
 
@@ -6,7 +6,7 @@ This file contains repository-specific instructions for coding agents. Keep prod
 
 ## 1. Core Boundaries
 
-OpenFlow orchestrates external provider CLIs. Do not turn it into a coding-agent implementation.
+Open Dynamic Workflow orchestrates external provider CLIs. Do not turn it into a coding-agent implementation.
 
 Preserve these boundaries:
 
@@ -233,9 +233,9 @@ During review, check:
 Do not duplicate README content here. Update:
 
 - `README.md` for user-facing usage, examples, and product overview.
-- `skills/openflow-workflow-writer/references/api-document.md` for DSL/API details.
-- `skills/openflow-workflow-writer/references/configuration.md` for config schema and precedence.
-- `skills/openflow-workflow-writer/references/cli-commands.md` for CLI flags and command behavior.
+- `skills/open-dynamic-workflow/references/api-document.md` for DSL/API details.
+- `skills/open-dynamic-workflow/references/configuration.md` for config schema and precedence.
+- `skills/open-dynamic-workflow/references/cli-commands.md` for CLI flags and command behavior.
 - `docs/` design and review notes for runtime, pipeline, event, artifact, or provider-boundary changes when those notes are still current.
 - `AGENTS.md` only for coding-agent operating rules.
 

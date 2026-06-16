@@ -1,4 +1,4 @@
-import type { OpenFlowConfig } from "./types.js";
+import type { OpenDynamicWorkflowConfig } from "./types.js";
 
 export interface ConfigCliOverrides {
   provider?: string | undefined;
@@ -10,10 +10,10 @@ export interface ConfigCliOverrides {
 }
 
 export function mergeConfig(
-  defaults: OpenFlowConfig,
-  fileConfig: Partial<OpenFlowConfig>,
+  defaults: OpenDynamicWorkflowConfig,
+  fileConfig: Partial<OpenDynamicWorkflowConfig>,
   cli: ConfigCliOverrides
-): OpenFlowConfig {
+): OpenDynamicWorkflowConfig {
   const mergedProviders = { ...defaults.providers };
   if (fileConfig.providers) {
     for (const [key, value] of Object.entries(fileConfig.providers)) {
@@ -26,7 +26,7 @@ export function mergeConfig(
     }
   }
 
-  const merged: OpenFlowConfig = {
+  const merged: OpenDynamicWorkflowConfig = {
     ...defaults,
     ...fileConfig,
     providers: mergedProviders,

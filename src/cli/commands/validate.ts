@@ -1,5 +1,5 @@
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
 import { discoverWorkflowRegistry } from "../../workflow/discovery.js";
 import { resolveWorkflowTarget } from "../../workflow/resolve-target.js";
@@ -77,7 +77,7 @@ export async function validateWorkflowService(
   const rootDefinition = workflowRegistry.list().find(d => d.sourcePath === absoluteRootPath);
 
   if (!rootDefinition) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_DEFINITION_NOT_FOUND,
       `Root workflow definition not found in discovery: ${absoluteRootPath}`
     );

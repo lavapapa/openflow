@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { SharedAgentRegistry } from "./registry.js";
 import type { SharedAgentRegistryEntry } from "./types.js";
 
@@ -19,7 +19,7 @@ export function resolveSharedAgent(
     id.includes("/") ||
     id.includes("\\")
   ) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_NOT_FOUND,
       "Shared agent definition references must use a registry ID, not a path."
     );
@@ -27,7 +27,7 @@ export function resolveSharedAgent(
 
   const entry = registry.get(id);
   if (!entry) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_NOT_FOUND,
       `Shared agent '${id}' was not found in the configured registry.`
     );

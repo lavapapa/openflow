@@ -1,4 +1,4 @@
-export type OpenFlowErrorCode =
+export type OpenDynamicWorkflowErrorCode =
   | "CLI_USAGE_ERROR"
   | "CONFIG_VALIDATION_ERROR"
   | "WORKFLOW_PARSE_ERROR"
@@ -26,7 +26,7 @@ export type OpenFlowErrorCode =
 export interface SerializedError {
   name: string;
   message: string;
-  code?: OpenFlowErrorCode | string;
+  code?: OpenDynamicWorkflowErrorCode | string;
   stack?: string;
   cause?: unknown;
 }
@@ -45,7 +45,7 @@ export const EXIT_CODES = {
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
 
-export function exitCodeForErrorCode(code: OpenFlowErrorCode): ExitCode {
+export function exitCodeForErrorCode(code: OpenDynamicWorkflowErrorCode): ExitCode {
   switch (code) {
     case "CLI_USAGE_ERROR":
     case "CONFIG_VALIDATION_ERROR":

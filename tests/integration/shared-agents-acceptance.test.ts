@@ -28,7 +28,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -49,7 +49,7 @@ describe("Shared Agent Acceptance Tests", () => {
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });
-    await fs.mkdir(path.join(TEMP_DIR, ".openflow/agents"), { recursive: true });
+    await fs.mkdir(path.join(TEMP_DIR, ".open-dynamic-workflow/agents"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -68,7 +68,7 @@ export default defineAgent({
   }
 });
 `;
-    const agentPath = path.join(TEMP_DIR, ".openflow/agents/malicious.agent.js");
+    const agentPath = path.join(TEMP_DIR, ".open-dynamic-workflow/agents/malicious.agent.js");
     await fs.writeFile(agentPath, agentDef);
 
     const workflow = `
@@ -80,7 +80,7 @@ await agent({ definition: "malicious-agent" });
 
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -112,7 +112,7 @@ export default defineAgent({
   }
 });
 `;
-    const agentPath = path.join(TEMP_DIR, ".openflow/agents/env.agent.js");
+    const agentPath = path.join(TEMP_DIR, ".open-dynamic-workflow/agents/env.agent.js");
     await fs.writeFile(agentPath, agentDef);
 
     const workflow = `
@@ -124,7 +124,7 @@ await agent({ definition: "env-agent" });
 
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -156,7 +156,7 @@ export default defineAgent({
   }
 });
 `;
-    const agentPath = path.join(TEMP_DIR, ".openflow/agents/escape.agent.js");
+    const agentPath = path.join(TEMP_DIR, ".open-dynamic-workflow/agents/escape.agent.js");
     await fs.writeFile(agentPath, agentDef);
 
     const workflow = `
@@ -168,7 +168,7 @@ await agent({ definition: "escape-agent" });
 
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -195,7 +195,7 @@ defaultProvider: mock
     await fs.mkdir(outsideDir, { recursive: true });
     await fs.writeFile(path.join(outsideDir, "outside.yaml"), "id: outside\ndescription: d\nagentPrompt: p");
     
-    const symlinkPath = path.join(TEMP_DIR, ".openflow/agents/outside-link");
+    const symlinkPath = path.join(TEMP_DIR, ".open-dynamic-workflow/agents/outside-link");
     await fs.symlink(outsideDir, symlinkPath, "dir");
 
     const workflow = `
@@ -207,7 +207,7 @@ await agent({ definition: "outside" });
 
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -286,7 +286,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/metadata.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/metadata.agent.js"), agentDef);
 
     const workflow = `
 export const meta = { name: "metadata-test", description: "test" };
@@ -297,7 +297,7 @@ await agent({ definition: "metadata-agent" });
 
     const config = `
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 defaultProvider: mock
 `;
     const configPath = path.join(TEMP_DIR, "config.yaml");
@@ -383,8 +383,8 @@ defaultProvider: mock
 
   it("Documentation Verification: verifies configuration and cli-commands references contain shared-agent details", async () => {
     // Arrange & Act
-    const configDoc = await fs.readFile("skills/openflow-workflow-writer/references/configuration.md", "utf8");
-    const cliDoc = await fs.readFile("skills/openflow-workflow-writer/references/cli-commands.md", "utf8");
+    const configDoc = await fs.readFile("skills/open-dynamic-workflow/references/configuration.md", "utf8");
+    const cliDoc = await fs.readFile("skills/open-dynamic-workflow/references/cli-commands.md", "utf8");
 
     // Assert
     expect(configDoc).toContain("sharedAgents");

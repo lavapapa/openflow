@@ -22,7 +22,7 @@ describe("list-command integration", () => {
       return true;
     });
 
-    await main(["node", "openflow", "list", "--cwd", VALID_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "--cwd", VALID_FIXTURES_DIR]);
     
     expect(output).toContain("--- WORKFLOWS ---");
     expect(output).toContain("feature-builder");
@@ -40,7 +40,7 @@ describe("list-command integration", () => {
       return true;
     });
 
-    await main(["node", "openflow", "list", "agents", "--cwd", VALID_FIXTURES_DIR, "--report", "json"]);
+    await main(["node", "open-dynamic-workflow", "list", "agents", "--cwd", VALID_FIXTURES_DIR, "--report", "json"]);
     
     const parsed = JSON.parse(output);
     expect(parsed.status).toBe("succeeded");
@@ -65,7 +65,7 @@ describe("list-command integration", () => {
       return true;
     });
 
-    await main(["node", "openflow", "list", "tools", "--cwd", VALID_FIXTURES_DIR, "--report", "jsonl"]);
+    await main(["node", "open-dynamic-workflow", "list", "tools", "--cwd", VALID_FIXTURES_DIR, "--report", "jsonl"]);
     
     const lines = output.trim().split("\n");
     const resourceRecord = JSON.parse(lines.find(l => JSON.parse(l).type === "list.resource")!);
@@ -82,7 +82,7 @@ describe("list-command integration", () => {
   it("rejects singular resource type 'workflow'", async () => {
     // commander will throw an error that main catches and sets exit code
     try {
-      await main(["node", "openflow", "list", "workflow", "--cwd", VALID_FIXTURES_DIR]);
+      await main(["node", "open-dynamic-workflow", "list", "workflow", "--cwd", VALID_FIXTURES_DIR]);
     } catch (err) {
       process.exitCode = exitCodeForError(err);
     }
@@ -90,12 +90,12 @@ describe("list-command integration", () => {
   });
 
   it("reports warnings for invalid resources in lenient mode", async () => {
-    await main(["node", "openflow", "list", "--cwd", INVALID_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "--cwd", INVALID_FIXTURES_DIR]);
     expect(process.exitCode).toBe(ExitCode.Success);
   });
 
   it("fails in strict mode for invalid resources", async () => {
-    await main(["node", "openflow", "list", "--cwd", INVALID_FIXTURES_DIR, "--strict"]);
+    await main(["node", "open-dynamic-workflow", "list", "--cwd", INVALID_FIXTURES_DIR, "--strict"]);
     expect(process.exitCode).toBe(ExitCode.WorkflowInvalid);
   });
 
@@ -106,7 +106,7 @@ describe("list-command integration", () => {
       return true;
     });
 
-    await main(["node", "openflow", "list", "--cwd", MIXED_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "--cwd", MIXED_FIXTURES_DIR]);
 
     expect(output).toContain("valid-workflow");
     expect(output).toContain("valid-agent");
@@ -124,7 +124,7 @@ describe("list-command integration", () => {
       return true;
     });
 
-    await main(["node", "openflow", "list", "--cwd", EMPTY_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "--cwd", EMPTY_FIXTURES_DIR]);
 
     expect(output).toContain("No workflows found");
     expect(output).toContain("No agents found");
@@ -144,7 +144,7 @@ describe("list-command integration", () => {
     // Test targeted override
     await main([
       "node",
-      "openflow",
+      "open-dynamic-workflow",
       "list",
       "workflows",
       "--cwd",
@@ -158,7 +158,7 @@ describe("list-command integration", () => {
     // Test all-resource override
     await main([
       "node",
-      "openflow",
+      "open-dynamic-workflow",
       "list",
       "--cwd",
       CUSTOM_FIXTURES_DIR,
@@ -185,7 +185,7 @@ describe("list-command integration", () => {
 
     await main([
       "node",
-      "openflow",
+      "open-dynamic-workflow",
       "list",
       "--cwd",
       DUPLICATE_FIXTURES_DIR,

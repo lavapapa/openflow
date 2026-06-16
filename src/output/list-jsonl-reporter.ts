@@ -8,7 +8,7 @@ export class ListJsonlReporter implements ListReporter {
     for (const resource of result.resources) {
       this.streams.stdout.write(
         JSON.stringify({
-          schemaVersion: "openflow.list.v1",
+          schemaVersion: "open-dynamic-workflow.list.v1",
           type: "list.resource",
           resource: this.filterResource(resource),
         }) + "\n"
@@ -18,7 +18,7 @@ export class ListJsonlReporter implements ListReporter {
     for (const warning of result.warnings) {
       this.streams.stdout.write(
         JSON.stringify({
-          schemaVersion: "openflow.list.v1",
+          schemaVersion: "open-dynamic-workflow.list.v1",
           type: "list.warning",
           warning,
         }) + "\n"
@@ -28,7 +28,7 @@ export class ListJsonlReporter implements ListReporter {
     for (const error of result.errors) {
       this.streams.stdout.write(
         JSON.stringify({
-          schemaVersion: "openflow.list.v1",
+          schemaVersion: "open-dynamic-workflow.list.v1",
           type: "list.error",
           error,
         }) + "\n"
@@ -37,7 +37,7 @@ export class ListJsonlReporter implements ListReporter {
 
     this.streams.stdout.write(
       JSON.stringify({
-        schemaVersion: "openflow.list.v1",
+        schemaVersion: "open-dynamic-workflow.list.v1",
         type: "list.summary",
         summary: result.summary,
       }) + "\n"

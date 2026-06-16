@@ -12,7 +12,7 @@ export function formatInitSummary(result: InitResult): string {
   const { plan, writeResult, smokeTest } = result;
   const lines: string[] = [];
 
-  lines.push("OpenFlow project initialized.");
+  lines.push("Open Dynamic Workflow project initialized.");
   lines.push("");
   lines.push(providerSelectionReason(plan.providerSelection));
   lines.push("");

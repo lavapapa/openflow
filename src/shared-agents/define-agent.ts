@@ -1,6 +1,6 @@
 import type { SharedAgentDefinition } from "./types.js";
 
-const SHARED_AGENT_MARKER = Symbol.for("openflow.sharedAgentDefinition");
+const SHARED_AGENT_MARKER = Symbol.for("open-dynamic-workflow.sharedAgentDefinition");
 
 export function defineAgent<T extends SharedAgentDefinition>(definition: T): T {
   Object.defineProperty(definition, SHARED_AGENT_MARKER, {

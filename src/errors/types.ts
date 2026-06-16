@@ -8,13 +8,13 @@ export interface SerializedError {
   cause?: unknown;
 }
 
-export class OpenFlowError extends Error {
+export class OpenDynamicWorkflowError extends Error {
   readonly code: ErrorCode;
   override readonly cause?: unknown;
 
   constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
     super(message);
-    this.name = "OpenFlowError";
+    this.name = "OpenDynamicWorkflowError";
     this.code = code;
     this.cause = options?.cause;
     // Restore prototype chain

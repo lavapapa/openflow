@@ -12,7 +12,7 @@ import { shouldRedactEnvName } from "../security/env.js";
 import { appendModelArg } from "./model-args.js";
 import { extractJson } from "../structured/extract-json.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export interface OpenCodeProviderConfig extends ProviderConfig {
@@ -79,14 +79,14 @@ export class OpenCodeCliAdapter implements AgentAdapter {
     });
 
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'OpenCode does not support structuredOutput.transport="native" yet.'
       );
     }
 
     if (config.promptMode === "stdin") {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'OpenCode does not support promptMode="stdin". Use "arg".'
       );

@@ -21,7 +21,7 @@ async function runCli(args: string[]) {
 
   let error: unknown = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -75,9 +75,9 @@ describe("Integration - mock run jsonl mode", () => {
       }).not.toThrow();
     }
 
-    // Every event must have schemaVersion: "openflow.event.v1"
+    // Every event must have schemaVersion: "open-dynamic-workflow.event.v1"
     for (const event of parsedEvents) {
-      expect(event.schemaVersion).toBe("openflow.event.v1");
+      expect(event.schemaVersion).toBe("open-dynamic-workflow.event.v1");
     }
 
     // Sequence numbers must be strictly increasing

@@ -7,7 +7,7 @@ import { tmpdir } from "os";
 describe("Load Config", () => {
   it("56. no-config defaults include all new providers without changing default provider", async () => {
     // Arrange
-    const emptyDir = join(tmpdir(), "openflow-test-empty-" + Date.now());
+    const emptyDir = join(tmpdir(), "open-dynamic-workflow-test-empty-" + Date.now());
     mkdirSync(emptyDir, { recursive: true });
 
     // Act
@@ -25,7 +25,7 @@ describe("Load Config", () => {
 
   it("57. YAML overrides provider-specific fields and keeps unspecified defaults", async () => {
     // Arrange
-    const tempDir = join(tmpdir(), "openflow-test-yaml-" + Date.now());
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-yaml-" + Date.now());
     mkdirSync(tempDir, { recursive: true });
     const configContent = `
 providers:
@@ -38,7 +38,7 @@ providers:
   pi:
     safeTools: [read, grep]
 `;
-    const configDir = join(tempDir, ".openflow");
+    const configDir = join(tempDir, ".open-dynamic-workflow");
     mkdirSync(configDir, { recursive: true });
     const configPath = join(configDir, "config.yaml");
     writeFileSync(configPath, configContent);
@@ -61,14 +61,14 @@ providers:
 
   it("AAV2-T005: executionMode: print should not be overridden by default args", async () => {
     // Arrange
-    const tempDir = join(tmpdir(), "openflow-test-aav2-t005-" + Date.now());
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-aav2-t005-" + Date.now());
     mkdirSync(tempDir, { recursive: true });
     const configContent = `
 providers:
   pi:
     executionMode: print
 `;
-    const configDir = join(tempDir, ".openflow");
+    const configDir = join(tempDir, ".open-dynamic-workflow");
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, "config.yaml"), configContent);
 
@@ -84,10 +84,10 @@ providers:
 
   it("36. Copilot can be configured as default provider explicitly", async () => {
     // Arrange
-    const tempDir = join(tmpdir(), "openflow-test-default-" + Date.now());
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-default-" + Date.now());
     mkdirSync(tempDir, { recursive: true });
     const configContent = "defaultProvider: copilot";
-    const configDir = join(tempDir, ".openflow");
+    const configDir = join(tempDir, ".open-dynamic-workflow");
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, "config.yaml"), configContent);
 
@@ -103,7 +103,7 @@ providers:
 
   it("37. security defaults do not pass Copilot tokens automatically", async () => {
     // Arrange
-    const emptyDir = join(tmpdir(), "openflow-test-security-" + Date.now());
+    const emptyDir = join(tmpdir(), "open-dynamic-workflow-test-security-" + Date.now());
     mkdirSync(emptyDir, { recursive: true });
 
     // Act
@@ -118,9 +118,9 @@ providers:
   });
 
   // Keep some core existing tests to ensure no regressions
-  it("loads config from .openflow/config.yaml", async () => {
-    const tempDir = join(tmpdir(), "openflow-test-base-" + Date.now());
-    const configDir = join(tempDir, ".openflow");
+  it("loads config from .open-dynamic-workflow/config.yaml", async () => {
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-base-" + Date.now());
+    const configDir = join(tempDir, ".open-dynamic-workflow");
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, "config.yaml"), "defaultProvider: codex");
     const config = await loadConfig({ cwd: tempDir, cli: {} });

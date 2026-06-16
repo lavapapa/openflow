@@ -40,7 +40,7 @@ function isCallOf(node: ts.CallExpression, name: string): boolean {
     return true;
   }
 
-  // TODO: Support namespaced calls if needed, e.g., openflow.defineAgent(...)
+  // TODO: Support namespaced calls if needed, e.g., open-dynamic-workflow.defineAgent(...)
   
   return false;
 }

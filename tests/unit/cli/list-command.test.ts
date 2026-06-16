@@ -21,7 +21,7 @@ describe("listCommand", () => {
 
   const mockDiscoveryService = {
     discover: vi.fn().mockResolvedValue({
-      schemaVersion: "openflow.list.v1",
+      schemaVersion: "open-dynamic-workflow.list.v1",
       status: "succeeded",
       resourceTypes: ["workflow", "agent", "tool"],
       resources: [
@@ -151,7 +151,7 @@ describe("listCommand", () => {
 
   it("sets exit code 3 in strict mode with errors", async () => {
     mockDiscoveryService.discover.mockResolvedValueOnce({
-      schemaVersion: "openflow.list.v1",
+      schemaVersion: "open-dynamic-workflow.list.v1",
       status: "failed",
       resourceTypes: ["workflow"],
       resources: [],
@@ -182,7 +182,7 @@ describe("listCommand", () => {
 
   it("sets exit code 8 on internal discovery failure", async () => {
     mockDiscoveryService.discover.mockResolvedValueOnce({
-      schemaVersion: "openflow.list.v1",
+      schemaVersion: "open-dynamic-workflow.list.v1",
       status: "failed",
       resourceTypes: ["workflow"],
       resources: [],

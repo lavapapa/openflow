@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { validateCommand } from "../../../src/cli/commands/validate.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import { resolve } from "node:path";
 
 describe("Validate Command", () => {
@@ -28,7 +28,7 @@ describe("Validate Command", () => {
         workflowFile: fixturePath,
         rawOptions: {}
       })
-    ).rejects.toThrow(OpenFlowError);
+    ).rejects.toThrow(OpenDynamicWorkflowError);
 
     try {
       await validateCommand({

@@ -1,7 +1,7 @@
 import { mkdir, writeFile, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import type { InitPlan, InitWriteResult } from "./types.js";
 
 export async function applyInitPlan(plan: InitPlan): Promise<InitWriteResult> {
@@ -43,13 +43,13 @@ export async function applyInitPlan(plan: InitPlan): Promise<InitWriteResult> {
       }
     } catch (error: any) {
       if (error.code === "EEXIST" && target.action === "create") {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.ARTIFACT_WRITE_FAILED,
           `Failed to create "${target.displayPath}": file already exists (write race).`,
           { cause: error }
         );
       }
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.ARTIFACT_WRITE_FAILED,
         `Failed to ${target.action} ${target.kind} at "${target.displayPath}": ${error.message}`,
         { cause: error }

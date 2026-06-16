@@ -1,6 +1,6 @@
 # Contributing
 
-OpenFlow is an local-first workflow CLI. Keep changes focused on orchestration, provider adapters, validation, reporting, and durable artifacts.
+Open Dynamic Workflow is an local-first workflow CLI. Keep changes focused on orchestration, provider adapters, validation, reporting, and durable artifacts.
 
 ## Development
 
@@ -19,4 +19,4 @@ Use the mock provider for tests and examples that should not require real provid
 - Do not make the workflow runtime spawn provider processes directly.
 - Do not add production dependencies without a concrete MVP need.
 - Update tests and documentation for user-visible behavior changes.
-- Do not commit secrets, provider credentials, `.openflow/runs/`, `dist/`, or local tool logs.
+- Do not commit secrets, provider credentials, `.open-dynamic-workflow/runs/`, `dist/`, or local tool logs.

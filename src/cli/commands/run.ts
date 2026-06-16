@@ -1,5 +1,5 @@
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
 import { discoverWorkflowRegistry } from "../../workflow/discovery.js";
 import { resolveWorkflowTarget, type ResolvedWorkflowTarget } from "../../workflow/resolve-target.js";
@@ -55,14 +55,14 @@ export async function runWorkflowService(
   const noCache = rawOptions.cache === false || rawOptions.noCache === true;
 
   if (rawOptions.resume !== undefined && (typeof rawOptions.resume !== "string" || rawOptions.resume.trim() === "")) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       "CLI option '--resume' value must be a non-empty string."
     );
   }
 
   if (rawOptions.model !== undefined && (typeof rawOptions.model !== "string" || rawOptions.model.trim() === "")) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       "CLI option '--model' value must be a non-empty string."
     );
@@ -133,7 +133,7 @@ export async function runWorkflowService(
   const absoluteRootPath = path.resolve(config.cwd, resolved.workflowFile);
   const rootDefinition = workflowRegistry.list().find(d => d.sourcePath === absoluteRootPath);
   if (!rootDefinition) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_DEFINITION_NOT_FOUND,
       `Root workflow definition not found in discovery: ${absoluteRootPath}`
     );
@@ -196,12 +196,12 @@ export async function runWorkflowService(
     workflowHash: parsed.sourceHash,
     workflow: workflowIdentity,
     resolvedConfig: config,
-    openflowVersion: parsed.meta.version || "0.0.0",
+    openDynamicWorkflowVersion: parsed.meta.version || "0.0.0",
     cwd,
     configPath: rawOptions.config
   });
   await artifactStore.writeJson("run-input.json", {
-    schemaVersion: "openflow.run-input.v1",
+    schemaVersion: "open-dynamic-workflow.run-input.v1",
     runId: runIdGenerated,
     workflowFile: resolved.workflowFile,
     requestedTarget: resolved.requestedTarget,
@@ -360,9 +360,9 @@ export async function runWorkflowService(
       const errMessage = typeof result.error === "string"
         ? result.error
         : (result.error as any)?.message || "Workflow run failed";
-      throw new OpenFlowError(errorCode, errMessage, { cause: result.error });
+      throw new OpenDynamicWorkflowError(errorCode, errMessage, { cause: result.error });
     } else if (result.status === "cancelled") {
-      throw new OpenFlowError(ErrorCode.USER_CANCELLED, "Workflow run was cancelled");
+      throw new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Workflow run was cancelled");
     }
   } finally {
     process.off("SIGINT", sigIntHandler);

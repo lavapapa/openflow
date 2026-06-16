@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateRegistryDependencies } from "../../../src/workflow/validate.js";
 import { createWorkflowRegistry, type WorkflowDefinition } from "../../../src/workflow/registry.js";
 import type { ParsedWorkflow } from "../../../src/workflow/types.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("Validate Registry Dependencies", () => {
   const createParsed = (name: string, bodyText: string): ParsedWorkflow => ({

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { runInitSmokeTest } from "../../src/cli/init/smoke-test.js";
-import { OpenFlowError } from "../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../src/errors/types.js";
 import { ErrorCode } from "../../src/errors/codes.js";
 
 describe("runInitSmokeTest", () => {
@@ -46,7 +46,7 @@ describe("runInitSmokeTest", () => {
   });
 
   it("reports validate failure and does not call run", async () => {
-    const error = new OpenFlowError(ErrorCode.WORKFLOW_PARSE_ERROR, "failed to parse");
+    const error = new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_PARSE_ERROR, "failed to parse");
     const validate = vi.fn().mockRejectedValue(error);
     const run = vi.fn();
 
@@ -62,7 +62,7 @@ describe("runInitSmokeTest", () => {
   });
 
   it("reports run failure after validate success", async () => {
-    const error = new OpenFlowError(ErrorCode.PROVIDER_PROCESS_FAILED, "run failed");
+    const error = new OpenDynamicWorkflowError(ErrorCode.PROVIDER_PROCESS_FAILED, "run failed");
     const validate = vi.fn().mockResolvedValue({ workflowName: "example", workflowFileRelative: "workflows/example.ts" });
     const run = vi.fn().mockRejectedValue(error);
 

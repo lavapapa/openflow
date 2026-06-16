@@ -69,7 +69,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
   });
 
   it("emits verbose command and result events on success", async () => {
-    process.env.OPENFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
+    process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
     const executor = new DefaultAgentExecutor({ config, artifactStore: store as any, eventBus });
 
     const result = await executor.execute({
@@ -107,11 +107,11 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
     expect(resultEvent.payload.normalized).toContain("[REDACTED]");
     expect(typeof resultEvent.payload.durationMs).toBe("number");
 
-    delete process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
   });
 
   it("emits verbose result with status failed on non-zero exit", async () => {
-    process.env.OPENFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
+    process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
     const executor = new DefaultAgentExecutor({ config, artifactStore: store as any, eventBus });
 
     await executor.execute({
@@ -134,7 +134,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
     expect(resultEvent.payload.error.message).toContain("[REDACTED]");
     expect(resultEvent.payload.error.message).not.toContain("secret-12345");
 
-    delete process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
   });
 
   it("emits verbose result on timeout", async () => {
@@ -207,7 +207,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
         register: () => {}
     } as any);
 
-    process.env.OPENFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
+    process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
     const executor = new DefaultAgentExecutor({ config, artifactStore: store as any, eventBus });
 
     await executor.execute({
@@ -232,7 +232,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
     expect(resultEvent.payload.error.message).toContain("[REDACTED]");
     expect(resultEvent.payload.error.message).not.toContain("secret-12345");
 
-    delete process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
     registryMock.mockRestore();
   });
 
@@ -266,7 +266,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
   });
 
   it("redacts injected schema in verbose command prompt if it contains secrets", async () => {
-    process.env.OPENFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
+    process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = "secret-12345";
     config.providers.mock.responses["structured-agent-secret"] = {
       text: "{}",
       exitCode: 0
@@ -293,7 +293,7 @@ describe("DefaultAgentExecutor Verbose Logging", () => {
     expect(commandEvent.payload.prompt).toContain("[REDACTED]");
     expect(commandEvent.payload.prompt).not.toContain("secret-12345");
     
-    delete process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
   });
 
   it("succeeds when provider command omits env", async () => {

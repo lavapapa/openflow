@@ -111,7 +111,7 @@ describe("call cache", () => {
     await fs.mkdir(path.join(runRoot, "agents/a"), { recursive: true });
     await fs.writeFile(path.join(runRoot, "manifest.json"), JSON.stringify({ runId: "run-legacy" }), "utf8");
     await fs.writeFile(path.join(runRoot, "cache-index.json"), JSON.stringify({
-      schemaVersion: "openflow.cache-index.v1",
+      schemaVersion: "open-dynamic-workflow.cache-index.v1",
       entries: [
         { sequence: 1, callId: "a", fingerprint: "fp", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a" }
       ]

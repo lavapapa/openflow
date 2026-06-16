@@ -22,19 +22,19 @@ describe("list-command security", () => {
   });
 
   it("does not execute top-level code in workflows during listing", async () => {
-    await main(["node", "openflow", "list", "workflows", "--cwd", SECURITY_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "workflows", "--cwd", SECURITY_FIXTURES_DIR]);
 
     expect(fs.existsSync(WORKFLOW_MARKER)).toBe(false);
   });
 
   it("does not execute top-level code in agents during listing", async () => {
-    await main(["node", "openflow", "list", "agents", "--cwd", SECURITY_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "agents", "--cwd", SECURITY_FIXTURES_DIR]);
     
     expect(fs.existsSync(AGENT_MARKER)).toBe(false);
   });
 
   it("does not execute top-level code in tools during listing", async () => {
-    await main(["node", "openflow", "list", "tools", "--cwd", SECURITY_FIXTURES_DIR]);
+    await main(["node", "open-dynamic-workflow", "list", "tools", "--cwd", SECURITY_FIXTURES_DIR]);
     
     expect(fs.existsSync(TOOL_MARKER)).toBe(false);
   });

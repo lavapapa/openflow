@@ -43,7 +43,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-omit-cp-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-omit-cp-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.ts");
@@ -84,7 +84,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-invalid-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-invalid-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.ts");
@@ -103,7 +103,7 @@ describe("Workflow Discovery", () => {
 
       vi.mocked(parseWorkflow).mockImplementation((loaded) => {
         if (loaded.sourcePath.endsWith("helper.ts")) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_PARSE_ERROR, "Metadata name is required");
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_PARSE_ERROR, "Metadata name is required");
         }
         return {
           meta: { name: loaded.sourcePath.endsWith("root.ts") ? "root" : "child", description: "test" },
@@ -132,7 +132,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-duplicates-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-duplicates-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.ts");
@@ -236,8 +236,8 @@ describe("Workflow Discovery", () => {
     const { join } = await import("node:path");
 
     // Create a temp workspace directory
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-ws-")));
-    const tempOutsideDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-out-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-ws-")));
+    const tempOutsideDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-out-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.workflow.js");
@@ -294,7 +294,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-ws-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-ws-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.workflow.js");
@@ -335,7 +335,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-glob-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-glob-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.ts");
@@ -396,7 +396,7 @@ describe("Workflow Discovery", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
 
-    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "openflow-rootglob-")));
+    const tempWorkspaceDir = await realpath(await mkdtemp(join(tmpdir(), "open-dynamic-workflow-rootglob-")));
 
     try {
       const rootPath = join(tempWorkspaceDir, "root.workflow.js");

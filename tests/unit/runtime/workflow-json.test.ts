@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { cloneJsonValue, cloneJsonObject } from "../../../src/workflow/json.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
 
 describe("workflow json cloning", () => {
@@ -21,14 +21,14 @@ describe("workflow json cloning", () => {
   });
 
   it("rejects undefined values at any level", () => {
-    expect(() => cloneJsonValue(undefined, "test")).toThrow(OpenFlowError);
-    expect(() => cloneJsonValue({ a: undefined, b: 1 }, "test")).toThrow(OpenFlowError);
-    expect(() => cloneJsonValue([undefined, 1], "test")).toThrow(OpenFlowError);
+    expect(() => cloneJsonValue(undefined, "test")).toThrow(OpenDynamicWorkflowError);
+    expect(() => cloneJsonValue({ a: undefined, b: 1 }, "test")).toThrow(OpenDynamicWorkflowError);
+    expect(() => cloneJsonValue([undefined, 1], "test")).toThrow(OpenDynamicWorkflowError);
   });
 
   it("rejects functions", () => {
-    expect(() => cloneJsonValue(() => {}, "test")).toThrow(OpenFlowError);
-    expect(() => cloneJsonValue({ a: () => {} }, "test")).toThrow(OpenFlowError);
+    expect(() => cloneJsonValue(() => {}, "test")).toThrow(OpenDynamicWorkflowError);
+    expect(() => cloneJsonValue({ a: () => {} }, "test")).toThrow(OpenDynamicWorkflowError);
   });
 
   it("rejects circular references", () => {

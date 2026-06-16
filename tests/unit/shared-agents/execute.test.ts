@@ -19,7 +19,7 @@ describe("executeSharedAgent", () => {
     signal: new AbortController().signal,
     agent: vi.fn(),
     log: vi.fn(),
-    artifactsDir: "/repo/.openflow/runs/run-1",
+    artifactsDir: "/repo/.open-dynamic-workflow/runs/run-1",
   };
 
   it("uses custom ID from context if provided", async () => {
@@ -155,7 +155,7 @@ describe("executeSharedAgent", () => {
     expect(mockDeps.agent).toHaveBeenCalledWith(expect.objectContaining({
       prompt: "Template: test-value",
       metadata: expect.objectContaining({
-        outDir: "/repo/.openflow/runs/run-1"
+        outDir: "/repo/.open-dynamic-workflow/runs/run-1"
       })
     }));
   });

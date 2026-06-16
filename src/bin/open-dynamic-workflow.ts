@@ -2,7 +2,7 @@
 
 import { main } from "../cli/index.js";
 import { exitCodeForError } from "../errors/exit-codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 
 function objectCode(value: unknown): string | undefined {
   if (value && typeof value === "object" && "code" in value && typeof value.code === "string") {
@@ -32,14 +32,14 @@ function isCommanderControlError(error: unknown): boolean {
 }
 
 function isCommanderUsageError(error: unknown): boolean {
-  if (!(error instanceof OpenFlowError)) {
+  if (!(error instanceof OpenDynamicWorkflowError)) {
     return false;
   }
   const causeCode = objectCode(error.cause);
   return typeof causeCode === "string" && causeCode.startsWith("commander.");
 }
 
-main(process.argv.slice(2)).catch((error) => {
+main(process.argv).catch((error) => {
   if (isCommanderControlError(error)) {
     process.exitCode = 0;
     return;

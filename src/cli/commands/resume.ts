@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { defaultRunsDir } from "../../artifacts/run-store.js";
 import { parseReportMode } from "../args.js";
 import { resolveUserPath } from "../paths.js";
@@ -24,15 +24,15 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
   try {
     runInput = JSON.parse(await fs.readFile(runInputPath, "utf8"));
   } catch (err) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
-      `Cannot resume '${input.runIdOrPath}' because run-input.json is missing or unreadable. Use 'openflow run <workflow> --resume <run-id>' for older runs.`,
+      `Cannot resume '${input.runIdOrPath}' because run-input.json is missing or unreadable. Use 'open-dynamic-workflow run <workflow> --resume <run-id>' for older runs.`,
       { cause: err }
     );
   }
 
-  if (runInput.schemaVersion !== "openflow.run-input.v1" || typeof runInput.workflowFile !== "string") {
-    throw new OpenFlowError(
+  if (runInput.schemaVersion !== "open-dynamic-workflow.run-input.v1" || typeof runInput.workflowFile !== "string") {
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Cannot resume '${input.runIdOrPath}' because run-input.json is invalid.`
     );
@@ -44,18 +44,18 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
       const loaded = await loadWorkflow(runInput.workflowFile, runInput.cwd || cwd);
       const parsed = parseWorkflow(loaded);
       if (parsed.meta.name !== runInput.workflowName) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED,
           `The recorded workflow file exists, but its meta.name changed from "${runInput.workflowName}" to "${parsed.meta.name}".`
         );
       }
     } catch (err) {
-      if (err instanceof OpenFlowError && err.code === ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED) {
+      if (err instanceof OpenDynamicWorkflowError && err.code === ErrorCode.WORKFLOW_RESUME_TARGET_CHANGED) {
         throw err;
       }
       // If file is missing or unparseable, let runCommand handle it or re-throw as validation error.
-      if (err instanceof OpenFlowError) throw err;
-      throw new OpenFlowError(ErrorCode.WORKFLOW_VALIDATION_ERROR, `Failed to validate workflow identity during resume: ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof OpenDynamicWorkflowError) throw err;
+      throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_VALIDATION_ERROR, `Failed to validate workflow identity during resume: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -90,7 +90,7 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
 
 function resolveRunRoot(runIdOrPath: string, outDir: string | undefined, cwd: string): string {
   if (!runIdOrPath || typeof runIdOrPath !== "string" || runIdOrPath.trim() === "") {
-    throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "resume requires a run id or run directory path.");
+    throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "resume requires a run id or run directory path.");
   }
   if (path.isAbsolute(runIdOrPath)) {
     return runIdOrPath;

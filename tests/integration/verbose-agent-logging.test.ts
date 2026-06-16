@@ -27,7 +27,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -45,20 +45,20 @@ async function runCli(args: string[]) {
 }
 
 describe("Integration - verbose agent logging", () => {
-  const oldToken = process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+  const oldToken = process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
 
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });
-    process.env.OPENFLOW_VERBOSE_TEST_TOKEN = "SECRET_FROM_ENV";
+    process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = "SECRET_FROM_ENV";
   });
 
   afterEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     if (oldToken === undefined) {
-      delete process.env.OPENFLOW_VERBOSE_TEST_TOKEN;
+      delete process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN;
     } else {
-      process.env.OPENFLOW_VERBOSE_TEST_TOKEN = oldToken;
+      process.env.OPEN_DYNAMIC_WORKFLOW_VERBOSE_TEST_TOKEN = oldToken;
     }
   });
 
@@ -151,7 +151,7 @@ describe("Integration - verbose agent logging", () => {
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
       const event = JSON.parse(line);
-      expect(event.schemaVersion).toBe("openflow.event.v1");
+      expect(event.schemaVersion).toBe("open-dynamic-workflow.event.v1");
     }
     
     // Stderr should contain verbose blocks

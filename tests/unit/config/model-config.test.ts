@@ -11,8 +11,8 @@ function getValidBaseConfig(): any {
     },
     reporting: { mode: "pretty", verbose: false },
     security: { passEnv: [], redactEnv: [], allowWorkflowImports: false },
-    tools: { dir: ".openflow/tools", concurrency: 1, maxDefinitions: 10 },
-    sharedAgents: { dir: ".openflow/agents", maxDefinitions: 10, strictPromptTemplateVariables: true, registry: [], allowDynamicIds: false },
+    tools: { dir: ".open-dynamic-workflow/tools", concurrency: 1, maxDefinitions: 10 },
+    sharedAgents: { dir: ".open-dynamic-workflow/agents", maxDefinitions: 10, strictPromptTemplateVariables: true, registry: [], allowDynamicIds: false },
     workflow: { maxDepth: 5, discovery: { include: ["**/*.workflow.js"], exclude: [] } }
   };
 }

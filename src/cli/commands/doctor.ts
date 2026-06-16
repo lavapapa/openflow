@@ -1,5 +1,5 @@
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
 import { loadToolRegistry } from "../../tools/load.js";
 import type { ProviderHealthChecker, DoctorResult } from "../../doctors/public.js";
@@ -49,7 +49,7 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
   const rawOptions = input.rawOptions || {};
   const cwd = rawOptions.cwd ?? process.cwd();
 
-  console.log("openflow doctor\n");
+  console.log("open-dynamic-workflow doctor\n");
 
   // Node.js >= 20 check
   const nodeVersion = process.version;
@@ -60,8 +60,8 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
     console.log(`✕ Node.js version is ${nodeVersion}, expected >= 20`);
   }
 
-  // openflow package version check
-  console.log(`✓ openflow ${await getPackageVersion()}`);
+  // open-dynamic-workflow package version check
+  console.log(`✓ open-dynamic-workflow ${await getPackageVersion()}`);
 
   // current working directory is writable check
   let isCwdWritable = false;
@@ -73,14 +73,14 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
     console.log("✕ Current directory not writable");
   }
 
-  // .openflow/runs can be created or accessed check
-  const runsDir = path.resolve(cwd, ".openflow/runs");
+  // .open-dynamic-workflow/runs can be created or accessed check
+  const runsDir = path.resolve(cwd, ".open-dynamic-workflow/runs");
   let runsDirOk = false;
   try {
     await fs.mkdir(runsDir, { recursive: true });
     await fs.access(runsDir, fs.constants.W_OK);
     runsDirOk = true;
-    console.log(`✓ Artifact directory available: .openflow/runs`);
+    console.log(`✓ Artifact directory available: .open-dynamic-workflow/runs`);
   } catch {
     console.log("✕ Artifact directory unavailable");
   }
@@ -128,7 +128,7 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
       .filter((p) => !p.ok)
       .map((p) => p.provider)
       .join(", ");
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.PROVIDER_UNAVAILABLE,
       `Provider check failed: ${failedList} is unavailable.`
     );

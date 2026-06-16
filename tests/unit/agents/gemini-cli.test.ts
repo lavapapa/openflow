@@ -242,7 +242,7 @@ describe("GeminiCliAdapter", () => {
   });
 
   it("health check passes a safe env with PATH but without API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "openflow-gemini-health-"));
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-gemini-health-"));
     const command = join(dir, "health-check");
     const previousOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "should-not-leak";
@@ -351,7 +351,7 @@ describe("GeminiCliAdapter", () => {
   });
 
   it("health check passes a safe env with PATH but without API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "openflow-gemini-health-"));
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-gemini-health-"));
     const command = join(dir, "health-check");
     const previousOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "should-not-leak";

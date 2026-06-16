@@ -21,7 +21,7 @@ const defaultConfig: ResolvedConfig = {
   security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
   reporting: { mode: "pretty", verbose: false },
   cwd: "/workspace",
-  outDir: "/workspace/.openflow/runs",
+  outDir: "/workspace/.open-dynamic-workflow/runs",
   cliArgs: {}
 };
 

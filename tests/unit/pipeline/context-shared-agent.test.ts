@@ -39,16 +39,16 @@ describe("PipelineStageContext.agent", () => {
       sourceHash: "abc"
     },
     config: {
-      cwd: "/root/projects/openflow",
-      outDir: "/root/projects/openflow/.openflow/runs/run-123",
+      cwd: "/root/projects/open-dynamic-workflow",
+      outDir: "/root/projects/open-dynamic-workflow/.open-dynamic-workflow/runs/run-123",
       defaultProvider: "mock",
       timeoutMs: 30000,
       concurrency: 1,
       failFast: false
     },
     args: {},
-    cwd: "/root/projects/openflow",
-    artifactsDir: "/root/projects/openflow/.openflow/runs/run-123",
+    cwd: "/root/projects/open-dynamic-workflow",
+    artifactsDir: "/root/projects/open-dynamic-workflow/.open-dynamic-workflow/runs/run-123",
     agentResults: [],
     scheduler: {
       schedule: vi.fn().mockImplementation((task) => {

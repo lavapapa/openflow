@@ -12,7 +12,7 @@ import { shouldRedactEnvName } from "../security/env.js";
 import { appendModelArg } from "./model-args.js";
 import { extractJson } from "../structured/extract-json.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export interface AntigravityProviderConfig extends ProviderConfig {
@@ -88,7 +88,7 @@ export class AntigravityCliAdapter implements AgentAdapter {
     });
 
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'Antigravity does not support structuredOutput.transport="native" yet.'
       );
@@ -116,7 +116,7 @@ export class AntigravityCliAdapter implements AgentAdapter {
       if (this.config.useSandboxByDefault === true || this.config.permissionPolicy === "sandbox") {
         args.push(this.config.sandboxFlag ?? "--sandbox");
       } else if (this.config.permissionPolicy !== "native") {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.CLI_USAGE_ERROR,
           "Antigravity default execution requires sandbox or native policy."
         );

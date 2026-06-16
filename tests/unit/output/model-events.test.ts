@@ -25,7 +25,7 @@ describe("Model Events, Reports, and Artifacts", () => {
     reporter.start({ meta: { name: "test-run" } } as any);
 
     reporter.handle({
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 1,
       timestamp: new Date().toISOString(),
@@ -41,7 +41,7 @@ describe("Model Events, Reports, and Artifacts", () => {
     });
 
     reporter.handle({
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 2,
       timestamp: new Date().toISOString(),

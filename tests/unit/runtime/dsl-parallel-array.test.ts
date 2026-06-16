@@ -63,7 +63,7 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
     reporting: { mode: "pretty", verbose: false },
     cwd: "/workspace",
-    outDir: "/workspace/.openflow/runs",
+    outDir: "/workspace/.open-dynamic-workflow/runs",
     cliArgs: {}
   };
 
@@ -73,7 +73,7 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     config,
     args: {},
     cwd: "/workspace",
-    artifactsDir: "/workspace/.openflow/runs/run-test-1",
+    artifactsDir: "/workspace/.open-dynamic-workflow/runs/run-test-1",
     agentResults: [],
     scheduler: {
       schedule: vi.fn().mockResolvedValue(makeSuccessResult("default")),

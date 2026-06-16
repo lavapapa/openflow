@@ -27,7 +27,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -48,7 +48,7 @@ describe("Pipeline Shared Agent Integration", () => {
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });
-    await fs.mkdir(path.join(TEMP_DIR, ".openflow/agents"), { recursive: true });
+    await fs.mkdir(path.join(TEMP_DIR, ".open-dynamic-workflow/agents"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -76,7 +76,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/summarizer.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/summarizer.agent.js"), agentDef);
 
     // 2. Create workflow with pipeline
     const workflow = `
@@ -103,12 +103,12 @@ export default result;
     const config = `
 defaultProvider: mock
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 providers:
   mock:
     command: mock
 `;
-    const configPath = path.join(TEMP_DIR, "openflow.config.yaml");
+    const configPath = path.join(TEMP_DIR, "open-dynamic-workflow.config.yaml");
     await fs.writeFile(configPath, config);
 
     // 4. Run CLI
@@ -126,7 +126,7 @@ providers:
     // 5. Verify results
     const runs = (await fs.readdir(TEMP_DIR)).filter(d => d.startsWith("run-") || /^[a-z0-9-]{10,}$/.test(d));
     const runId = (await fs.readdir(TEMP_DIR)).find(d => 
-      d !== ".openflow" && d !== "workflow.js" && d !== "openflow.config.yaml" && !d.endsWith(".log")
+      d !== ".open-dynamic-workflow" && d !== "workflow.js" && d !== "open-dynamic-workflow.config.yaml" && !d.endsWith(".log")
     )!;
     const runDir = path.join(TEMP_DIR, runId);
 
@@ -195,7 +195,7 @@ export default defineAgent({
   }
 });
 `;
-    await fs.writeFile(path.join(TEMP_DIR, ".openflow/agents/validated_summarizer.agent.js"), agentDef);
+    await fs.writeFile(path.join(TEMP_DIR, ".open-dynamic-workflow/agents/validated_summarizer.agent.js"), agentDef);
 
     // 2. Create workflow with pipeline calling agent with invalid input (missing 'text')
     const workflow = `
@@ -223,9 +223,9 @@ export default result;
     const config = `
 defaultProvider: mock
 sharedAgents:
-  dir: .openflow/agents
+  dir: .open-dynamic-workflow/agents
 `;
-    const configPath = path.join(TEMP_DIR, "openflow.config.yaml");
+    const configPath = path.join(TEMP_DIR, "open-dynamic-workflow.config.yaml");
     await fs.writeFile(configPath, config);
 
     // 4. Run CLI
@@ -240,7 +240,7 @@ sharedAgents:
 
     // 5. Verify failure and report.agents
     const runId = (await fs.readdir(TEMP_DIR)).find(d => 
-      d !== ".openflow" && d !== "workflow-fail.js" && d !== "openflow.config.yaml" && !d.endsWith(".log") && d !== "workflow.js"
+      d !== ".open-dynamic-workflow" && d !== "workflow-fail.js" && d !== "open-dynamic-workflow.config.yaml" && !d.endsWith(".log") && d !== "workflow.js"
     )!;
     const runDir = path.join(TEMP_DIR, runId);
     const reportPath = path.join(runDir, "report.json");

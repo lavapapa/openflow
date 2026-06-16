@@ -1,6 +1,6 @@
 import { join, isAbsolute, relative, normalize } from "node:path";
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import type { SupportedInitProvider, ProviderCandidate } from "./types.js";
 
 export const SUPPORTED_INIT_PROVIDERS: SupportedInitProvider[] = [
@@ -34,9 +34,9 @@ export const PROVIDER_CANDIDATES: Omit<ProviderCandidate, "detected">[] = [
 ];
 
 export const DEFAULT_INIT_WORKFLOWS_DIR = "workflows";
-export const DEFAULT_INIT_AGENTS_DIR = ".openflow/agents";
-export const DEFAULT_INIT_TOOLS_DIR = ".openflow/tools";
-export const DEFAULT_INIT_CONFIG_PATH = ".openflow/config.yaml";
+export const DEFAULT_INIT_AGENTS_DIR = ".open-dynamic-workflow/agents";
+export const DEFAULT_INIT_TOOLS_DIR = ".open-dynamic-workflow/tools";
+export const DEFAULT_INIT_CONFIG_PATH = ".open-dynamic-workflow/config.yaml";
 export const DEFAULT_INIT_EXAMPLE_FILE = "example.ts";
 
 export function toDisplayPath(cwd: string, absolutePath: string): string {
@@ -46,7 +46,7 @@ export function toDisplayPath(cwd: string, absolutePath: string): string {
 
 export function resolveProjectPath(cwd: string, value: string, optionName: string): string {
   if (!value) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Option "${optionName}" cannot be empty.`
     );
@@ -56,7 +56,7 @@ export function resolveProjectPath(cwd: string, value: string, optionName: strin
   const rel = relative(cwd, absolute);
 
   if (rel.startsWith("..") || isAbsolute(rel)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Path "${value}" for "${optionName}" must be inside the project directory "${cwd}".`
     );

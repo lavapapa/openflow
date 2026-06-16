@@ -2,7 +2,7 @@ import AjvModule from "ajv";
 import type { JsonObject } from "../types/common.js";
 import type { WorkflowCallInput, WorkflowSettledResult, WorkflowInvocationSummary, WorkflowSettledStatus } from "../types/workflow.js";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { serializeError } from "../errors/serialize.js";
 import type { WorkflowDefinition, WorkflowRegistry } from "./registry.js";
 import type { 
@@ -25,9 +25,9 @@ const ajv = new Ajv({
 });
 
 function getAbortError(reason: any): Error {
-  if (reason instanceof OpenFlowError) return reason;
+  if (reason instanceof OpenDynamicWorkflowError) return reason;
   if (reason instanceof Error) return reason;
-  return new OpenFlowError(
+  return new OpenDynamicWorkflowError(
     ErrorCode.WORKFLOW_CANCELLED,
     typeof reason === "string" ? reason : (reason?.message || "Workflow cancelled")
   );
@@ -151,10 +151,10 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
     if (deadlineAt !== Infinity) {
       const remaining = deadlineAt - this.now();
       if (remaining <= 0) {
-        this.runtime.abortController.abort(new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out before starting."));
+        this.runtime.abortController.abort(new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out before starting."));
       } else {
         timeoutTimer = setTimeout(() => {
-          this.runtime.abortController.abort(new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out."));
+          this.runtime.abortController.abort(new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out."));
         }, remaining);
       }
     }
@@ -172,8 +172,8 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
     try {
       if (context.signal.aborted) {
         const reason = context.signal.reason;
-        if (reason instanceof OpenFlowError) throw reason;
-        throw new OpenFlowError(
+        if (reason instanceof OpenDynamicWorkflowError) throw reason;
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_CANCELLED, 
           typeof reason === "string" ? reason : (reason?.message || "Workflow cancelled")
         );
@@ -231,8 +231,8 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
   ): Promise<T | WorkflowSettledResult<T>> {
     if (parent.signal.aborted) {
       const reason = parent.signal.reason;
-      if (reason instanceof OpenFlowError) throw reason;
-      throw new OpenFlowError(ErrorCode.WORKFLOW_CANCELLED, typeof reason === "string" ? reason : (reason?.message || "Parent workflow already cancelled."));
+      if (reason instanceof OpenDynamicWorkflowError) throw reason;
+      throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_CANCELLED, typeof reason === "string" ? reason : (reason?.message || "Parent workflow already cancelled."));
     }
 
     const call = normalizeWorkflowCall(input);
@@ -265,14 +265,14 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
       
       const maxDepth = this.runtime.config.workflow?.maxDepth ?? 8;
       if (depth > maxDepth) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_MAX_DEPTH_EXCEEDED,
           `Maximum workflow depth of ${maxDepth} exceeded.`
         );
       }
 
       if (parent.ancestry.includes(definition.name)) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_RECURSION_DETECTED,
           `Active recursion detected: ${parent.ancestry.join(" -> ")} -> ${definition.name}`
         );
@@ -283,7 +283,7 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
         const valid = validate(call.args);
         if (!valid) {
           const errors = validate.errors?.map((e: any) => `${e.instancePath} ${e.message}`).join(", ");
-          throw new OpenFlowError(
+          throw new OpenDynamicWorkflowError(
             ErrorCode.WORKFLOW_INPUT_VALIDATION_FAILED,
             `Input validation failed for workflow '${definition.name}': ${errors}`
           );
@@ -348,10 +348,10 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
     if (deadlineAt !== Infinity) {
       const remaining = deadlineAt - this.now();
       if (remaining <= 0) {
-        abortController.abort(new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out before starting."));
+        abortController.abort(new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out before starting."));
       } else {
         timeoutTimer = setTimeout(() => {
-          abortController.abort(new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out."));
+          abortController.abort(new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out."));
         }, remaining);
       }
     }
@@ -406,8 +406,8 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
     try {
       if (context.signal.aborted) {
         const reason = context.signal.reason;
-        if (reason instanceof OpenFlowError) throw reason;
-        throw new OpenFlowError(
+        if (reason instanceof OpenDynamicWorkflowError) throw reason;
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_CANCELLED, 
           typeof reason === "string" ? reason : (reason?.message || "Workflow cancelled")
         );
@@ -418,7 +418,7 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
       try {
         output = cloneJsonValue(rawOutput, "workflow output") as T;
       } catch (err: any) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_RESULT_SERIALIZATION_FAILED,
           `Failed to serialize workflow output: ${err.message}`,
           { cause: err }
@@ -550,7 +550,7 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
   }
 
   private getErrorStatus(error: any): "failed" | "timed_out" | "cancelled" {
-    if (error instanceof OpenFlowError) {
+    if (error instanceof OpenDynamicWorkflowError) {
       if (error.code === ErrorCode.WORKFLOW_TIMEOUT) return "timed_out";
       if (error.code === ErrorCode.WORKFLOW_CANCELLED) return "cancelled";
       if (error.code === ErrorCode.USER_CANCELLED) return "cancelled";

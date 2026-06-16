@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { defineTool } from "../../../src/tools/define-tool.js";
 import { buildToolRegistry } from "../../../src/tools/registry.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("ToolRegistry", () => {
   it("should register valid tool definitions and compile schemas (Case 4)", () => {
@@ -44,7 +44,7 @@ describe("ToolRegistry", () => {
       maxDefinitions: 10
     });
 
-    expect(action).toThrow(OpenFlowError);
+    expect(action).toThrow(OpenDynamicWorkflowError);
     try {
       action();
     } catch (err: any) {

@@ -7,11 +7,11 @@ import {
   resolveWorkflowTarget 
 } from "../../../src/workflow/resolve-target.js";
 import { DEFAULT_CONFIG } from "../../../src/config/defaults.js";
-import type { ResolvedOpenFlowConfig } from "../../../src/config/types.js";
+import type { ResolvedOpenDynamicWorkflowConfig } from "../../../src/config/types.js";
 
 const FIXTURES_DIR = resolve(__dirname, "../../fixtures/workflows/resolve-target");
 
-function createTestConfig(cwd: string): ResolvedOpenFlowConfig {
+function createTestConfig(cwd: string): ResolvedOpenDynamicWorkflowConfig {
   return {
     ...DEFAULT_CONFIG,
     cwd,
@@ -23,7 +23,7 @@ function createTestConfig(cwd: string): ResolvedOpenFlowConfig {
       },
       maxDepth: 8
     }
-  } as ResolvedOpenFlowConfig;
+  } as ResolvedOpenDynamicWorkflowConfig;
 }
 
 describe("Workflow Target Resolver", () => {
@@ -210,7 +210,7 @@ describe("Workflow Target Resolver", () => {
 
     it("enforces workspace path containment policy", async () => {
       // 1. Create a temporary workspace directory and an outside directory.
-      const baseTmpDir = await mkdtemp(join(tmpdir(), "openflow-test-"));
+      const baseTmpDir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-test-"));
       const workspaceDir = join(baseTmpDir, "workspace");
       const outsideDir = join(baseTmpDir, "outside");
       await mkdir(workspaceDir);

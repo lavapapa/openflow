@@ -4,7 +4,7 @@ import * as path from "node:path";
 import type { AgentCallInput, AgentPermissions, AgentResult, AgentSuccessResult } from "../types/agent.js";
 import type { ToolExecutionResult, ToolFailureMode } from "../types/tool.js";
 import type { ArtifactStore } from "../types/artifacts.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export type CallCacheStatus =
@@ -39,7 +39,7 @@ export interface ToolCallCacheEntry extends BaseCallCacheEntry {
 export type CallCacheEntry = AgentCallCacheEntry | ToolCallCacheEntry;
 
 export interface CallCacheIndex {
-  schemaVersion: "openflow.cache-index.v1";
+  schemaVersion: "open-dynamic-workflow.cache-index.v1";
   previousRunId?: string | undefined;
   workflowHash?: string | undefined;
   entries: CallCacheEntry[];
@@ -446,7 +446,7 @@ async function recordCallEntry(input: {
     if (input.entry.status === "succeeded" && input.cache.writeIndex) {
       input.cache.currentEntries.push(input.entry);
       await input.store.writeJson("cache-index.json", {
-        schemaVersion: "openflow.cache-index.v1",
+        schemaVersion: "open-dynamic-workflow.cache-index.v1",
         previousRunId: input.cache.previousRunId,
         workflowHash: input.cache.previousWorkflowHash,
         entries: input.cache.currentEntries
@@ -466,7 +466,7 @@ async function loadCacheIndex(previousRunRoot: string): Promise<CallCacheIndex> 
   try {
     const index = JSON.parse(await fs.readFile(indexPath, "utf8"));
     return {
-      schemaVersion: "openflow.cache-index.v1",
+      schemaVersion: "open-dynamic-workflow.cache-index.v1",
       entries: filterSucceededEntries(Array.isArray(index.entries) ? index.entries : Object.values(index.entries ?? {}))
     };
   } catch {
@@ -481,7 +481,7 @@ async function rebuildCacheIndexFromCalls(previousRunRoot: string): Promise<Call
   try {
     content = await fs.readFile(callsPath, "utf8");
   } catch {
-    return { schemaVersion: "openflow.cache-index.v1", entries };
+    return { schemaVersion: "open-dynamic-workflow.cache-index.v1", entries };
   }
 
   for (const line of content.split(/\r?\n/)) {
@@ -498,7 +498,7 @@ async function rebuildCacheIndexFromCalls(previousRunRoot: string): Promise<Call
   }
 
   return {
-    schemaVersion: "openflow.cache-index.v1",
+    schemaVersion: "open-dynamic-workflow.cache-index.v1",
     entries: entries.filter(Boolean)
   };
 }
@@ -579,7 +579,7 @@ function resolvePreviousRunPath(previousRunRoot: string, relativePath: string): 
   const root = path.resolve(previousRunRoot);
   const fullPath = path.resolve(root, relativePath);
   if (!fullPath.startsWith(root + path.sep) && fullPath !== root) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Cached artifact path escapes previous run directory: ${relativePath}`
     );

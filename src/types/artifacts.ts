@@ -12,7 +12,7 @@ export interface AgentArtifacts {
 }
 
 export interface RunManifest {
-  schemaVersion: "openflow.manifest.v1";
+  schemaVersion: "open-dynamic-workflow.manifest.v1";
   runId: string;
   status: "running" | "succeeded" | "failed" | "cancelled";
   createdAt: string;
@@ -25,7 +25,7 @@ export interface RunManifest {
     requestedTarget: string;
     targetKind: "workflow-name" | "workflow-file";
   } | undefined;
-  openflowVersion: string;
+  openDynamicWorkflowVersion: string;
   cwd: string;
   configPath?: string | undefined;
   error?: any;
@@ -44,7 +44,7 @@ export interface CreateRunInput {
     targetKind: "workflow-name" | "workflow-file";
   } | undefined;
   resolvedConfig: unknown;
-  openflowVersion: string;
+  openDynamicWorkflowVersion: string;
   cwd: string;
   configPath?: string | undefined;
 }

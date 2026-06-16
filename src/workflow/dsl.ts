@@ -4,7 +4,7 @@ import type { AgentExecutionInput } from "../agents/execution-types.js";
 import type { RuntimeState } from "./types.js";
 import { resolveAgentModel } from "../agents/resolve-model.js";
 import { InvalidDslCallError } from "./errors.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { runPipeline } from "../pipeline/run.js";
 import { getActivePipelineContext, recordChildAgentId } from "../pipeline/context.js";
@@ -94,7 +94,7 @@ function normalizeToolCallInput(input: unknown, runtime: RuntimeState): ToolCall
     try {
       cloneJsonValue(typedInput.metadata, "tool metadata");
     } catch (err: any) {
-      throw new OpenFlowError(ErrorCode.TOOL_SERIALIZATION_FAILED, err.message, { cause: err });
+      throw new OpenDynamicWorkflowError(ErrorCode.TOOL_SERIALIZATION_FAILED, err.message, { cause: err });
     }
   }
 
@@ -102,7 +102,7 @@ function normalizeToolCallInput(input: unknown, runtime: RuntimeState): ToolCall
   try {
     cloneJsonValue(typedInput.args, "tool args");
   } catch (err: any) {
-    throw new OpenFlowError(ErrorCode.TOOL_SERIALIZATION_FAILED, err.message, { cause: err });
+    throw new OpenDynamicWorkflowError(ErrorCode.TOOL_SERIALIZATION_FAILED, err.message, { cause: err });
   }
 
   return typedInput;
@@ -379,7 +379,7 @@ export function createDsl(runtime: RuntimeState) {
       });
 
       if (!result.ok && result.error?.code === ErrorCode.PROVIDER_UNAVAILABLE) {
-        throw new OpenFlowError(ErrorCode.PROVIDER_UNAVAILABLE, result.error.message);
+        throw new OpenDynamicWorkflowError(ErrorCode.PROVIDER_UNAVAILABLE, result.error.message);
       }
 
       return result;
@@ -396,7 +396,7 @@ export function createDsl(runtime: RuntimeState) {
     }
     if ("definition" in input && input.definition !== undefined) {
       if (!runtime.sharedAgentRegistry) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.SHARED_AGENT_NOT_FOUND,
           "Shared agent registry is not available."
         );
@@ -424,7 +424,7 @@ export function createDsl(runtime: RuntimeState) {
           signal: activeInvocation?.signal || runtime.abortController.signal,
           agent: async (innerInput) => {
             if ("definition" in innerInput && innerInput.definition !== undefined) {
-              throw new OpenFlowError(
+              throw new OpenDynamicWorkflowError(
                 ErrorCode.SHARED_AGENT_RUNTIME_FAILED,
                 "Nested shared agent definitions are not supported."
               );
@@ -434,7 +434,7 @@ export function createDsl(runtime: RuntimeState) {
           log: logWorkflow
         });
       } catch (err: any) {
-        if (err instanceof OpenFlowError && err.code === ErrorCode.SHARED_AGENT_CONTEXT_VALIDATION_FAILED) {
+        if (err instanceof OpenDynamicWorkflowError && err.code === ErrorCode.SHARED_AGENT_CONTEXT_VALIDATION_FAILED) {
           let failureAgentId = input.id;
           if (!failureAgentId) {
             if (activePipeline) {
@@ -497,7 +497,7 @@ export function createDsl(runtime: RuntimeState) {
     const normalizedInput = normalizeToolCallInput(input, runtime);
     
     if (!runtime.toolRegistry || !runtime.toolExecutor) {
-      throw new OpenFlowError(ErrorCode.TOOL_INVALID_CONTEXT, "tool() is not configured for this run.");
+      throw new OpenDynamicWorkflowError(ErrorCode.TOOL_INVALID_CONTEXT, "tool() is not configured for this run.");
     }
 
     const definition = runtime.toolRegistry.require(normalizedInput.definition);
@@ -505,7 +505,7 @@ export function createDsl(runtime: RuntimeState) {
     const inputValidation = definition.validateInput(normalizedInput.args);
     if (!inputValidation.ok) {
       const errors = inputValidation.errors.map(e => `${e.path} ${e.message}`).join(", ");
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.TOOL_INVALID_INPUT,
         `Input validation failed for tool '${normalizedInput.definition}': ${errors}`
       );
@@ -644,7 +644,7 @@ export function createDsl(runtime: RuntimeState) {
         if (result.status === "timed_out") code = ErrorCode.TOOL_TIMEOUT;
 
         const error = result.error || { name: "ToolExecutionError", message: `Tool execution failed` };
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           code,
           `Tool execution ${result.status}: ${error.message}`,
           { cause: error }
@@ -767,13 +767,13 @@ export function createDsl(runtime: RuntimeState) {
     workflow: async <T>(input: WorkflowCallInput): Promise<T | WorkflowSettledResult<T>> => {
       const activeInvocation = getActiveWorkflowInvocation();
       if (!activeInvocation) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_FAILED,
           "workflow() can only be called from within a workflow invocation."
         );
       }
       if (!runtime.invocationManager) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_FAILED,
           "Workflow invocation manager is not available."
         );

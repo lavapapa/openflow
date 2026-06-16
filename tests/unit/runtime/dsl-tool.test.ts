@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createDsl } from "../../../src/workflow/dsl.js";
 import { withDslExecutionScope, withToolForbidden } from "../../../src/workflow/scope.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import * as callCache from "../../../src/artifacts/call-cache.js";
 
 vi.mock("../../../src/artifacts/call-cache.js", async (importOriginal) => {
@@ -313,7 +313,7 @@ describe("DSL tool() runtime", () => {
     };
 
     mockRuntime.toolRegistry.require.mockImplementationOnce(() => {
-      throw new OpenFlowError(ErrorCode.TOOL_DEFINITION_NOT_FOUND as any, "Not found");
+      throw new OpenDynamicWorkflowError(ErrorCode.TOOL_DEFINITION_NOT_FOUND as any, "Not found");
     });
 
     await expect(withDslExecutionScope(scope, () => 

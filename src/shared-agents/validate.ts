@@ -1,7 +1,7 @@
 import AjvModule from "ajv";
 import * as ts from "typescript";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { JsonSchema } from "../types/common.js";
 import type {
   SharedAgentDefinition,
@@ -22,7 +22,7 @@ export function validateSharedAgentDefinition(
   options: SharedAgentValidationOptions = {}
 ): SharedAgentDefinition {
   if (!definition || typeof definition !== "object") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent definition in ${sourcePath} must be an object.`
     );
@@ -32,7 +32,7 @@ export function validateSharedAgentDefinition(
 
   // Validate ID
   if (typeof def.id !== "string" || !ID_REGEX.test(def.id)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent in ${sourcePath} has invalid id '${def.id}'. IDs must match ${ID_REGEX}.`
     );
@@ -40,7 +40,7 @@ export function validateSharedAgentDefinition(
 
   // Validate description
   if (def.description !== undefined && typeof def.description !== "string") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent in ${sourcePath} has invalid description. If provided, it must be a string.`
     );
@@ -48,7 +48,7 @@ export function validateSharedAgentDefinition(
 
   // Validate run
   if (typeof def.run !== "function") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent in ${sourcePath} must have a 'run' function.`
     );
@@ -64,7 +64,7 @@ export function validateSharedAgentDefinition(
 
   if (def.agentPrompt !== undefined) {
     if (typeof def.agentPrompt !== "string") {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
         `Shared agent in ${sourcePath} has invalid agentPrompt. If provided, it must be a string.`
       );
@@ -80,7 +80,7 @@ export function validateSharedAgentDefinition(
 
 function validateSchema(schema: unknown, fieldName: string, sourcePath: string): void {
   if (!schema || typeof schema !== "object") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent in ${sourcePath} has invalid ${fieldName}. It must be an object.`
     );
@@ -88,7 +88,7 @@ function validateSchema(schema: unknown, fieldName: string, sourcePath: string):
   try {
     ajv.compile(schema as JsonSchema);
   } catch (err) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Shared agent in ${sourcePath} has invalid ${fieldName}: ${(err as Error).message}`
     );
@@ -116,7 +116,7 @@ function validatePromptVariables(
 
   for (const variable of variables) {
     if (!declaredVariables.has(variable)) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SHARED_AGENT_UNDECLARED_PROMPT_VARIABLE,
         `Shared agent '${def.id}' in ${sourcePath} uses undeclared prompt variable '{{${variable}}}'.`
       );
@@ -188,7 +188,7 @@ export function validateSharedAgentSource(
   ]);
 
   function report(node: ts.Node, message: string) {
-    throw new OpenFlowError(ErrorCode.SHARED_AGENT_SECURITY_POLICY_VIOLATION, message);
+    throw new OpenDynamicWorkflowError(ErrorCode.SHARED_AGENT_SECURITY_POLICY_VIOLATION, message);
   }
 
   function staticStringValue(node: ts.Node): string | null {
@@ -215,7 +215,7 @@ export function validateSharedAgentSource(
           const moduleSpecifier = node.moduleSpecifier;
           if (ts.isStringLiteral(moduleSpecifier)) {
             const val = moduleSpecifier.text;
-            if (val === "@prmflow/openflow" || val.includes("define-agent")) {
+            if (val === "@travisliu/open-dynamic-workflow" || val.includes("define-agent")) {
               isAllowed = true;
             }
           }
@@ -291,7 +291,7 @@ export function validateSharedAgentInput(
   if (input === undefined) return {};
 
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_CONTEXT_VALIDATION_FAILED,
       "Shared agent context must be an object."
     );
@@ -300,7 +300,7 @@ export function validateSharedAgentInput(
   const ctx = input as Record<string, unknown>;
 
   if (ctx.subPrompt !== undefined) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_CONTEXT_VALIDATION_FAILED,
       "Context field 'subPrompt' is deprecated and restricted. Use 'prompt' instead."
     );
@@ -311,7 +311,7 @@ export function validateSharedAgentInput(
     const valid = validate(ctx);
     if (!valid) {
       const error = ajv.errorsText(validate.errors);
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SHARED_AGENT_CONTEXT_VALIDATION_FAILED,
         `Shared agent context validation failed: ${error}`
       );

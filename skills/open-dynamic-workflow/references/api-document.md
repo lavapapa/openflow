@@ -1,8 +1,8 @@
-# OpenFlow API Reference
+# Open Dynamic Workflow API Reference
 
-This reference summarizes the OpenFlow workflow DSL, CLI commands, providers, pipeline options, reporting modes, artifacts, and exit codes.
+This reference summarizes the Open Dynamic Workflow workflow DSL, CLI commands, providers, pipeline options, reporting modes, artifacts, and exit codes.
 
-Use this file as the syntax reference when creating OpenFlow workflow scripts.
+Use this file as the syntax reference when creating Open Dynamic Workflow workflow scripts.
 
 ---
 
@@ -24,7 +24,7 @@ Requirements:
 
 * `meta` must be the first top-level statement.
 * `meta.name` is required. It is exact and case-sensitive.
-* `openflow run <meta.name>` and `openflow validate <meta.name>` are supported when the workflow is in the configured discovery scope.
+* `open-dynamic-workflow run <meta.name>` and `open-dynamic-workflow validate <meta.name>` are supported when the workflow is in the configured discovery scope.
 * `meta.description` is required.
 * `meta.phases` is optional (array of phase name strings).
 * `meta.version` is optional (string).
@@ -44,7 +44,7 @@ export default {
 
 ## 2. DSL Overview
 
-OpenFlow exposes these workflow DSL primitives:
+Open Dynamic Workflow exposes these workflow DSL primitives:
 
 | API          | Purpose                                         |
 | ------------ | ----------------------------------------------- |
@@ -130,7 +130,7 @@ type DefinitionAgentCallInput = {
 
 ### Structured output
 
-Use `schema` when downstream workflow steps need machine-readable output. When a schema is provided, OpenFlow validates the normalized provider output locally.
+Use `schema` when downstream workflow steps need machine-readable output. When a schema is provided, Open Dynamic Workflow validates the normalized provider output locally.
 
 `structuredOutput.transport` controls how the schema is supplied:
 
@@ -184,7 +184,7 @@ const result = await agent({
 
 The `permissions` field controls the approval and sandbox mode passed to the provider CLI.
 
-When omitted, OpenFlow uses `{ mode: "default" }` and providers run with their configured approval behaviour (e.g., `--approval-mode plan` for Gemini).
+When omitted, Open Dynamic Workflow uses `{ mode: "default" }` and providers run with their configured approval behaviour (e.g., `--approval-mode plan` for Gemini).
 
 Only one mode is currently supported:
 
@@ -198,7 +198,7 @@ Per-provider effect:
 | -------- | ----------------------------------- |
 | `codex`  | Appends `--dangerously-bypass-approvals-and-sandbox` to the provider command. |
 | `gemini` | Replaces `--approval-mode <value>` with `--approval-mode yolo` in the provider command. |
-| `copilot`| Appends `--yolo`. This provider targets the standalone `copilot` binary and NOT the deprecated `gh copilot` extension. Authentication and login must be handled via the Copilot CLI itself; OpenFlow does not manage Copilot credentials. |
+| `copilot`| Appends `--yolo`. This provider targets the standalone `copilot` binary and NOT the deprecated `gh copilot` extension. Authentication and login must be handled via the Copilot CLI itself; Open Dynamic Workflow does not manage Copilot credentials. |
 | `opencode`| Appends `--dangerously-skip-permissions` and skips read-only config injection. |
 | `antigravity`| Appends `--dangerously-skip-permissions`. |
 | `pi`      | Switches from `safeTools` to `fullAccessTools`. |
@@ -618,7 +618,7 @@ type ToolCallInput = {
 
 ## 10. Providers
 
-OpenFlow provider adapters coordinate external agent CLIs.
+Open Dynamic Workflow provider adapters coordinate external agent CLIs.
 
 Built-in providers:
 
@@ -674,14 +674,14 @@ const result = await agent({
 
 ## 12. Reports
 
-OpenFlow supports three report modes.
+Open Dynamic Workflow supports three report modes.
 
 ### Pretty
 
 Human-readable terminal output for local development.
 
 ```bash
-openflow run workflows/review.ts --report pretty
+open-dynamic-workflow run workflows/review.ts --report pretty
 ```
 
 ### JSON
@@ -689,7 +689,7 @@ openflow run workflows/review.ts --report pretty
 Prints only the final workflow report JSON object to stdout.
 
 ```bash
-openflow run workflows/review.ts --report json
+open-dynamic-workflow run workflows/review.ts --report json
 ```
 
 Use for CI jobs and automation.
@@ -699,7 +699,7 @@ Use for CI jobs and automation.
 Streams ordered execution events to stdout.
 
 ```bash
-openflow run workflows/review.ts --report jsonl
+open-dynamic-workflow run workflows/review.ts --report jsonl
 ```
 
 Use for CI logs, dashboards, and live event consumers.
@@ -711,7 +711,7 @@ Use for CI logs, dashboards, and live event consumers.
 Every run creates a local artifact directory.
 
 ```text
-.openflow/runs/<runId>/
+.open-dynamic-workflow/runs/<runId>/
   manifest.json
   workflow.input.ts
   config.resolved.json
@@ -824,16 +824,16 @@ Do not assume these are available unless explicitly implemented or enabled:
 
 ## 17. Resumable Runs & Determinism
 
-OpenFlow supports resuming a previous run to reuse cached results for unchanged agent-call prefixes.
+Open Dynamic Workflow supports resuming a previous run to reuse cached results for unchanged agent-call prefixes.
 
 ### Entry Points
 
-1.  **`openflow run <workflow> --resume <runId-or-path>`**: Re-runs a workflow file while attempting to reuse results from the previous run.
-2.  **`openflow resume <runId-or-path>`**: Re-runs the exact same workflow invocation recorded in the previous run's `run-input.json`.
+1.  **`open-dynamic-workflow run <workflow> --resume <runId-or-path>`**: Re-runs a workflow file while attempting to reuse results from the previous run.
+2.  **`open-dynamic-workflow resume <runId-or-path>`**: Re-runs the exact same workflow invocation recorded in the previous run's `run-input.json`.
 
 ### Deterministic Replay Model
 
-To ensure a safe and predictable resume, OpenFlow uses a **deterministic replay** model:
+To ensure a safe and predictable resume, Open Dynamic Workflow uses a **deterministic replay** model:
 1. The workflow script is executed from the beginning.
 2. Each `agent()` call is compared against the recorded call at the same position (sequence) in the previous run.
 3. If the call's "fingerprint" matches (same ID, prompt, schema, provider, model, etc.), the cached result is reused.
@@ -1061,7 +1061,7 @@ await myTool({ definition: "read-json", args: { path: "data.json" } });
 ```ts
 export const meta = {
   name: "basic-workflow",
-  description: "Run a basic OpenFlow workflow",
+  description: "Run a basic Open Dynamic Workflow workflow",
   phases: ["execute"]
 };
 
@@ -1258,7 +1258,7 @@ export default {
 
 ## 22. Workflow Patterns
 
-These patterns show standard architectures for organizing OpenFlow workflows.
+These patterns show standard architectures for organizing Open Dynamic Workflow workflows.
 
 ### Pattern 1: Single Agent
 

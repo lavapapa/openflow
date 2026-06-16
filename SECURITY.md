@@ -6,13 +6,13 @@ Report suspected vulnerabilities privately through the GitHub repository securit
 
 ## Scope
 
-OpenFlow orchestrates external coding-agent CLIs. It is not a complete sandbox, and provider CLIs may access files, network, and credentials according to their own behavior and permissions.
+Open Dynamic Workflow orchestrates external coding-agent CLIs. It is not a complete sandbox, and provider CLIs may access files, network, and credentials according to their own behavior and permissions.
 
 By default, workflow code cannot use shell execution, arbitrary imports, filesystem APIs, or process APIs. Environment variables are passed to providers only when allowlisted, and secret-like values are redacted where feasible.
 
 ## Redaction
 
-OpenFlow treats these names as secret-like by default:
+Open Dynamic Workflow treats these names as secret-like by default:
 
 - `*_KEY`
 - `*_TOKEN`

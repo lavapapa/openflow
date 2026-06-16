@@ -1,6 +1,6 @@
-import type { OpenFlowConfig } from "./types.js";
+import type { OpenDynamicWorkflowConfig } from "./types.js";
 
-export const DEFAULT_CONFIG: OpenFlowConfig = {
+export const DEFAULT_CONFIG: OpenDynamicWorkflowConfig = {
   defaultProvider: "mock",
   concurrency: 4,
   timeoutMs: 900_000,
@@ -91,13 +91,13 @@ export const DEFAULT_CONFIG: OpenFlowConfig = {
     ]
   },
   sharedAgents: {
-    dir: ".openflow/agents",
+    dir: ".open-dynamic-workflow/agents",
     allowDynamicIds: false,
     maxDefinitions: 100,
     strictPromptTemplateVariables: true
   },
   tools: {
-    dir: ".openflow/tools",
+    dir: ".open-dynamic-workflow/tools",
     concurrency: 4,
     maxDefinitions: 100
   },

@@ -28,7 +28,7 @@ describe("agent-extractor", () => {
 
   it("extracts valid agent metadata", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: "A test agent",
@@ -49,7 +49,7 @@ describe("agent-extractor", () => {
 
   it("preserves empty requiredInputs", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: "A test agent",
@@ -68,7 +68,7 @@ describe("agent-extractor", () => {
 
   it("extracts valid agent metadata without description", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         inputSchema: { type: "object", required: ["input1"] },
@@ -87,7 +87,7 @@ describe("agent-extractor", () => {
 
   it("fails if description is not a string", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: 123,
@@ -105,7 +105,7 @@ describe("agent-extractor", () => {
 
   it("fails if run method is missing", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: "A test agent"
@@ -122,7 +122,7 @@ describe("agent-extractor", () => {
 
   it("extracts valid agent metadata with method syntax", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         async run() {}
@@ -139,7 +139,7 @@ describe("agent-extractor", () => {
 
   it("fails if metadata is null", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: "A test agent",
@@ -158,7 +158,7 @@ describe("agent-extractor", () => {
 
   it("fails if inputSchema is null", async () => {
     const content = `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "test-agent",
         description: "A test agent",

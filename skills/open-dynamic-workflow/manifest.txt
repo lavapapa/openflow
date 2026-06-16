@@ -1,4 +1,4 @@
-openflow-workflow-writer/
+open-dynamic-workflow/
   SKILL.md
   references/
     README.md

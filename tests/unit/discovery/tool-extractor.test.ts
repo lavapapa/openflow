@@ -28,7 +28,7 @@ describe("tool-extractor", () => {
 
   it("extracts valid tool metadata", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -50,7 +50,7 @@ describe("tool-extractor", () => {
 
   it("fails if defaultTimeoutMs is 0", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -70,7 +70,7 @@ describe("tool-extractor", () => {
 
   it("fails if inputSchema is missing", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -88,7 +88,7 @@ describe("tool-extractor", () => {
 
   it("fails if run method is missing", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -106,7 +106,7 @@ describe("tool-extractor", () => {
 
   it("extracts valid tool metadata with method syntax", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -125,7 +125,7 @@ describe("tool-extractor", () => {
 
   it("fails if inputSchema is null", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",
@@ -144,7 +144,7 @@ describe("tool-extractor", () => {
 
   it("preserves empty requiredInputs", async () => {
     const content = `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "test-tool",
         description: "A test tool",

@@ -12,13 +12,13 @@ describe("init summary formatting", () => {
       },
       targets: [],
       strictConflicts: [],
-      nextSteps: ["openflow doctor", "openflow run workflows/example.ts --provider mock"]
+      nextSteps: ["open-dynamic-workflow doctor", "open-dynamic-workflow run workflows/example.ts --provider mock"]
     },
     writeResult: {
-      created: [".openflow/config.yaml", "workflows/example.ts"],
+      created: [".open-dynamic-workflow/config.yaml", "workflows/example.ts"],
       overwritten: [],
       skipped: [],
-      reusedDirectories: [".openflow/agents", ".openflow/tools", "workflows"]
+      reusedDirectories: [".open-dynamic-workflow/agents", ".open-dynamic-workflow/tools", "workflows"]
     },
     smokeTest: {
       requested: false,
@@ -28,22 +28,22 @@ describe("init summary formatting", () => {
 
   it("formats a standard success summary", () => {
     const output = formatInitSummary(baseResult);
-    expect(output).toContain("OpenFlow project initialized.");
+    expect(output).toContain("Open Dynamic Workflow project initialized.");
     expect(output).toContain("Selected default provider: mock");
     expect(output).toContain("Reason: mock-fallback");
     expect(output).toContain("Created:");
-    expect(output).toContain("  .openflow/config.yaml");
+    expect(output).toContain("  .open-dynamic-workflow/config.yaml");
     expect(output).toContain("Reused existing directories:");
-    expect(output).toContain("  .openflow/agents");
+    expect(output).toContain("  .open-dynamic-workflow/agents");
     expect(output).toContain("Next steps:");
-    expect(output).toContain("  openflow doctor");
+    expect(output).toContain("  open-dynamic-workflow doctor");
   });
 
   it("formats summary with overwritten and skipped files", () => {
     const result = {
       ...baseResult,
       writeResult: {
-        created: [".openflow/config.yaml"],
+        created: [".open-dynamic-workflow/config.yaml"],
         overwritten: ["workflows/example.ts"],
         skipped: ["existing-file.ts"],
         reusedDirectories: []
@@ -91,12 +91,12 @@ describe("init summary formatting", () => {
     const plan = {
       ...baseResult.plan,
       strictConflicts: [
-        { displayPath: ".openflow/config.yaml", exists: true } as any
+        { displayPath: ".open-dynamic-workflow/config.yaml", exists: true } as any
       ]
     };
     const output = formatStrictConflicts(plan);
     expect(output).toContain("Cannot initialize because --strict was provided and target paths already exist:");
-    expect(output).toContain("  .openflow/config.yaml");
+    expect(output).toContain("  .open-dynamic-workflow/config.yaml");
     expect(output).toContain("No files were written.");
   });
 

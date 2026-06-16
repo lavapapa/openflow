@@ -1,6 +1,6 @@
 export const meta = {
   name: "mock-review",
-  description: "Demonstrates openflow with the mock provider",
+  description: "Demonstrates open-dynamic-workflow with the mock provider",
   phases: ["review", "summarize"]
 };
 

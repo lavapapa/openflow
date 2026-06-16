@@ -1,23 +1,23 @@
-# OpenFlow CLI Commands
+# Open Dynamic Workflow CLI Commands
 
-This document summarizes the command-line interface (CLI) commands and options for OpenFlow.
+This document summarizes the command-line interface (CLI) commands and options for Open Dynamic Workflow.
 
 ---
 
 ## Initialize a project
 
-Initializes a project for OpenFlow by creating a recommended starter layout and configuration.
+Initializes a project for Open Dynamic Workflow by creating a recommended starter layout and configuration.
 
 ```bash
-openflow init [options]
+open-dynamic-workflow init [options]
 ```
 
 ### Generated Structure
 
-By default, `openflow init` creates:
+By default, `open-dynamic-workflow init` creates:
 
 ```text
-.openflow/
+.open-dynamic-workflow/
   config.yaml       # Core project configuration
   agents/           # Shared agents directory (empty)
   tools/            # Tools directory (empty)
@@ -43,11 +43,11 @@ workflows/
 ### Examples
 
 ```bash
-openflow init
-openflow init --yes
-openflow init --yes --run-smoke-test
-openflow init --strict
-openflow init --force --provider codex
+open-dynamic-workflow init
+open-dynamic-workflow init --yes
+open-dynamic-workflow init --yes --run-smoke-test
+open-dynamic-workflow init --strict
+open-dynamic-workflow init --force --provider codex
 ```
 
 ### Behavior
@@ -56,7 +56,7 @@ openflow init --force --provider codex
 * **Non-interactive mode**: Triggered by `--yes` or non-TTY stdin. Uses defaults or requested options.
 * **Mock fallback**: If a requested provider is not found in `PATH`, `init` offers a fallback to the `mock` provider.
 * **Safety**: Does **not** modify `package.json`. Existing files are skipped unless `--force` is used.
-* **Smoke test**: If `--run-smoke-test` is used, OpenFlow performs a `validate` and `run --provider mock` on the generated example workflow.
+* **Smoke test**: If `--run-smoke-test` is used, Open Dynamic Workflow performs a `validate` and `run --provider mock` on the generated example workflow.
 
 ---
 
@@ -65,32 +65,32 @@ openflow init --force --provider codex
 Runs a workflow by name or file path.
 
 ```bash
-openflow run <workflow-name-or-file>
+open-dynamic-workflow run <workflow-name-or-file>
 ```
 
 ### Resolution Rules
 
 * **Path-like targets**: Targets containing `/`, starting with `./` or `../`, absolute paths, or ending with workflow extensions (`.ts`, `.js`, etc.) are resolved as file paths directly.
-* **Bare targets**: Targets without path separators or extensions are resolved by exact `meta.name` first. If no name matches, OpenFlow falls back to resolving the target as a file path relative to the `cwd`.
+* **Bare targets**: Targets without path separators or extensions are resolved by exact `meta.name` first. If no name matches, Open Dynamic Workflow falls back to resolving the target as a file path relative to the `cwd`.
 * **Duplicate names**: If multiple workflows in the discovery scope share the same `meta.name`, the command will fail with a listing of matching files.
 
-Use `openflow list workflows` to see runnable names and their resolved paths.
+Use `open-dynamic-workflow list workflows` to see runnable names and their resolved paths.
 
 ### Common options
 ...
 ### Examples
 
 ```bash
-openflow run review
-openflow run workflows/review.ts
-openflow run review --provider codex
-openflow run review --provider mock
-openflow run review --concurrency 2
-openflow run review --timeout-ms 600000
-openflow run review --report json
-openflow run review --report jsonl
-openflow run review --fail-fast
-openflow run review --resume <previous-run-id>
+open-dynamic-workflow run review
+open-dynamic-workflow run workflows/review.ts
+open-dynamic-workflow run review --provider codex
+open-dynamic-workflow run review --provider mock
+open-dynamic-workflow run review --concurrency 2
+open-dynamic-workflow run review --timeout-ms 600000
+open-dynamic-workflow run review --report json
+open-dynamic-workflow run review --report jsonl
+open-dynamic-workflow run review --fail-fast
+open-dynamic-workflow run review --resume <previous-run-id>
 ```
 
 ---
@@ -100,7 +100,7 @@ openflow run review --resume <previous-run-id>
 Runs a new workflow attempt from a previous run's recorded invocation and reuses cached agent results for the longest unchanged prefix.
 
 ```bash
-openflow resume <runId-or-path> [options]
+open-dynamic-workflow resume <runId-or-path> [options]
 ```
 
 ### Common options
@@ -108,14 +108,14 @@ openflow resume <runId-or-path> [options]
 ### Example
 
 ```bash
-openflow resume <previous-run-id>
+open-dynamic-workflow resume <previous-run-id>
 ```
 
 ### Behavior
 
-Resume/cache is intentionally conservative. OpenFlow replays the workflow script and compares each `agent()` call in order. A cached result is reused only while the prefix is unchanged: the call sequence must match, `id` or `label` must match when present, and the call fingerprint must match.
+Resume/cache is intentionally conservative. Open Dynamic Workflow replays the workflow script and compares each `agent()` call in order. A cached result is reused only while the prefix is unchanged: the call sequence must match, `id` or `label` must match when present, and the call fingerprint must match.
 
-`openflow resume` reuses the exact `workflowFile` recorded in the original run's `run-input.json`, even if the original run was started by name. This ensures deterministic replay even if name resolution would now point to a different file.
+`open-dynamic-workflow resume` reuses the exact `workflowFile` recorded in the original run's `run-input.json`, even if the original run was started by name. This ensures deterministic replay even if name resolution would now point to a different file.
 
 Use stable `id` values for loops, such as `id: \`round-${i}\``. Using `Date.now()`, `Math.random()`, and argument-free `new Date()` will trigger validation warnings (e.g., `Avoid Date.now(): it prevents deterministic resume/cache behavior. Use tool() instead.`) because they prevent deterministic replay. If you need non-deterministic values like timestamps or random numbers, wrap them in a custom `tool()` call so they are cached on the first run and replayed deterministically on subsequent runs.
 
@@ -126,14 +126,14 @@ Use stable `id` values for loops, such as `id: \`round-${i}\``. Using `Date.now(
 Validates a workflow by name or file path.
 
 ```bash
-openflow validate <workflow-name-or-file>
+open-dynamic-workflow validate <workflow-name-or-file>
 ```
 
 ### Example
 
 ```bash
-openflow validate review
-openflow validate workflows/review.ts
+open-dynamic-workflow validate review
+open-dynamic-workflow validate workflows/review.ts
 ```
 
 ### Validation checks include
@@ -154,14 +154,14 @@ openflow validate workflows/review.ts
 ## Check environment readiness
 
 ```bash
-openflow doctor
+open-dynamic-workflow doctor
 ```
 
 ### Checks include
 
 * config file can be loaded.
 * provider CLIs are present.
-* `openflow doctor` reports all built-in provider adapters.
+* `open-dynamic-workflow doctor` reports all built-in provider adapters.
 * Missing optional provider CLIs (like `copilot`, `opencode`, `agy`, or `pi`) are shown as unavailable but do not cause the doctor command to fail unless they are the configured `defaultProvider`.
 * Note: For `copilot`, the doctor command checks for the standalone `copilot` executable but does not perform authentication or login checks.
 * provider commands can be executed.
@@ -172,7 +172,7 @@ openflow doctor
 ## List resources
 
 ```bash
-openflow list [resourceType]
+open-dynamic-workflow list [resourceType]
 ```
 
 List discoverable workflows, shared agents, and tools. `resourceType` can be `workflows`, `agents`, or `tools`. If omitted, all resources are listed.
@@ -194,19 +194,19 @@ List discoverable workflows, shared agents, and tools. `resourceType` can be `wo
 ### Examples
 
 ```bash
-openflow list
-openflow list workflows
-openflow list agents --verbose
-openflow list tools --report json
-openflow list --strict
-openflow list workflows --dir examples/workflows
+open-dynamic-workflow list
+open-dynamic-workflow list workflows
+open-dynamic-workflow list agents --verbose
+open-dynamic-workflow list tools --report json
+open-dynamic-workflow list --strict
+open-dynamic-workflow list workflows --dir examples/workflows
 ```
 
 ### Resource Discovery
 
 * **Workflows**: Scanned from the directory configured in `workflows.dir` (defaults to `workflows`).
-* **Agents**: Scanned from the directory configured in `sharedAgents.dir` (defaults to `.openflow/agents`).
-* **Tools**: Scanned from the directory configured in `tools.dir` (defaults to `.openflow/tools`).
+* **Agents**: Scanned from the directory configured in `sharedAgents.dir` (defaults to `.open-dynamic-workflow/agents`).
+* **Tools**: Scanned from the directory configured in `tools.dir` (defaults to `.open-dynamic-workflow/tools`).
 
 The `list` command is lenient by default. It will report errors and warnings but exit with code `0` unless `--strict` is used. In strict mode, any discovery error (e.g., duplicate IDs, invalid definitions) results in a non-zero exit code (3).
 
@@ -214,7 +214,7 @@ The `list` command is lenient by default. It will report errors and warnings but
 
 ## Shared Agent Loading & Security Policy
 
-When executing `openflow run` or `openflow validate`, OpenFlow scans the configured `sharedAgents.dir` directory.
+When executing `open-dynamic-workflow run` or `open-dynamic-workflow validate`, Open Dynamic Workflow scans the configured `sharedAgents.dir` directory.
 If a file contains unauthorized symbols or attempts host operations violating the validation restrictions, a `SHARED_AGENT_SECURITY_POLICY_VIOLATION` error is thrown, halting execution or validation immediately.
 Literal shared agent IDs referenced in `agent({ definition })` or `ctx.agent({ definition })` are checked against this loaded registry.
 
@@ -222,7 +222,7 @@ Literal shared agent IDs referenced in `agent({ definition })` or `ctx.agent({ d
 
 ## Tool Loading & Trust Model
 
-When executing `openflow run` or `openflow validate`, OpenFlow scans the configured `tools.dir` directory (defaults to `.openflow/tools`).
+When executing `open-dynamic-workflow run` or `open-dynamic-workflow validate`, Open Dynamic Workflow scans the configured `tools.dir` directory (defaults to `.open-dynamic-workflow/tools`).
 Unlike workflows or shared agents, tool definitions are trusted application extensions. They may execute unrestricted JavaScript with host access (e.g., read/write files, execute shell commands, import packages, or perform network requests).
 However, tool definitions must be declared with `defineTool()` and have valid default exports. Duplicate or invalid tool definitions will cause a `TOOL_INVALID_DEFINITION` or `TOOL_DUPLICATE_DEFINITION` validation error.
 Individual `tool({ definition })` calls are checked statically during validation to ensure they reference a registered tool ID.

@@ -20,7 +20,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -47,7 +47,7 @@ describe("Resumable Tools AAA Acceptance Tests", () => {
   });
 
   afterEach(async () => {
-    delete process.env.OPENFLOW_FAKE_PROVIDER_COUNTER;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER;
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
@@ -65,7 +65,7 @@ describe("Resumable Tools AAA Acceptance Tests", () => {
     await fs.writeFile(path.join(toolsDir, "cacheable-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "cacheable-tool",
   description: "cacheable",
   inputSchema: { type: "object" },
@@ -82,7 +82,7 @@ export default {
     await fs.writeFile(path.join(toolsDir, "live-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "live-tool",
   description: "non-cacheable",
   inputSchema: { type: "object" },
@@ -107,7 +107,7 @@ providers:
       - ${JSON.stringify(FAKE_PROVIDER)}
 security:
   passEnv:
-    - OPENFLOW_FAKE_PROVIDER_COUNTER
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER
 tools:
   dir: ${JSON.stringify(toolsDir)}
 workflow:
@@ -134,7 +134,7 @@ export default async (ctx) => {
     const legacyRunPath = path.join(runsDir, legacyRunId);
     await fs.mkdir(legacyRunPath, { recursive: true });
     await fs.writeFile(path.join(legacyRunPath, "run-input.json"), JSON.stringify({
-      schemaVersion: "openflow.run-input.v1",
+      schemaVersion: "open-dynamic-workflow.run-input.v1",
       runId: legacyRunId,
       workflowFile: workflowPath,
       rawOptions: { config: configPath }
@@ -155,7 +155,7 @@ export default async (ctx) => {
       ]
     }));
 
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
     await fs.writeFile(counterPath, "0");
     await fs.writeFile(t1CounterPath, "0");
     await fs.writeFile(t2CounterPath, "0");
@@ -237,7 +237,7 @@ export default async (ctx) => {
 
     await fs.writeFile(path.join(toolsDir, "tool.ts"), `
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "tool",
   description: "test",
   inputSchema: { type: "object" },

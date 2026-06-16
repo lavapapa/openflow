@@ -1,12 +1,12 @@
-# OpenFlow Configuration Reference
+# Open Dynamic Workflow Configuration Reference
 
-This reference details OpenFlow's configuration system, detailing the loading sequence, precedence hierarchy, validation rules, and built-in defaults.
+This reference details Open Dynamic Workflow's configuration system, detailing the loading sequence, precedence hierarchy, validation rules, and built-in defaults.
 
 ---
 
 ## 1. Config Loading & Resolution
 
-When OpenFlow initializes, it resolves config values through a three-stage pipeline:
+When Open Dynamic Workflow initializes, it resolves config values through a three-stage pipeline:
 
 ```mermaid
 graph TD
@@ -18,13 +18,13 @@ graph TD
 
 ### Loading Sequence
 1.  **Read CLI Path**: If `-c` or `--config <path>` is specified, the CLI attempts to read that configuration file. If the file cannot be read or contains invalid YAML, a `CONFIG_VALIDATION_ERROR` is thrown.
-2.  **Default Location fallback**: If no CLI config flag is provided, the CLI looks for `.openflow/config.yaml` in the active project directory. If it is missing, the loading continues using only built-in defaults.
+2.  **Default Location fallback**: If no CLI config flag is provided, the CLI looks for `.open-dynamic-workflow/config.yaml` in the active project directory. If it is missing, the loading continues using only built-in defaults.
 3.  **Merge CLI Options**: Overrides are applied from the command line (e.g. `--concurrency`, `--timeout-ms`, `--report`).
 4.  **Schema Validation**: The merged configuration object is validated. Any discrepancy raises an exit code 3 (`Workflow parse or validation error`).
 
-### Generating Configuration with `openflow init`
+### Generating Configuration with `open-dynamic-workflow init`
 
-The `openflow init` command generates a starter `.openflow/config.yaml` with safe defaults and detected providers.
+The `open-dynamic-workflow init` command generates a starter `.open-dynamic-workflow/config.yaml` with safe defaults and detected providers.
 
 The generated config typically includes:
 - `defaultProvider`: Set to the provider selected during initialization (e.g., `mock` or `codex`).
@@ -255,9 +255,9 @@ Controls visual outputs and terminal formatting.
 When evaluating configuration keys (like `model` or `timeoutMs`), the runtime resolves properties using the following hierarchy (highest precedence first):
 
 1.  **Agent DSL Parameter**: Options explicitly supplied inside the script code (e.g. `agent({ model: "custom" })`).
-2.  **CLI Flag Overrides**: Arguments provided directly on shell execution (e.g. `openflow run --model overridden-model`).
-3.  **YAML File Configuration**: Properties declared in `.openflow/config.yaml`.
-4.  **Built-in Defaults**: Fallback values defined in OpenFlow's core engine defaults.
+2.  **CLI Flag Overrides**: Arguments provided directly on shell execution (e.g. `open-dynamic-workflow run --model overridden-model`).
+3.  **YAML File Configuration**: Properties declared in `.open-dynamic-workflow/config.yaml`.
+4.  **Built-in Defaults**: Fallback values defined in Open Dynamic Workflow's core engine defaults.
 
 ---
 
@@ -265,7 +265,7 @@ When evaluating configuration keys (like `model` or `timeoutMs`), the runtime re
 
 Shared agent settings dictate how reusable, code-based agent definitions are loaded and validated:
 *   `sharedAgents`:
-    *   `dir`: Directory path scanned for shared agent definitions (defaults to `".openflow/agents"`).
+    *   `dir`: Directory path scanned for shared agent definitions (defaults to `".open-dynamic-workflow/agents"`).
     *   `maxDefinitions`: Positive integer limit on the maximum definitions loaded (defaults to 100).
     *   `allowDynamicIds`: Must be strictly `false` (dynamic shared agent IDs are rejected for security reasons).
     *   `strictPromptTemplateVariables`: Boolean specifying if template variables must match declared schema properties.
@@ -278,14 +278,14 @@ Tools settings dictate how reusable, trusted application extensions declared wit
 
 | Option | Type | Default | Validation Rules | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `dir` | `string` | `".openflow/tools"` | Non-empty path string. | Directory path scanned for tool definitions. |
+| `dir` | `string` | `".open-dynamic-workflow/tools"` | Non-empty path string. | Directory path scanned for tool definitions. |
 | `concurrency` | `integer` | `4` | Positive integer (>= 1). | Maximum parallel tool calls executed concurrently by the tool execution lane. |
 | `maxDefinitions` | `integer` | `100` | Positive integer (>= 1). | Limit on the maximum tool definitions loaded. |
 
 Example config snippet:
 ```yaml
 tools:
-  dir: ".openflow/tools"
+  dir: ".open-dynamic-workflow/tools"
   concurrency: 4
   maxDefinitions: 100
 ```

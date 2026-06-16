@@ -32,7 +32,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
     if (err instanceof Error && stderrData.length === 0) {
@@ -227,7 +227,7 @@ describe("Integration - run workflow by name", () => {
     // Stdout should be a single valid JSON document without event lines
     expect(result.stdout.trim().startsWith("{")).toBe(true);
     expect(result.stdout.trim().endsWith("}")).toBe(true);
-    expect(result.stdout).not.toContain("openflow.event.v1");
+    expect(result.stdout).not.toContain("open-dynamic-workflow.event.v1");
     
     const report = JSON.parse(result.stdout);
     expect(report.workflow.name).toBe("review");

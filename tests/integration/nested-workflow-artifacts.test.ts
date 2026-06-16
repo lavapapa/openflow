@@ -7,7 +7,7 @@ const TEMP_DIR = path.resolve("tests/temp-nested-artifacts");
 
 async function runCli(args: string[]) {
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     // Ignore CLI errors in this helper
   }

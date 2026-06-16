@@ -2,12 +2,12 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { ArtifactStore, RunArtifacts, CreateRunInput, RunManifest } from "../types/artifacts.js";
 import { createInitialManifest, updateManifestStatus } from "./manifest.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { resolveUserPath, resolveProjectPath } from "../cli/paths.js";
 
 export function defaultRunsDir(cwd = process.cwd()): string {
-  return resolveProjectPath(".openflow/runs", cwd);
+  return resolveProjectPath(".open-dynamic-workflow/runs", cwd);
 }
 
 export async function createRunDir(runId: string, cwd = process.cwd()): Promise<string> {
@@ -55,7 +55,7 @@ export class FileSystemArtifactStore implements ArtifactStore {
       workflowPath: input.workflowPath,
       workflowHash: input.workflowHash,
       workflow: input.workflow,
-      openflowVersion: input.openflowVersion,
+      openDynamicWorkflowVersion: input.openDynamicWorkflowVersion,
       cwd: input.cwd,
       configPath: input.configPath
     });
@@ -77,7 +77,7 @@ export class FileSystemArtifactStore implements ArtifactStore {
     await fs.writeFile(path.join(runRootDir, "calls.jsonl"), "", "utf8");
     await fs.writeFile(
       path.join(runRootDir, "cache-index.json"),
-      JSON.stringify({ schemaVersion: "openflow.cache-index.v1", entries: [] }, null, 2),
+      JSON.stringify({ schemaVersion: "open-dynamic-workflow.cache-index.v1", entries: [] }, null, 2),
       "utf8"
     );
 
@@ -127,7 +127,7 @@ export class FileSystemArtifactStore implements ArtifactStore {
       await fs.rename(tmpPath, reportPath);
       return reportPath;
     } catch (error) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.ARTIFACT_WRITE_FAILED,
         `Failed to write final report: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error }

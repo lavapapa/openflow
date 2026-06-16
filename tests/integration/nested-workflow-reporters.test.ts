@@ -12,7 +12,7 @@ async function runCli(args: string[]) {
     return true;
   });
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     // Ignore
   } finally {

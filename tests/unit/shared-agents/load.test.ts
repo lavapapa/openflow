@@ -4,14 +4,14 @@ import { join, resolve, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { loadSharedAgentRegistry } from "../../../src/shared-agents/load.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("loadSharedAgentRegistry", () => {
   let tempDir: string;
 
   beforeEach(async () => {
     // Ensure tempDir itself is a realpath to avoid issues with symlinked temp dirs
-    const baseTemp = await mkdtemp(join(tmpdir(), "openflow-test-"));
+    const baseTemp = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-test-"));
     tempDir = await realpath(baseTemp);
   });
 
@@ -68,7 +68,7 @@ describe("loadSharedAgentRegistry", () => {
   });
 
   it("loads a valid JS agent using defineAgent", async () => {
-    const agentsDir = join(tempDir, ".openflow", "agents");
+    const agentsDir = join(tempDir, ".open-dynamic-workflow", "agents");
     await mkdir(agentsDir, { recursive: true });
     const agentFile = join(agentsDir, "test.agent.js");
     await writeFile(agentFile, `
@@ -81,7 +81,7 @@ describe("loadSharedAgentRegistry", () => {
 
     const registry = await loadSharedAgentRegistry({
       cwd: tempDir,
-      dir: ".openflow/agents"
+      dir: ".open-dynamic-workflow/agents"
     });
 
     expect(registry.list()).toHaveLength(1);
@@ -89,11 +89,11 @@ describe("loadSharedAgentRegistry", () => {
   });
 
   it("loads a valid JS agent with an ES import statement", async () => {
-    const agentsDir = join(tempDir, ".openflow", "agents");
+    const agentsDir = join(tempDir, ".open-dynamic-workflow", "agents");
     await mkdir(agentsDir, { recursive: true });
     const agentFile = join(agentsDir, "import-test.agent.js");
     await writeFile(agentFile, `
-      import { defineAgent } from "@prmflow/openflow";
+      import { defineAgent } from "@travisliu/open-dynamic-workflow";
       export default defineAgent({
         id: "import-js-agent",
         description: "Import JS Agent",
@@ -103,7 +103,7 @@ describe("loadSharedAgentRegistry", () => {
 
     const registry = await loadSharedAgentRegistry({
       cwd: tempDir,
-      dir: ".openflow/agents"
+      dir: ".open-dynamic-workflow/agents"
     });
 
     expect(registry.list()).toHaveLength(1);
@@ -145,11 +145,11 @@ describe("loadSharedAgentRegistry", () => {
     await expect(loadSharedAgentRegistry({
       cwd: tempDir,
       dir: "agents"
-    })).rejects.toThrow(OpenFlowError);
+    })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("allows paths outside cwd", async () => {
-    const outsideDir = await mkdtemp(join(tmpdir(), "openflow-outside-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-outside-"));
     const realOutsideDir = await realpath(outsideDir);
     await writeFile(join(realOutsideDir, "outside.js"), `
       export default defineAgent({ id: "outside", run: async () => ({ ok: true }) });
@@ -170,7 +170,7 @@ describe("loadSharedAgentRegistry", () => {
     await expect(loadSharedAgentRegistry({
       cwd: tempDir,
       dir: "agents"
-    })).rejects.toThrow(OpenFlowError);
+    })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("allows restricted keywords in prompts, descriptions, and comments but rejects actual API usage", async () => {
@@ -216,7 +216,7 @@ describe("loadSharedAgentRegistry", () => {
       join(agentsDir, "bad.agent.js"),
       `import fs from 'node:fs';\nexport default defineAgent({ id: "bad", description: "desc", run: async () => ({ ok: true }) });`
     );
-    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-builtin" })).rejects.toThrow(OpenFlowError);
+    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-builtin" })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("proves that shared-agent definitions cannot spawn processes", async () => {
@@ -226,7 +226,7 @@ describe("loadSharedAgentRegistry", () => {
       join(agentsDir, "bad.agent.js"),
       `const { exec } = require('child_process');\nexport default defineAgent({ id: "bad", description: "desc", run: async () => ({ ok: true }) });`
     );
-    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-spawn" })).rejects.toThrow(OpenFlowError);
+    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-spawn" })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("proves that shared-agent definitions cannot read environment variables", async () => {
@@ -236,7 +236,7 @@ describe("loadSharedAgentRegistry", () => {
       join(agentsDir, "bad.agent.js"),
       `const env = process.env;\nexport default defineAgent({ id: "bad", description: "desc", run: async () => ({ ok: true }) });`
     );
-    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-env" })).rejects.toThrow(OpenFlowError);
+    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-env" })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("proves that shared-agent definitions cannot write files", async () => {
@@ -246,7 +246,7 @@ describe("loadSharedAgentRegistry", () => {
       join(agentsDir, "bad.agent.js"),
       `fs.writeFileSync('test.txt', 'data');\nexport default defineAgent({ id: "bad", description: "desc", run: async () => ({ ok: true }) });`
     );
-    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-write" })).rejects.toThrow(OpenFlowError);
+    await expect(loadSharedAgentRegistry({ cwd: tempDir, dir: "agents-write" })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("fails if discovered files exceed maxDefinitions", async () => {
@@ -259,14 +259,14 @@ describe("loadSharedAgentRegistry", () => {
       cwd: tempDir,
       dir: "agents",
       maxDefinitions: 1
-    })).rejects.toThrow(OpenFlowError);
+    })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("rejects symlinks pointing outside workspace", async () => {
     const agentsDir = join(tempDir, "agents");
     await mkdir(agentsDir, { recursive: true });
     
-    const outsideDir = await mkdtemp(join(tmpdir(), "openflow-outside-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-outside-"));
     const realOutsideDir = await realpath(outsideDir);
     await writeFile(join(realOutsideDir, "outside.js"), "export default defineAgent({ id: 'outside', run: async () => ({ ok: true }) });");
     
@@ -288,7 +288,7 @@ describe("loadSharedAgentRegistry", () => {
   });
 
   it("loads a valid TS agent using defineAgent", async () => {
-    const agentsDir = join(tempDir, ".openflow", "agents");
+    const agentsDir = join(tempDir, ".open-dynamic-workflow", "agents");
     await mkdir(agentsDir, { recursive: true });
     const agentFile = join(agentsDir, "test.agent.ts");
     await writeFile(agentFile, `
@@ -302,7 +302,7 @@ describe("loadSharedAgentRegistry", () => {
 
     const registry = await loadSharedAgentRegistry({
       cwd: tempDir,
-      dir: ".openflow/agents"
+      dir: ".open-dynamic-workflow/agents"
     });
 
     expect(registry.list()).toHaveLength(1);

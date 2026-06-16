@@ -1,11 +1,11 @@
 import type { AgentResult, EventEnvelope, WorkflowRunResult } from "../src/types/index.js";
 
 const artifacts = {
-  dir: ".openflow/runs/demo/agents/a1",
-  promptPath: ".openflow/runs/demo/agents/a1/prompt.txt",
-  stdoutPath: ".openflow/runs/demo/agents/a1/stdout.log",
-  stderrPath: ".openflow/runs/demo/agents/a1/stderr.log",
-  normalizedResultPath: ".openflow/runs/demo/agents/a1/normalized-result.json"
+  dir: ".open-dynamic-workflow/runs/demo/agents/a1",
+  promptPath: ".open-dynamic-workflow/runs/demo/agents/a1/prompt.txt",
+  stdoutPath: ".open-dynamic-workflow/runs/demo/agents/a1/stdout.log",
+  stderrPath: ".open-dynamic-workflow/runs/demo/agents/a1/stderr.log",
+  normalizedResultPath: ".open-dynamic-workflow/runs/demo/agents/a1/normalized-result.json"
 };
 
 const agent: AgentResult = {
@@ -23,7 +23,7 @@ const agent: AgentResult = {
 };
 
 const event: EventEnvelope = {
-  schemaVersion: "openflow.event.v1",
+  schemaVersion: "open-dynamic-workflow.event.v1",
   runId: "demo",
   sequence: 1,
   timestamp: new Date(0).toISOString(),
@@ -40,7 +40,7 @@ const event: EventEnvelope = {
 };
 
 const report: WorkflowRunResult = {
-  schemaVersion: "openflow.report.v1",
+  schemaVersion: "open-dynamic-workflow.report.v1",
   runId: "demo",
   status: "succeeded",
   meta: {
@@ -52,9 +52,9 @@ const report: WorkflowRunResult = {
   startedAt: new Date(0).toISOString(),
   finishedAt: new Date(1).toISOString(),
   durationMs: 1,
-  artifactsDir: ".openflow/runs/demo",
-  reportPath: ".openflow/runs/demo/report.json",
-  eventsPath: ".openflow/runs/demo/events.jsonl"
+  artifactsDir: ".open-dynamic-workflow/runs/demo",
+  reportPath: ".open-dynamic-workflow/runs/demo/report.json",
+  eventsPath: ".open-dynamic-workflow/runs/demo/events.jsonl"
 };
 
 console.log(JSON.stringify({ eventType: event.type, reportStatus: report.status }, null, 2));

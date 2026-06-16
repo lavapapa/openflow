@@ -4,7 +4,7 @@ import { RuntimeState } from "../../../src/workflow/types.js";
 import { SharedAgentRegistry } from "../../../src/shared-agents/registry.js";
 import type { AgentCallInput, AgentResult } from "../../../src/types/agent.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("DSL shared-agent calls", () => {
   const createMockRuntime = (registry?: SharedAgentRegistry): RuntimeState => ({
@@ -113,7 +113,7 @@ describe("DSL shared-agent calls", () => {
     const dsl = createDsl(runtime);
 
     // Call agent without the required 'prompt' field
-    await expect(dsl.agent({ definition: "security-review", unexpected: true })).rejects.toThrow(OpenFlowError);
+    await expect(dsl.agent({ definition: "security-review", unexpected: true })).rejects.toThrow(OpenDynamicWorkflowError);
     
     // Check that a failed agent result is recorded in runtime.agentResults
     expect(runtime.agentResults).toHaveLength(1);
@@ -142,7 +142,7 @@ describe("DSL shared-agent calls", () => {
     const runtime = createMockRuntime(registry);
     const dsl = createDsl(runtime);
 
-    await expect(dsl.agent({ definition: "nested-agent" })).rejects.toThrow(OpenFlowError);
+    await expect(dsl.agent({ definition: "nested-agent" })).rejects.toThrow(OpenDynamicWorkflowError);
   });
 
   it("existing agent still works", async () => {

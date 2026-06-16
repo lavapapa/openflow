@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { initCommand } from "../../src/cli/commands/init.js";
 import { ErrorCode } from "../../src/errors/codes.js";
-import { OpenFlowError } from "../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../src/errors/types.js";
 
 describe("init command orchestration", () => {
   beforeEach(() => {
@@ -108,7 +108,7 @@ describe("init command orchestration", () => {
     await expect(initCommand({
       rawOptions: {},
       deps
-    })).rejects.toThrow(new OpenFlowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user."));
+    })).rejects.toThrow(new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user."));
 
     expect(deps.buildInitPlan).not.toHaveBeenCalled();
     expect(deps.applyInitPlan).not.toHaveBeenCalled();
@@ -158,7 +158,7 @@ describe("init command orchestration", () => {
     await expect(initCommand({
       rawOptions: {},
       deps
-    })).rejects.toThrow(new OpenFlowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user."));
+    })).rejects.toThrow(new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user."));
 
     expect(deps.applyInitPlan).not.toHaveBeenCalled();
   });

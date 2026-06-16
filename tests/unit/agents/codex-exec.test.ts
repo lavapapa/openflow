@@ -385,7 +385,7 @@ describe("CodexExecAdapter", () => {
   });
 
   it("health check passes a safe env with PATH but without API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "openflow-codex-health-"));
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-codex-health-"));
     const command = join(dir, "health-check");
     const previousOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "should-not-leak";
@@ -451,7 +451,7 @@ describe("CodexExecAdapter", () => {
   });
 
   it("health check passes a safe env with PATH but without API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "openflow-codex-health-"));
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-codex-health-"));
     const command = join(dir, "health-check");
     const previousOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "should-not-leak";

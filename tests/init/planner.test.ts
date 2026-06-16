@@ -14,8 +14,8 @@ describe("Init Planner Services", () => {
     runSmokeTest: false,
     smokeReport: "pretty" as const,
     workflowsDir: "/project/workflows",
-    agentsDir: "/project/.openflow/agents",
-    toolsDir: "/project/.openflow/tools"
+    agentsDir: "/project/.open-dynamic-workflow/agents",
+    toolsDir: "/project/.open-dynamic-workflow/tools"
   };
 
   const providerSelection = {
@@ -43,7 +43,7 @@ describe("Init Planner Services", () => {
 
     const plan = await buildInitPlan({ options, providerSelection });
 
-    const configTarget = plan.targets.find(t => t.displayPath === ".openflow/config.yaml");
+    const configTarget = plan.targets.find(t => t.displayPath === ".open-dynamic-workflow/config.yaml");
     const workflowTarget = plan.targets.find(t => t.displayPath === "workflows/example.ts");
 
     expect(configTarget?.action).toBe("skip");
@@ -57,7 +57,7 @@ describe("Init Planner Services", () => {
     const forceOptions = { ...options, force: true };
     const plan = await buildInitPlan({ options: forceOptions, providerSelection });
 
-    const configTarget = plan.targets.find(t => t.displayPath === ".openflow/config.yaml");
+    const configTarget = plan.targets.find(t => t.displayPath === ".open-dynamic-workflow/config.yaml");
     const workflowTarget = plan.targets.find(t => t.displayPath === "workflows/example.ts");
 
     expect(configTarget?.action).toBe("overwrite");
@@ -72,7 +72,7 @@ describe("Init Planner Services", () => {
     const plan = await buildInitPlan({ options: strictOptions, providerSelection });
 
     expect(plan.strictConflicts.length).toBeGreaterThan(0);
-    expect(plan.strictConflicts.some(t => t.displayPath === ".openflow/config.yaml")).toBe(true);
+    expect(plan.strictConflicts.some(t => t.displayPath === ".open-dynamic-workflow/config.yaml")).toBe(true);
   });
 
   it("generates correct next steps", async () => {
@@ -81,23 +81,23 @@ describe("Init Planner Services", () => {
 
     const plan = await buildInitPlan({ options, providerSelection });
 
-    expect(plan.nextSteps).toContain("openflow doctor");
-    expect(plan.nextSteps).toContain("openflow run workflows/example.ts --provider mock");
+    expect(plan.nextSteps).toContain("odw doctor");
+    expect(plan.nextSteps).toContain("odw run workflows/example.ts --provider mock");
   });
 
-  it("marks a file at .openflow/agents as a conflict, not reuse-directory", async () => {
+  it("marks a file at .open-dynamic-workflow/agents as a conflict, not reuse-directory", async () => {
     const mockStat = vi.mocked(fs.stat);
     mockStat.mockImplementation(async (p: any) => {
-      if (p === "/project/.openflow/agents") {
+      if (p === "/project/.open-dynamic-workflow/agents") {
         return { isDirectory: () => false, isFile: () => true } as any;
       }
       throw new Error("ENOENT");
     });
 
     const plan = await buildInitPlan({ options, providerSelection });
-    const agentsTarget = plan.targets.find(t => t.displayPath === ".openflow/agents");
+    const agentsTarget = plan.targets.find(t => t.displayPath === ".open-dynamic-workflow/agents");
 
-    expect(agentsTarget?.conflictReason).toMatch(/Cannot reuse "\.openflow\/agents" as a directory/);
+    expect(agentsTarget?.conflictReason).toMatch(/Cannot reuse "\.open-dynamic-workflow\/agents" as a directory/);
     expect(plan.pathConflicts).toContain(agentsTarget);
   });
 
@@ -117,19 +117,19 @@ describe("Init Planner Services", () => {
     expect(plan.pathConflicts).toContain(workflowTarget);
   });
 
-  it("detects parent-path file conflict for unplanned parent .openflow", async () => {
+  it("detects parent-path file conflict for unplanned parent .open-dynamic-workflow", async () => {
     const mockStat = vi.mocked(fs.stat);
     mockStat.mockImplementation(async (p: any) => {
-      if (p === "/project/.openflow") {
+      if (p === "/project/.open-dynamic-workflow") {
         return { isDirectory: () => false, isFile: () => true } as any;
       }
       throw new Error("ENOENT");
     });
 
     const plan = await buildInitPlan({ options, providerSelection });
-    const configTarget = plan.targets.find(t => t.displayPath === ".openflow/config.yaml");
+    const configTarget = plan.targets.find(t => t.displayPath === ".open-dynamic-workflow/config.yaml");
 
-    expect(configTarget?.conflictReason).toMatch(/parent path "\.openflow" is a file, not a directory/);
+    expect(configTarget?.conflictReason).toMatch(/parent path "\.open-dynamic-workflow" is a file, not a directory/);
     expect(plan.pathConflicts).toContain(configTarget);
   });
 });

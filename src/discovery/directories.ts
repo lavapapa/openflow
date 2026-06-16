@@ -1,11 +1,11 @@
 import { resolveUserPath } from "../cli/paths.js";
-import type { ResolvedOpenFlowConfig } from "../config/types.js";
+import type { ResolvedOpenDynamicWorkflowConfig } from "../config/types.js";
 import type { DiscoveryDirectories, ListCliResourceType } from "./types.js";
 
 export function resolveDiscoveryDirectories(input: {
   resourceType: ListCliResourceType;
   rawOptions: any;
-  config: ResolvedOpenFlowConfig;
+  config: ResolvedOpenDynamicWorkflowConfig;
   cwd: string;
 }): DiscoveryDirectories {
   const workflowsDirOverride = input.resourceType === "workflow"

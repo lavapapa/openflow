@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { ListCliResourceType } from "../discovery/types.js";
 import type { InitCliOptions, InitReportMode } from "./init/types.js";
 
@@ -41,7 +41,7 @@ export function parseKeyValueArgs(values: string[]): Record<string, string> {
   for (const val of values) {
     const index = val.indexOf("=");
     if (index === -1) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         `Invalid argument format: '${val}'. Arguments must be in key=value format.`
       );
@@ -49,7 +49,7 @@ export function parseKeyValueArgs(values: string[]): Record<string, string> {
     const key = val.substring(0, index).trim();
     const value = val.substring(index + 1);
     if (!key) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         `Invalid argument format: '${val}'. Key cannot be empty.`
       );
@@ -62,7 +62,7 @@ export function parseKeyValueArgs(values: string[]): Record<string, string> {
 export function parsePositiveInteger(value: string, optionName: string): number {
   const num = Number(value);
   if (!Number.isInteger(num) || num <= 0 || String(num) !== value) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Invalid option value for '${optionName}': '${value}'. Must be a positive integer.`
     );
@@ -72,7 +72,7 @@ export function parsePositiveInteger(value: string, optionName: string): number 
 
 export function parseReportMode(value: string): ReportMode {
   if (value !== "pretty" && value !== "json" && value !== "jsonl") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Invalid report mode: '${value}'. Must be one of: pretty, json, jsonl.`
     );
@@ -82,7 +82,7 @@ export function parseReportMode(value: string): ReportMode {
 
 export function parseInitReportMode(value: string): InitReportMode {
   if (value !== "pretty" && value !== "json") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       `Invalid report mode for init: '${value}'. Must be one of: pretty, json.`
     );
@@ -95,7 +95,7 @@ export function parseListResourceType(value?: string): ListCliResourceType {
   if (value === "workflows") return "workflow";
   if (value === "agents") return "agent";
   if (value === "tools") return "tool";
-  throw new OpenFlowError(
+  throw new OpenDynamicWorkflowError(
     ErrorCode.CLI_USAGE_ERROR,
     `Invalid list resource type: '${value}'. Must be one of: workflows, agents, tools.`
   );

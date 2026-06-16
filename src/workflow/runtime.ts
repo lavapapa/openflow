@@ -15,7 +15,7 @@ import { type WorkflowRegistry, createRootWorkflowRegistry } from "./registry.js
 import { serializeError } from "../errors/serialize.js";
 import { createLinkedAbortController } from "../orchestration/cancellation.js";
 import { shouldTriggerFailFast } from "../orchestration/fail-fast.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { loadRuntimeCallCache } from "../artifacts/call-cache.js";
 import type { SharedAgentRegistry } from "../shared-agents/registry.js";
@@ -70,7 +70,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
     const runId = deps.idGenerator ? deps.idGenerator.nextId("run") : crypto.randomUUID();
 
     const cwd = input.cli.cwd || input.config.cwd || process.cwd();
-    const artifactsDir = input.cli.outDir || input.config.outDir || path.resolve(cwd, ".openflow/runs", runId);
+    const artifactsDir = input.cli.outDir || input.config.outDir || path.resolve(cwd, ".open-dynamic-workflow/runs", runId);
 
     const schedulerConcurrency = input.cli.concurrency ?? input.config.concurrency ?? 1;
 
@@ -139,7 +139,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
         workflowSource: input.parsedWorkflow.sourceText || "",
         workflowHash: input.parsedWorkflow.sourceHash,
         resolvedConfig: input.config,
-        openflowVersion: input.parsedWorkflow.meta.version || "0.0.0",
+        openDynamicWorkflowVersion: input.parsedWorkflow.meta.version || "0.0.0",
         cwd,
         configPath: input.config.configPath
       });
@@ -181,7 +181,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
 
     try {
       if (runtimeAbortController.signal.aborted) {
-        throw new OpenFlowError(ErrorCode.WORKFLOW_CANCELLED, String(runtimeAbortController.signal.reason || "Workflow cancelled before execution started."));
+        throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_CANCELLED, String(runtimeAbortController.signal.reason || "Workflow cancelled before execution started."));
       }
 
       const workflowResult = await withDslExecutionScope({
@@ -278,7 +278,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
         err?.code === ErrorCode.USER_CANCELLED ||
         err?.name === "AbortError" ||
         err?.name === "WorkflowCancelledError" ||
-        (err?.name === "OpenFlowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED))
+        (err?.name === "OpenDynamicWorkflowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED))
       ) {
         abortType = "user";
       }
@@ -300,7 +300,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
                              err?.code === ErrorCode.USER_CANCELLED ||
                              err?.name === "AbortError" || 
                              err?.name === "WorkflowCancelledError" ||
-                             (err?.name === "OpenFlowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED));
+                             (err?.name === "OpenDynamicWorkflowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED));
 
       if (isCancellation) {
         const result = buildCancelledRunResult(runtime, durationMs, finishTime.toISOString(), err.message, deps.artifactStore);
@@ -339,7 +339,7 @@ export async function executeWorkflowModule(runtime: RuntimeState, invocationCon
   try {
     context = createSandboxContext(runtime);
   } catch (err: any) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SECURITY_POLICY_VIOLATION,
       `Failed to create secure sandbox context: ${err.message}`,
       { cause: err }
@@ -385,17 +385,17 @@ export async function executeWorkflowModule(runtime: RuntimeState, invocationCon
     try {
       return cloneJsonValue(result, "workflow result");
     } catch (err: any) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_RESULT_SERIALIZATION_FAILED,
         `Failed to serialize workflow result: ${err.message}`,
         { cause: err }
       );
     }
   } catch (err: any) {
-    // Check if it's already an OpenFlowError (e.g. from DSL)
+    // Check if it's already an OpenDynamicWorkflowError (e.g. from DSL)
     // We check both instanceof and the presence of the 'code' property 
     // to handle errors coming from the VM context.
-    if (err instanceof OpenFlowError || (err && typeof err === "object" && "code" in err && "name" in err && err.name === "OpenFlowError")) {
+    if (err instanceof OpenDynamicWorkflowError || (err && typeof err === "object" && "code" in err && "name" in err && err.name === "OpenDynamicWorkflowError")) {
       throw err;
     }
 
@@ -403,7 +403,7 @@ export async function executeWorkflowModule(runtime: RuntimeState, invocationCon
     const isSecurityViolation = err.name === "SecurityError";
 
     if (isSecurityViolation) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SECURITY_POLICY_VIOLATION,
         `Workflow execution violated security policy: ${err.message}`,
         { cause: err }
@@ -426,7 +426,7 @@ export function buildSucceededRunResult(
   const eventsPath = runArtifacts?.eventsPath || path.join(runtime.artifactsDir, "events.jsonl");
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "succeeded",
     meta: runtime.parsedWorkflow.meta,
@@ -463,7 +463,7 @@ export function buildFailedRunResult(
   const serialized = serializeError(error);
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "failed",
     meta: runtime.parsedWorkflow.meta,
@@ -501,7 +501,7 @@ export function buildCancelledRunResult(
   };
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "cancelled",
     meta: runtime.parsedWorkflow.meta,

@@ -27,7 +27,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -69,7 +69,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
-  it("openflow validate succeeds for a root with a valid child workflow", async () => {
+  it("open-dynamic-workflow validate succeeds for a root with a valid child workflow", async () => {
     const workflowPath = "tests/fixtures/workflows/nested-acceptance/valid-root.workflow.js";
     const result = await runCli([
       "validate",
@@ -81,7 +81,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     expect(result.stdout).toContain("Validated workflow");
   });
 
-  it("openflow validate rejects duplicate workflow definitions", async () => {
+  it("open-dynamic-workflow validate rejects duplicate workflow definitions", async () => {
     // Override config to include duplicates
     const dupConfigPath = path.join(TEMP_DIR, "dup-config.json");
     await fs.writeFile(dupConfigPath, JSON.stringify({
@@ -106,7 +106,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     expect(result.error.message).toContain("b.workflow.js");
   });
 
-  it("openflow validate rejects missing statically referenced child", async () => {
+  it("open-dynamic-workflow validate rejects missing statically referenced child", async () => {
     const workflowPath = "tests/fixtures/workflows/nested-acceptance/invalid/missing-child-root.invalid";
     const result = await runCli([
       "validate",
@@ -118,7 +118,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     expect(result.error.message).toContain("Workflow 'no-such-child' was not found in the registry");
   });
 
-  it("openflow validate rejects static schema-invalid args", async () => {
+  it("open-dynamic-workflow validate rejects static schema-invalid args", async () => {
     const workflowPath = "tests/fixtures/workflows/nested-acceptance/invalid/invalid-args-root.invalid";
     const result = await runCli([
       "validate",
@@ -131,7 +131,7 @@ describe("Nested Workflow Acceptance Integration", () => {
     expect(result.error.message).toContain("must be string at /target");
   });
 
-  it("openflow validate keeps arbitrary imports rejected", async () => {
+  it("open-dynamic-workflow validate keeps arbitrary imports rejected", async () => {
     const workflowPath = "tests/fixtures/workflows/nested-acceptance/invalid/imports.invalid";
     const result = await runCli([
       "validate",

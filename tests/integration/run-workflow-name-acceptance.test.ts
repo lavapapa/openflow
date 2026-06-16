@@ -32,7 +32,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
     if (err instanceof Error && stderrData.length === 0 && !err.message.includes("process.exit")) {
@@ -229,7 +229,7 @@ await agent({ id: "a1", provider: "mock", prompt: "p" });
     expect(result.error).toBeDefined();
     expect(result.stderr).toContain("missing-workflow");
     expect(result.stderr).toContain("not found by name or file path");
-    expect(result.stderr).toContain("openflow list workflows");
+    expect(result.stderr).toContain("open-dynamic-workflow list workflows");
   });
 
   it("AT-11: Config and cwd discovery scope", async () => {

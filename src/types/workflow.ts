@@ -129,7 +129,7 @@ export interface ResolvedWorkflowIdentity {
 }
 
 export interface WorkflowRunResult {
-  schemaVersion: "openflow.report.v1";
+  schemaVersion: "open-dynamic-workflow.report.v1";
   runId: string;
   status: WorkflowStatus;
   meta: WorkflowMeta;

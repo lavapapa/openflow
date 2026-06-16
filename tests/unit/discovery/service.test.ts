@@ -278,8 +278,8 @@ describe("discovery-service", () => {
             include: ["workflows/**/*.ts"]
           }
         },
-        sharedAgents: { dir: ".openflow/agents" },
-        tools: { dir: ".openflow/tools" }
+        sharedAgents: { dir: ".open-dynamic-workflow/agents" },
+        tools: { dir: ".open-dynamic-workflow/tools" }
       };
       const dirs = resolveDiscoveryDirectories({
         resourceType: "all",
@@ -289,7 +289,7 @@ describe("discovery-service", () => {
       });
 
       expect(dirs.workflowInclude).toEqual(["workflows/**/*.ts"]);
-      expect(dirs.agentsDir).toBe(join(tempDir, ".openflow/agents"));
+      expect(dirs.agentsDir).toBe(join(tempDir, ".open-dynamic-workflow/agents"));
     });
   });
 });

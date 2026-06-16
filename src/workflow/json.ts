@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { JsonObject, JsonValue } from "../types/common.js";
 
 /**
@@ -16,7 +16,7 @@ export function cloneJsonValue(value: unknown, label: string): JsonValue {
 export function cloneJsonObject(value: unknown, label: string): JsonObject {
   const cloned = cloneJsonValue(value, label);
   if (cloned === null || typeof cloned !== "object" || Array.isArray(cloned)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       `${label} must be a plain object.`
     );
@@ -31,7 +31,7 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
   if (typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_INVALID_CALL,
         `${label} contains non-finite number: ${value}`
       );
@@ -41,24 +41,24 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
 
   // Reject explicitly unsupported types
   if (value === undefined) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       `${label} cannot be undefined.`
     );
   }
   if (typeof value === "function") {
-    throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a function.`);
+    throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a function.`);
   }
   if (typeof value === "symbol") {
-    throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a symbol.`);
+    throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a symbol.`);
   }
   if (typeof value === "bigint") {
-    throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a bigint.`);
+    throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a bigint.`);
   }
 
   // Circular reference detection
   if (seen.has(value)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       `${label} contains a circular reference.`
     );
@@ -79,7 +79,7 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
   if (typeof value === "object") {
     // Check for "thenables" or Promises
     if ("then" in value && typeof (value as any).then === "function") {
-      throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Promise or thenable.`);
+      throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Promise or thenable.`);
     }
 
     // Check for other non-plain objects
@@ -92,25 +92,25 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
       } else {
         // It's a class instance, Map, Set, Date, Buffer, etc.
         if (value instanceof Date) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Date.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Date.`);
         }
         if (value instanceof Map) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Map.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Map.`);
         }
         if (value instanceof Set) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Set.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Set.`);
         }
         if (value instanceof Error) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains an Error.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains an Error.`);
         }
         if (globalThis.Buffer && value instanceof globalThis.Buffer) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Buffer.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a Buffer.`);
         }
         if (ArrayBuffer.isView(value)) {
-          throw new OpenFlowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a TypedArray or DataView.`);
+          throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_INVALID_CALL, `${label} contains a TypedArray or DataView.`);
         }
         // General rejection for class instances or complex types
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_INVALID_CALL,
           `${label} contains an unsupported object type: ${value.constructor?.name || "Unknown"}`
         );
@@ -123,7 +123,7 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
     for (const key of Object.keys(value)) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (descriptor?.get || descriptor?.set) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_INVALID_CALL,
           `${label}.${key} contains accessors.`
         );
@@ -138,7 +138,7 @@ function cloneRecursive(value: unknown, label: string, seen: Set<unknown>): Json
   }
 
   // Fallback for anything else (shouldn't really happen with above checks)
-  throw new OpenFlowError(
+  throw new OpenDynamicWorkflowError(
     ErrorCode.WORKFLOW_INVALID_CALL,
     `${label} contains an unsupported value: ${value}`
   );

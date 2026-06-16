@@ -12,7 +12,7 @@ import { shouldRedactEnvName } from "../security/env.js";
 import { appendModelArg } from "./model-args.js";
 import { extractJson } from "../structured/extract-json.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export interface GitHubCopilotProviderConfig extends Partial<ProviderConfig> {
@@ -83,7 +83,7 @@ export class GitHubCopilotCliAdapter implements AgentAdapter {
     });
 
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'GitHub Copilot CLI does not support structuredOutput.transport="native" yet.'
       );

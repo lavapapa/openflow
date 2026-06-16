@@ -92,7 +92,7 @@ export interface OrchestrationConfig {
   concurrency?: number;
 }
 
-export interface OpenFlowConfig {
+export interface OpenDynamicWorkflowConfig {
   defaultProvider: ProviderName;
   concurrency: number;
   timeoutMs: number;
@@ -106,7 +106,7 @@ export interface OpenFlowConfig {
   orchestration?: OrchestrationConfig;
 }
 
-export interface ResolvedConfig extends OpenFlowConfig {
+export interface ResolvedConfig extends OpenDynamicWorkflowConfig {
   cwd: string;
   outDir: string;
   configPath?: string;

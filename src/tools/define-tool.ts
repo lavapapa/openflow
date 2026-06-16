@@ -5,7 +5,7 @@ import {
 } from "../types/tool.js";
 
 /**
- * Defines a tool for use in OpenFlow workflows.
+ * Defines a tool for use in Open Dynamic Workflow workflows.
  * Brands the definition and freezes it to prevent mutation.
  */
 export function defineTool<TInput = unknown, TOutput = unknown>(

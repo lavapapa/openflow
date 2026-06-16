@@ -8,7 +8,7 @@ describe("loadToolRegistry", () => {
   let tempBaseDir: string;
 
   beforeEach(async () => {
-    tempBaseDir = await mkdtemp(join(tmpdir(), "openflow-load-test-"));
+    tempBaseDir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-load-test-"));
   });
 
   afterEach(async () => {

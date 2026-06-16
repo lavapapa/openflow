@@ -166,7 +166,7 @@ describe("Init Provider Services", () => {
     const isWindows = process.platform === "win32";
 
     beforeEach(() => {
-      tempBin = fsSync.mkdtempSync(path.join(os.tmpdir(), "openflow-bin-test-"));
+      tempBin = fsSync.mkdtempSync(path.join(os.tmpdir(), "open-dynamic-workflow-bin-test-"));
     });
 
     afterEach(() => {

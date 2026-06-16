@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseInitOptions, parseInitReportMode } from "../../src/cli/args.js";
-import { OpenFlowError } from "../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../src/errors/types.js";
 import { ErrorCode } from "../../src/errors/codes.js";
 
 describe("init options parsing", () => {
@@ -50,7 +50,7 @@ describe("init options parsing", () => {
   });
 
   it("fails on invalid report mode", () => {
-    expect(() => parseInitReportMode("invalid")).toThrow(OpenFlowError);
+    expect(() => parseInitReportMode("invalid")).toThrow(OpenDynamicWorkflowError);
     expect(() => parseInitReportMode("invalid")).toThrow(expect.objectContaining({
       code: ErrorCode.CLI_USAGE_ERROR
     }));

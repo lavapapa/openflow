@@ -18,7 +18,7 @@ describe("List Reporters", () => {
   });
 
   const mockResult: ListResult = {
-    schemaVersion: "openflow.list.v1",
+    schemaVersion: "open-dynamic-workflow.list.v1",
     status: "succeeded",
     resourceTypes: ["workflow", "agent", "tool"],
     resources: [
@@ -110,7 +110,7 @@ describe("List Reporters", () => {
     reporter.render(mockResult);
 
     const parsed = JSON.parse(output);
-    expect(parsed.schemaVersion).toBe("openflow.list.v1");
+    expect(parsed.schemaVersion).toBe("open-dynamic-workflow.list.v1");
     expect(parsed.resources).toHaveLength(3);
   });
 

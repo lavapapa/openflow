@@ -20,7 +20,7 @@ describe("CLI package execution and installation", () => {
 
     // Pack the package
     const packOutput = execSync("npm pack", { cwd: WORKSPACE_DIR, encoding: "utf8" }).trim();
-    const tarballName = packOutput.split("\n").pop() || `prmflow-openflow-${PACKAGE_VERSION}.tgz`;
+    const tarballName = packOutput.split("\n").pop() || `travisliu-open-dynamic-workflow-${PACKAGE_VERSION}.tgz`;
     packedTarballPath = path.resolve(WORKSPACE_DIR, tarballName);
   });
 
@@ -41,19 +41,19 @@ describe("CLI package execution and installation", () => {
   it("can execute npx . list --help and see examples", () => {
     const stdout = execSync("npx . list --help", { cwd: WORKSPACE_DIR, encoding: "utf8" });
     expect(stdout).toContain("Examples:");
-    expect(stdout).toContain("openflow list agents --verbose");
-    expect(stdout).toContain("openflow list workflows --dir examples/workflows");
+    expect(stdout).toContain("open-dynamic-workflow list agents --verbose");
+    expect(stdout).toContain("open-dynamic-workflow list workflows --dir examples/workflows");
   });
 
   it("can execute npx . init --help", () => {
     const stdout = execSync("npx . init --help", { cwd: WORKSPACE_DIR, encoding: "utf8" });
-    expect(stdout).toContain("Initialize a project for OpenFlow");
+    expect(stdout).toContain("Initialize a project for Open Dynamic Workflow");
   });
 
   it("can execute npx . doctor", () => {
     const stdout = execSync("npx . doctor", { cwd: WORKSPACE_DIR, encoding: "utf8" });
     expect(stdout).toContain("Node.js >= 20");
-    expect(stdout).toContain(`openflow ${PACKAGE_VERSION}`);
+    expect(stdout).toContain(`open-dynamic-workflow ${PACKAGE_VERSION}`);
     expect(stdout).toContain("Current directory writable");
   });
 
@@ -73,19 +73,26 @@ describe("CLI package execution and installation", () => {
     });
 
     const isWindows = process.platform === "win32";
-    const binaryName = isWindows ? "openflow.cmd" : "openflow";
+    const binaryName = isWindows ? "open-dynamic-workflow.cmd" : "open-dynamic-workflow";
     const globalBinPath = path.join(TEMP_NPM_DIR, isWindows ? "" : "bin", binaryName);
+    
+    const odwBinaryName = isWindows ? "odw.cmd" : "odw";
+    const globalOdwPath = path.join(TEMP_NPM_DIR, isWindows ? "" : "bin", odwBinaryName);
 
     expect(existsSync(globalBinPath)).toBe(true);
+    expect(existsSync(globalOdwPath)).toBe(true);
 
     const helpStdout = execSync(`"${globalBinPath}" --help`, { encoding: "utf8" });
     expect(helpStdout).toContain("Orchestrate coding-agent CLI workflows");
 
+    const odwHelpStdout = execSync(`"${globalOdwPath}" --help`, { encoding: "utf8" });
+    expect(odwHelpStdout).toContain("Orchestrate coding-agent CLI workflows");
+
     const doctorStdout = execSync(`"${globalBinPath}" doctor`, { encoding: "utf8" });
     expect(doctorStdout).toContain("Node.js >= 20");
-    expect(doctorStdout).toContain(`openflow ${PACKAGE_VERSION}`);
+    expect(doctorStdout).toContain(`open-dynamic-workflow ${PACKAGE_VERSION}`);
 
-    // Run the installed openflow binary with a real workflow and verify output/artifacts
+    // Run the installed open-dynamic-workflow binary with a real workflow and verify output/artifacts
     const runOutDir = path.join(TEMP_NPM_DIR, "out");
     await fs.mkdir(runOutDir, { recursive: true });
 
@@ -98,7 +105,7 @@ describe("CLI package execution and installation", () => {
       parsedReport = JSON.parse(runStdout.trim());
     }).not.toThrow();
 
-    expect(parsedReport.schemaVersion).toBe("openflow.report.v1");
+    expect(parsedReport.schemaVersion).toBe("open-dynamic-workflow.report.v1");
     expect(typeof parsedReport.runId).toBe("string");
     expect(parsedReport.status).toBe("succeeded");
 
@@ -121,7 +128,7 @@ describe("CLI package execution and installation", () => {
     await fs.mkdir(initProjectDir, { recursive: true });
     execSync(`"${globalBinPath}" init --yes --cwd "${initProjectDir}"`, { encoding: "utf8" });
 
-    expect(existsSync(path.join(initProjectDir, ".openflow/config.yaml"))).toBe(true);
+    expect(existsSync(path.join(initProjectDir, ".open-dynamic-workflow/config.yaml"))).toBe(true);
     expect(existsSync(path.join(initProjectDir, "workflows/example.ts"))).toBe(true);
 
     // Init with smoke test
@@ -137,7 +144,7 @@ describe("CLI package execution and installation", () => {
     await fs.mkdir(jsonSmokeDir, { recursive: true });
     const jsonStdout = execSync(`"${globalBinPath}" init --yes --cwd "${jsonSmokeDir}" --run-smoke-test --report json`, { encoding: "utf8" });
     const report = JSON.parse(jsonStdout.trim());
-    expect(report.schemaVersion).toBe("openflow.report.v1");
+    expect(report.schemaVersion).toBe("open-dynamic-workflow.report.v1");
     expect(report.status).toBe("succeeded");
   });
 });

@@ -32,7 +32,7 @@ describe("FileSystemArtifactStore", () => {
     workflowSource: 'console.log("workflow source")',
     workflowHash: "hash-456",
     resolvedConfig: { defaultProvider: "mock" },
-    openflowVersion: "1.0.0",
+    openDynamicWorkflowVersion: "1.0.0",
     cwd: "/workspace"
   };
 

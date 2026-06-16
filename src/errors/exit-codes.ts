@@ -1,4 +1,4 @@
-import { OpenFlowError } from "./types.js";
+import { OpenDynamicWorkflowError } from "./types.js";
 import { ErrorCode } from "./codes.js";
 
 export enum ExitCode {
@@ -15,7 +15,7 @@ export enum ExitCode {
 }
 
 export function exitCodeForError(error: unknown): ExitCode {
-  if (error instanceof OpenFlowError) {
+  if (error instanceof OpenDynamicWorkflowError) {
     switch (error.code) {
       case ErrorCode.CLI_USAGE_ERROR:
       case ErrorCode.CONFIG_VALIDATION_ERROR:

@@ -22,7 +22,7 @@ describe("defineTool", () => {
     expect(Object.isFrozen(definition)).toBe(false);
 
     // Marker should be non-enumerable
-    const descriptor = Object.getOwnPropertyDescriptor(tool, Symbol.for("openflow.toolDefinition"));
+    const descriptor = Object.getOwnPropertyDescriptor(tool, Symbol.for("open-dynamic-workflow.toolDefinition"));
     expect(descriptor?.enumerable).toBe(false);
   });
 

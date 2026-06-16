@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { JsonValue } from "../types/common.js";
 import { cloneJsonValue } from "../workflow/json.js";
 import { redactText } from "../security/env.js";
@@ -69,8 +69,8 @@ export function serializeToolValue(value: unknown, label: string, secrets: strin
     // 2. Redact and bound
     return redactAndBoundValue(cloned, { secrets });
   } catch (error) {
-    if (error instanceof OpenFlowError && error.code === ErrorCode.WORKFLOW_INVALID_CALL) {
-      throw new OpenFlowError(
+    if (error instanceof OpenDynamicWorkflowError && error.code === ErrorCode.WORKFLOW_INVALID_CALL) {
+      throw new OpenDynamicWorkflowError(
         ErrorCode.TOOL_SERIALIZATION_FAILED,
         error.message,
         { cause: error }

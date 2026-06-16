@@ -1,5 +1,5 @@
 import path from "node:path";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { ErrorCode } from "../../errors/codes.js";
 import { parseInitOptions } from "../args.js";
 import {
@@ -88,15 +88,15 @@ export async function initCommand(input: InitCommandInput): Promise<void> {
   };
 
   if (options.force && options.strict) {
-    throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Cannot combine --force and --strict.");
+    throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "Cannot combine --force and --strict.");
   }
 
   if (cliOptions.provider && !isSupportedInitProvider(cliOptions.provider)) {
-    throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, `Unsupported provider: ${cliOptions.provider}`);
+    throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, `Unsupported provider: ${cliOptions.provider}`);
   }
 
   if (cliOptions.report && !options.runSmokeTest) {
-    throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "--report requires --run-smoke-test.");
+    throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "--report requires --run-smoke-test.");
   }
 
   // 2. Detect provider candidates
@@ -139,7 +139,7 @@ export async function initCommand(input: InitCommandInput): Promise<void> {
 
   if (selection === "cancel") {
     deps.stdout.write(formatCancellationMessage() + "\n");
-    throw new OpenFlowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user.");
+    throw new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user.");
   }
 
   // 4. Build the init plan
@@ -151,12 +151,12 @@ export async function initCommand(input: InitCommandInput): Promise<void> {
   // 5. Fail on strict conflicts or path-kind conflicts before confirmation or writes
   if (plan.strictConflicts && plan.strictConflicts.length > 0) {
     deps.stdout.write(formatStrictConflicts(plan) + "\n");
-    throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Init target paths already exist in strict mode.");
+    throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "Init target paths already exist in strict mode.");
   }
 
   if (plan.pathConflicts && plan.pathConflicts.length > 0) {
     const firstConflict = plan.pathConflicts[0]!;
-    throw new OpenFlowError(ErrorCode.ARTIFACT_WRITE_FAILED, firstConflict.conflictReason!);
+    throw new OpenDynamicWorkflowError(ErrorCode.ARTIFACT_WRITE_FAILED, firstConflict.conflictReason!);
   }
 
   // 6. Confirm the plan when interactive
@@ -168,7 +168,7 @@ export async function initCommand(input: InitCommandInput): Promise<void> {
     });
     if (!confirmed) {
       deps.stdout.write(formatCancellationMessage() + "\n");
-      throw new OpenFlowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user.");
+      throw new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Initialization cancelled by user.");
     }
   }
 

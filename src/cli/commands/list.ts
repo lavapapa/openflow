@@ -4,7 +4,7 @@ import { resolveDiscoveryDirectories } from "../../discovery/directories.js";
 import { createDiscoveryService } from "../../discovery/service.js";
 import { createListReporter } from "../../output/list-reporter.js";
 import { mapListExitCode } from "../../errors/list-errors.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { ErrorCode } from "../../errors/codes.js";
 import type { DiscoveryService, ListCliResourceType } from "../../discovery/types.js";
 
@@ -26,7 +26,7 @@ export function validateListDirectoryFlags(cliResourceType: ListCliResourceType,
 
   if (cliResourceType === "all") {
     if (rawOptions.dir !== undefined) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         "Option '--dir' is ambiguous when listing all resource types. Use resource-specific flags like '--workflows-dir', '--agents-dir', or '--tools-dir' instead."
       );
@@ -34,9 +34,9 @@ export function validateListDirectoryFlags(cliResourceType: ListCliResourceType,
   } else {
     // Targeted command (workflows, agents, tools)
     if (hasTypeSpecificFlags) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
-        `Resource-specific directory flags (e.g., '--workflows-dir') are invalid on targeted list commands. Use '--dir <path>' instead when running 'openflow list ${cliResourceType}s'.`
+        `Resource-specific directory flags (e.g., '--workflows-dir') are invalid on targeted list commands. Use '--dir <path>' instead when running 'open-dynamic-workflow list ${cliResourceType}s'.`
       );
     }
   }

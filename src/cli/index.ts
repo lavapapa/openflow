@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import path from "node:path";
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
@@ -7,7 +8,7 @@ import { resumeCommand } from "./commands/resume.js";
 import { validateCommand } from "./commands/validate.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { listCommand } from "./commands/list.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { getPackageVersion } from "./package-info.js";
 
@@ -19,21 +20,25 @@ export async function main(argv: string[]): Promise<void> {
   const program = new Command();
   const version = await getPackageVersion();
 
+  // Detect if invoked via odw or the full name
+  const binName = argv[1] ? path.basename(argv[1]) : "odw";
+  const displayName = binName.startsWith("odw") ? "odw" : "open-dynamic-workflow";
+
   program
-    .name("openflow")
-    .description("Orchestrate coding-agent CLI workflows")
+    .name(displayName)
+    .description("Orchestrate coding-agent CLI workflows (alias: odw)")
     .version(version)
     .exitOverride((err) => {
       if (err.code === "commander.helpDisplayed" || err.code === "commander.help" || err.code === "commander.version") {
         throw err;
       }
       // Throw CLI usage error on command parsing errors
-      throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, err.message, { cause: err });
+      throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, err.message, { cause: err });
     });
 
   program
     .command("init")
-    .description("Initialize a project for OpenFlow")
+    .description("Initialize a project for Open Dynamic Workflow")
     .option("--yes", "Run non-interactively with defaults")
     .option("--provider <name>", "Default provider for generated config")
     .option("--force", "Overwrite generated files if they already exist")
@@ -48,11 +53,11 @@ export async function main(argv: string[]): Promise<void> {
       "after",
       `
 Examples:
-  openflow init
-  openflow init --yes
-  openflow init --yes --run-smoke-test
-  openflow init --strict
-  openflow init --force --provider codex
+  ${displayName} init
+  ${displayName} init --yes
+  ${displayName} init --yes --run-smoke-test
+  ${displayName} init --strict
+  ${displayName} init --force --provider codex
 `
     )
     .action(async (options) => {
@@ -75,12 +80,12 @@ Examples:
       "after",
       `
 Examples:
-  openflow list
-  openflow list workflows
-  openflow list agents --verbose
-  openflow list tools --report json
-  openflow list --strict
-  openflow list workflows --dir examples/workflows
+  ${displayName} list
+  ${displayName} list workflows
+  ${displayName} list agents --verbose
+  ${displayName} list tools --report json
+  ${displayName} list --strict
+  ${displayName} list workflows --dir examples/workflows
 `
     )
     .action(async (resourceType, options) => {
@@ -104,6 +109,17 @@ Examples:
     .option("--dry-run", "Validate and print summary without invoking providers")
     .option("--fail-fast", "Stop immediately on first agent step failure")
     .option("-v, --verbose", "Enable verbose logging")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  ${displayName} run my-workflow
+  ${displayName} run my-workflow --provider gemini
+  ${displayName} run my-workflow --arg key1=val1 --arg key2=val2
+  ${displayName} run my-workflow --report json
+  ${displayName} run my-workflow --dry-run
+`
+    )
     .action(async (workflowFile, options) => {
       await runCommand({ workflowFile, rawOptions: options });
     });
@@ -115,6 +131,15 @@ Examples:
     .option("-o, --out <path>", "Runs artifact directory")
     .option("-r, --report <mode>", "Reporter mode (pretty, json, jsonl)")
     .option("--no-cache", "Disable resume/cache lookup and cache index updates")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  ${displayName} resume last-run
+  ${displayName} resume .open-dynamic-workflow/runs/2025-01-01T00-00-00Z
+  ${displayName} resume last-run --report pretty
+`
+    )
     .action(async (runIdOrPath, options) => {
       await resumeCommand({ runIdOrPath, rawOptions: options });
     });
@@ -125,9 +150,18 @@ Examples:
     .option("-c, --config <path>", "Path to config file")
     .option("--cwd <path>", "Custom working directory")
     .option("-v, --verbose", "Enable verbose logging")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  ${displayName} validate my-workflow
+  ${displayName} validate workflows/my-workflow.ts
+  ${displayName} validate my-workflow --verbose
+`
+    )
     .action(async (target, options) => {
       if (!target) {
-        throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Missing <workflow-name-or-file>");
+        throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "Missing <workflow-name-or-file>");
       }
       await validateCommand({ workflowFile: target, rawOptions: options });
     });
@@ -137,6 +171,14 @@ Examples:
     .option("-c, --config <path>", "Path to config file")
     .option("--cwd <path>", "Custom working directory")
     .option("-v, --verbose", "Enable verbose logging")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  ${displayName} doctor
+  ${displayName} doctor --verbose
+`
+    )
     .action(async (options) => {
       await doctorCommand({ rawOptions: options });
     });

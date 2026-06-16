@@ -94,7 +94,7 @@ const defaultResolvedConfig: ResolvedConfig = {
     verbose: false
   },
   cwd: "/workspace",
-  outDir: "/workspace/.openflow/runs"
+  outDir: "/workspace/.open-dynamic-workflow/runs"
 };
 
 describe("DefaultRuntimeRunner", () => {

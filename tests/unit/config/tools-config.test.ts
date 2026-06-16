@@ -6,7 +6,7 @@ import { validateConfig } from "../../../src/config/schema.js";
 describe("Tools Config", () => {
   it("should have default tools configuration", () => {
     expect(DEFAULT_CONFIG.tools).toBeDefined();
-    expect(DEFAULT_CONFIG.tools.dir).toBe(".openflow/tools");
+    expect(DEFAULT_CONFIG.tools.dir).toBe(".open-dynamic-workflow/tools");
     expect(DEFAULT_CONFIG.tools.concurrency).toBe(4);
     expect(DEFAULT_CONFIG.tools.maxDefinitions).toBe(100);
   });
@@ -19,7 +19,7 @@ describe("Tools Config", () => {
     };
     const merged = mergeConfig(DEFAULT_CONFIG, fileConfig as any, {});
     expect(merged.tools.concurrency).toBe(8);
-    expect(merged.tools.dir).toBe(".openflow/tools"); // preserved default
+    expect(merged.tools.dir).toBe(".open-dynamic-workflow/tools"); // preserved default
     expect(merged.tools.maxDefinitions).toBe(100); // preserved default
   });
 
@@ -34,7 +34,7 @@ describe("Tools Config", () => {
     };
     expect(() => validateConfig(config as any)).toThrow(/Config value 'tools.dir' must be a non-empty string/);
     
-    config.tools.dir = ".openflow/tools";
+    config.tools.dir = ".open-dynamic-workflow/tools";
     expect(() => validateConfig(config as any)).toThrow(/Config value 'tools.concurrency' must be a positive integer/);
 
     config.tools.concurrency = 4;
@@ -64,8 +64,8 @@ describe("Tools Config", () => {
 
     expect(() => validateConfig({ ...baseConfig, tools: null } as any)).toThrow();
     expect(() => validateConfig({ ...baseConfig, tools: { dir: "", concurrency: 4, maxDefinitions: 100 } } as any)).toThrow();
-    expect(() => validateConfig({ ...baseConfig, tools: { dir: ".openflow/tools", concurrency: 0, maxDefinitions: 100 } } as any)).toThrow();
-    expect(() => validateConfig({ ...baseConfig, tools: { dir: ".openflow/tools", concurrency: 4, maxDefinitions: 0 } } as any)).toThrow();
+    expect(() => validateConfig({ ...baseConfig, tools: { dir: ".open-dynamic-workflow/tools", concurrency: 0, maxDefinitions: 100 } } as any)).toThrow();
+    expect(() => validateConfig({ ...baseConfig, tools: { dir: ".open-dynamic-workflow/tools", concurrency: 4, maxDefinitions: 0 } } as any)).toThrow();
   });
 
   it("should reject unknown keys in tools configuration (WORKSTREAM-002)", () => {

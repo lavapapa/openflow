@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { DefaultWorkflowInvocationManager } from "../../../src/workflow/invocation-manager.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("workflow recursion and depth", () => {
   const createMockRuntime = (maxDepth = 8) => ({
@@ -46,7 +46,7 @@ describe("workflow recursion and depth", () => {
     } as any;
 
     await expect(manager.invokeChild(parentCtx, { name: "A" }))
-      .rejects.toThrow(OpenFlowError);
+      .rejects.toThrow(OpenDynamicWorkflowError);
     
     const err = await manager.invokeChild(parentCtx, { name: "A" }).catch(e => e);
     expect(err.code).toBe(ErrorCode.WORKFLOW_RECURSION_DETECTED);

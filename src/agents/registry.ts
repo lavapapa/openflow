@@ -9,7 +9,7 @@ import {
 import { OpenCodeCliAdapter, type OpenCodeProviderConfig } from "./opencode-cli.js";
 import { AntigravityCliAdapter, type AntigravityProviderConfig } from "./antigravity-cli.js";
 import { PiCodingAgentAdapter, type PiCodingAgentProviderConfig } from "./pi-coding-agent.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export class ProviderRegistry {
@@ -25,7 +25,7 @@ export class ProviderRegistry {
   get(provider: string): AgentAdapter {
     const adapter = this.adapters.get(provider);
     if (!adapter) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.PROVIDER_UNAVAILABLE,
         `Unknown provider: ${provider}`
       );

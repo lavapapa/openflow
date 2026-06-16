@@ -6,7 +6,7 @@ import { assertWorkflowValid, validateRegistryDependencies } from "./validate.js
 import { createWorkflowRegistry, type WorkflowDefinition, type WorkflowRegistry } from "./registry.js";
 import type { SharedAgentRegistry } from "../shared-agents/registry.js";
 import type { ToolRegistry } from "../types/tool.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { walk, matchGlob, getGlobBaseDir } from "../discovery/file-patterns.js";
 
@@ -74,7 +74,7 @@ export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryIn
     // Safety check: ensure path is within CWD
     const rel = relative(canonicalCwd, canonicalPath);
     if (rel.startsWith("..") || isAbsolute(rel)) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SECURITY_POLICY_VIOLATION,
         `Workflow file outside project root: ${canonicalPath}`
       );
@@ -131,7 +131,7 @@ export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryIn
         // Unrelated duplicates. If we have candidatePaths, discovery service should have narrowed it,
         // so finding a duplicate here is a hard error. If we are scanning include, be lenient.
         if (candidatePaths) {
-          throw new OpenFlowError(
+          throw new OpenDynamicWorkflowError(
             ErrorCode.WORKFLOW_DUPLICATE_DEFINITION,
             `Duplicate workflow name '${def.name}' found in:\n  - ${existing.sourcePath}\n  - ${absolutePath}`
           );

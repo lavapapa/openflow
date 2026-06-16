@@ -1,31 +1,31 @@
 ---
-name: openflow-workflow-writer
-description: Create, review, validate, and improve OpenFlow workflow scripts that orchestrate Codex, Gemini, and mock provider agents through agent(), parallel(), pipeline(), phase(), log(), and tool().
+name: open-dynamic-workflow
+description: Create, review, validate, and improve Open Dynamic Workflow workflow scripts that orchestrate Codex, Gemini, and mock provider agents through agent(), parallel(), pipeline(), phase(), log(), and tool().
 ---
 
 # Purpose
 
-Use this skill when the user wants Codex to create, review, debug, validate, or improve an OpenFlow workflow script.
+Use this skill when the user wants Codex to create, review, debug, validate, or improve an Open Dynamic Workflow workflow script.
 
-OpenFlow is a local-first command-line workflow runner for orchestrating external coding-agent CLIs. A good OpenFlow workflow expresses orchestration intent in a constrained JavaScript / TypeScript-like DSL, keeps provider behavior isolated, uses structured output where useful, and remains observable through reports and artifacts.
+Open Dynamic Workflow is a local-first command-line workflow runner for orchestrating external coding-agent CLIs. A good Open Dynamic Workflow workflow expresses orchestration intent in a constrained JavaScript / TypeScript-like DSL, keeps provider behavior isolated, uses structured output where useful, and remains observable through reports and artifacts.
 
 Use this skill for requests such as:
 
-- Create an OpenFlow workflow for code review, CI/CD, finance, accounting, research, migration checks, test triage, documentation review, or other repeatable multi-agent work.
-- Convert an informal workflow idea into an OpenFlow workflow file.
+- Create an Open Dynamic Workflow workflow for code review, CI/CD, finance, accounting, research, migration checks, test triage, documentation review, or other repeatable multi-agent work.
+- Convert an informal workflow idea into an Open Dynamic Workflow workflow file.
 - Review an existing workflow for API correctness, validation errors, concurrency risks, provider selection, structured output, and CI usability.
-- Explain how to run, validate, configure, or troubleshoot an OpenFlow workflow.
+- Explain how to run, validate, configure, or troubleshoot an Open Dynamic Workflow workflow.
 - Refactor a workflow to use `parallel()` or `pipeline()` appropriately.
 
-Do not use this skill when the user only wants a general explanation of agent orchestration, generic JavaScript help unrelated to OpenFlow, or implementation work inside the OpenFlow runtime itself unless the user explicitly asks to modify OpenFlow.
+Do not use this skill when the user only wants a general explanation of agent orchestration, generic JavaScript help unrelated to Open Dynamic Workflow, or implementation work inside the Open Dynamic Workflow runtime itself unless the user explicitly asks to modify Open Dynamic Workflow.
 
 # References
 
 Consult these files when needed:
 
 - `references/api-document.md`: Syntax reference for workflow file shape, `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `workflow()`, `tool()`, providers, reports, artifacts, exit codes, templates, and common validation mistakes.
-- `references/cli-commands.md`: Command reference for `openflow run`, `openflow validate`, and `openflow doctor`.
-- `references/configuration.md`: Configuration reference for `.openflow/config.yaml`, provider settings, security settings, reporting settings, and precedence rules.
+- `references/cli-commands.md`: Command reference for `open-dynamic-workflow run`, `open-dynamic-workflow validate`, and `open-dynamic-workflow doctor`.
+- `references/configuration.md`: Configuration reference for `.open-dynamic-workflow/config.yaml`, provider settings, security settings, reporting settings, and precedence rules.
 
 When the user asks for exact syntax, validation constraints, command options, configuration behavior, or troubleshooting, prefer the references over memory.
 
@@ -37,7 +37,7 @@ When using this skill:
    - Identify the domain, target inputs, expected outputs, providers, and whether the workflow is local, CI, or documentation-oriented.
    - If the user provides enough information, proceed without asking follow-up questions.
 
-2. Choose the right OpenFlow pattern.
+2. Choose the right Open Dynamic Workflow pattern.
    - Use a single `agent()` when one agent can complete the task.
    - Use `parallel()` when independent reviews or analyses can run concurrently and then be summarized.
    - Use `pipeline()` when many items must pass through the same ordered stages.
@@ -85,10 +85,10 @@ When using this skill:
    - Prefer item-tolerant behavior for analysis pipelines unless the user wants strict gating.
 
 9. Add run instructions.
-   - Include `openflow validate <workflow-file>` before `openflow run <workflow-file>`.
+   - Include `open-dynamic-workflow validate <workflow-file>` before `open-dynamic-workflow run <workflow-file>`.
    - Include local commands and CI-friendly commands when relevant.
    - Suggest `--report json` for final machine-readable reports and `--report jsonl` for event streams.
-   - Suggest `openflow doctor` when provider availability or config may be uncertain.
+   - Suggest `open-dynamic-workflow doctor` when provider availability or config may be uncertain.
 
 10. Review the workflow before finalizing.
    - Check metadata placement.
@@ -105,7 +105,7 @@ When using this skill:
 
 # Rules
 
-- Do not invent unsupported OpenFlow APIs.
+- Do not invent unsupported Open Dynamic Workflow APIs.
 - Do not use arbitrary imports, `require()`, filesystem APIs, process APIs, shell commands, or host capabilities inside workflow files (use `tool()` to invoke registered, trusted tool definitions for these operations).
 - Do not place anything before `export const meta`.
 - Do not use dynamic metadata values.
@@ -128,7 +128,7 @@ When creating a workflow, return:
 
 ## Workflow
 
-A complete OpenFlow workflow file in a JavaScript code block.
+A complete Open Dynamic Workflow workflow file in a JavaScript code block.
 
 ## How to run
 
@@ -140,7 +140,7 @@ Brief notes explaining the selected pattern, providers, concurrency, structured 
 
 ## Validation checklist
 
-A short checklist of OpenFlow-specific correctness checks.
+A short checklist of Open Dynamic Workflow-specific correctness checks.
 
 When reviewing a workflow, return:
 
@@ -176,8 +176,8 @@ List validation and run commands.
 
 Use these helper scripts when relevant and available:
 
-- `scripts/openflow-validate.sh`: Validate one or more workflow files with `openflow validate`.
-- `scripts/openflow-smoke-run.sh`: Run a workflow with the mock provider and JSON report mode for deterministic smoke testing.
+- `scripts/open-dynamic-workflow-validate.sh`: Validate one or more workflow files with `open-dynamic-workflow validate`.
+- `scripts/open-dynamic-workflow-smoke-run.sh`: Run a workflow with the mock provider and JSON report mode for deterministic smoke testing.
 
 These scripts are optional helpers. If they do not fit the repository, show equivalent commands instead.
 
@@ -188,7 +188,7 @@ These scripts are optional helpers. If they do not fit the repository, show equi
 User request:
 
 ```text
-Create an OpenFlow workflow that uses Codex to review correctness and security while Gemini reviews tests and operations, then Gemini summarizes the results.
+Create an Open Dynamic Workflow workflow that uses Codex to review correctness and security while Gemini reviews tests and operations, then Gemini summarizes the results.
 ```
 
 Example response workflow:
@@ -332,17 +332,17 @@ export default {
 ## Example commands
 
 ```bash
-openflow doctor
-openflow validate workflows/parallel-pr-review.js
-openflow run workflows/parallel-pr-review.js --provider mock --dry-run
-openflow run workflows/parallel-pr-review.js --provider codex --concurrency 4 --timeout-ms 900000
-openflow run workflows/parallel-pr-review.js --provider mock --report json
-openflow run workflows/parallel-pr-review.js --report jsonl
+open-dynamic-workflow doctor
+open-dynamic-workflow validate workflows/parallel-pr-review.js
+open-dynamic-workflow run workflows/parallel-pr-review.js --provider mock --dry-run
+open-dynamic-workflow run workflows/parallel-pr-review.js --provider codex --concurrency 4 --timeout-ms 900000
+open-dynamic-workflow run workflows/parallel-pr-review.js --provider mock --report json
+open-dynamic-workflow run workflows/parallel-pr-review.js --report jsonl
 ```
 
 # Quality checklist
 
-Before returning a final OpenFlow workflow, confirm:
+Before returning a final Open Dynamic Workflow workflow, confirm:
 
 - `meta` is first and static.
 - The workflow exports a final result.

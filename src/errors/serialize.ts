@@ -1,10 +1,10 @@
-import { OpenFlowError } from "./types.js";
+import { OpenDynamicWorkflowError } from "./types.js";
 import type { SerializedError } from "./types.js";
 
 export function serializeError(error: unknown): SerializedError {
-  const isOpenFlowError = error instanceof OpenFlowError || (error && typeof error === "object" && "code" in error && "name" in error && (error as any).name === "OpenFlowError");
+  const isOpenDynamicWorkflowError = error instanceof OpenDynamicWorkflowError || (error && typeof error === "object" && "code" in error && "name" in error && (error as any).name === "OpenDynamicWorkflowError");
 
-  if (isOpenFlowError) {
+  if (isOpenDynamicWorkflowError) {
     const execErr = error as any;
     const res: SerializedError = {
       name: execErr.name,

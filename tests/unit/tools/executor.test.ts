@@ -4,7 +4,7 @@ import type { RegisteredToolDefinition } from "../../../src/types/tool.js";
 import type { PreparedToolCall, ToolExecutorDependencies } from "../../../src/tools/executor-types.js";
 import { TOOL_DEFINITION_MARKER } from "../../../src/types/tool.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("DefaultToolExecutor", () => {
   let deps: ToolExecutorDependencies;
@@ -82,7 +82,7 @@ describe("DefaultToolExecutor", () => {
     // Check metadata contract in artifacts
     const metadataCall = mockArtifactStore.writeJson.mock.calls.find((c: any) => c[0].endsWith("metadata.json"));
     expect(metadataCall[1]).toEqual(expect.objectContaining({
-      schemaVersion: "openflow.tool.v1",
+      schemaVersion: "open-dynamic-workflow.tool.v1",
       toolCallId: "call-1",
       definition: "echo",
       status: "succeeded",
@@ -532,7 +532,7 @@ describe("DefaultToolExecutor", () => {
     const execPromise = executor.execute(call);
     
     // Simulate workflow timeout
-    const abortReason = new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out");
+    const abortReason = new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out");
     controller.abort(abortReason);
 
     const result = await execPromise;

@@ -75,7 +75,7 @@ export async function promptUnavailableRequestedProvider({ stdin, stdout, reques
 export async function confirmInitPlan({ stdin, stdout, plan }: PromptInput & { plan: InitPlan }): Promise<boolean> {
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
-  stdout.write("\nOpenFlow will create:\n");
+  stdout.write("\nOpenDynamicWorkflow will create:\n");
   plan.targets.forEach(t => {
     if (t.action === "create" || t.action === "overwrite") {
       stdout.write(`  ${t.displayPath}\n`);

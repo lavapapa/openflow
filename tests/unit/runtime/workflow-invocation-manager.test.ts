@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { DefaultWorkflowInvocationManager } from "../../../src/workflow/invocation-manager.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
 
 describe("WorkflowInvocationManager", () => {
@@ -16,7 +16,7 @@ describe("WorkflowInvocationManager", () => {
 
   const createMockRegistry = (definitions: Record<string, any>) => ({
     require: vi.fn((name: string) => {
-      if (!definitions[name]) throw new OpenFlowError(ErrorCode.WORKFLOW_DEFINITION_NOT_FOUND, "Not found");
+      if (!definitions[name]) throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_DEFINITION_NOT_FOUND, "Not found");
       return definitions[name];
     })
   } as any);
@@ -155,7 +155,7 @@ describe("WorkflowInvocationManager", () => {
     const runtime = createMockRuntime();
     const childDef = { name: "child", parsedWorkflow: { body: "", meta: { name: "child" } } };
     const registry = createMockRegistry({ child: childDef });
-    const timeoutError = new OpenFlowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out.");
+    const timeoutError = new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_TIMEOUT, "Workflow timed out.");
     const evaluate = vi.fn().mockRejectedValue(timeoutError);
 
     const manager = new DefaultWorkflowInvocationManager({ runtime, registry, evaluate });
@@ -205,7 +205,7 @@ describe("WorkflowInvocationManager", () => {
       if (ctx.signal.aborted) {
         throw ctx.signal.reason;
       }
-      const abortError = new OpenFlowError(ErrorCode.WORKFLOW_CANCELLED, "parent cancelled");
+      const abortError = new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_CANCELLED, "parent cancelled");
       parentAbortController.abort(abortError);
       throw ctx.signal.reason || abortError;
     });
@@ -240,7 +240,7 @@ describe("WorkflowInvocationManager", () => {
     const manager = new DefaultWorkflowInvocationManager({ runtime, registry, evaluate: vi.fn() });
     
     const abortController = new AbortController();
-    const abortError = new OpenFlowError(ErrorCode.WORKFLOW_CANCELLED, "Pre-aborted");
+    const abortError = new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_CANCELLED, "Pre-aborted");
     abortController.abort(abortError);
     
     const parentCtx = { 

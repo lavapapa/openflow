@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SharedAgentRegistry } from "../../../src/shared-agents/registry.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("SharedAgentRegistry", () => {
   it("registers and retrieves an entry", () => {
@@ -23,7 +23,7 @@ describe("SharedAgentRegistry", () => {
       sourcePath: "/path/to/agent.yaml",
       definition: { id: "", description: "test" },
     };
-    expect(() => registry.register(entry)).toThrow(OpenFlowError);
+    expect(() => registry.register(entry)).toThrow(OpenDynamicWorkflowError);
     try {
         registry.register(entry);
     } catch (err: any) {
@@ -44,7 +44,7 @@ describe("SharedAgentRegistry", () => {
       definition: { id: "test-agent", description: "test" },
     };
     registry.register(entry1);
-    expect(() => registry.register(entry2)).toThrow(OpenFlowError);
+    expect(() => registry.register(entry2)).toThrow(OpenDynamicWorkflowError);
     try {
         registry.register(entry2);
     } catch (err: any) {

@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { ParsedWorkflow, WorkflowMeta } from "../types/workflow.js";
 
 export interface WorkflowDefinition {
@@ -27,7 +27,7 @@ class DefaultWorkflowRegistry implements WorkflowRegistry {
     for (const def of definitions) {
       if (this.definitions.has(def.name)) {
         const existing = this.definitions.get(def.name)!;
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.WORKFLOW_DUPLICATE_DEFINITION,
           `Duplicate workflow name '${def.name}' found in:\n  - ${existing.sourcePath}\n  - ${def.sourcePath}`
         );
@@ -43,7 +43,7 @@ class DefaultWorkflowRegistry implements WorkflowRegistry {
   require(name: string): WorkflowDefinition {
     const def = this.get(name);
     if (!def) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_DEFINITION_NOT_FOUND,
         `Workflow definition '${name}' not found.`
       );

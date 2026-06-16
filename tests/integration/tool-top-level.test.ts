@@ -31,7 +31,7 @@ async function runCli(args: string[], cwd: string = process.cwd()) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -59,8 +59,8 @@ describe("Tool Top-Level Integration", () => {
   let outDir: string;
 
   beforeEach(async () => {
-    projectDir = await fs.mkdtemp(path.join(tmpdir(), "openflow-tool-toplevel-"));
-    toolsDir = path.join(projectDir, ".openflow/tools");
+    projectDir = await fs.mkdtemp(path.join(tmpdir(), "open-dynamic-workflow-tool-toplevel-"));
+    toolsDir = path.join(projectDir, ".open-dynamic-workflow/tools");
     workflowDir = path.join(projectDir, "workflows");
     outDir = path.join(projectDir, "out");
 

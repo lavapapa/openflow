@@ -26,7 +26,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -43,7 +43,7 @@ async function runCli(args: string[]) {
   };
 }
 
-describe("openflow doctor", () => {
+describe("open-dynamic-workflow doctor", () => {
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });

@@ -78,7 +78,7 @@ export interface OrchestrationConfig {
   concurrency?: number;
 }
 
-export interface OpenFlowConfig {
+export interface OpenDynamicWorkflowConfig {
   defaultProvider: ProviderName;
   concurrency: number;
   timeoutMs: number;
@@ -96,7 +96,7 @@ export interface OpenFlowConfig {
   failFast?: boolean;
 }
 
-export interface ResolvedOpenFlowConfig extends OpenFlowConfig {
+export interface ResolvedOpenDynamicWorkflowConfig extends OpenDynamicWorkflowConfig {
   configPath?: string;
   cwd: string;
   outDir: string;

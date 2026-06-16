@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateSharedAgentDefinition, validateSharedAgentSource } from "../../../src/shared-agents/validate.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import type { SharedAgentDefinition } from "../../../src/shared-agents/types.js";
 
 describe("SharedAgent Validation", () => {
@@ -12,7 +12,7 @@ describe("SharedAgent Validation", () => {
         description: "An agent without run",
         agentPrompt: "Hello {{name}}"
       };
-      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("accepts a valid function definition", () => {
@@ -29,7 +29,7 @@ describe("SharedAgent Validation", () => {
       const trulyInvalid = ["", "Invalid-ID", "agent!"];
       for (const id of trulyInvalid) {
         const def = { id, description: "desc", run: async () => ({ ok: true }) };
-        expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenFlowError);
+        expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenDynamicWorkflowError);
       }
     });
 
@@ -38,7 +38,7 @@ describe("SharedAgent Validation", () => {
       expect(validateSharedAgentDefinition(def1, "test.yaml").id).toBe("agent");
 
       const def2 = { id: "agent", description: 123, run: async () => ({ ok: true }) };
-      expect(() => validateSharedAgentDefinition(def2, "test.yaml")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentDefinition(def2, "test.yaml")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("accepts both agentPrompt and run", () => {
@@ -54,7 +54,7 @@ describe("SharedAgent Validation", () => {
         run: async () => ({ ok: true }),
         inputSchema: { type: "invalid" }
       };
-      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects malformed schema objects like type: 123", () => {
@@ -64,7 +64,7 @@ describe("SharedAgent Validation", () => {
         run: async () => ({ ok: true }),
         inputSchema: { type: 123 }
       };
-      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentDefinition(def, "test.yaml")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects undeclared prompt variables in strict mode", () => {
@@ -81,7 +81,7 @@ describe("SharedAgent Validation", () => {
         }
       };
       expect(() => validateSharedAgentDefinition(def, "test.yaml", { strictPromptTemplateVariables: true }))
-        .toThrow(OpenFlowError);
+        .toThrow(OpenDynamicWorkflowError);
       try {
         validateSharedAgentDefinition(def, "test.yaml", { strictPromptTemplateVariables: true });
       } catch (err: any) {
@@ -107,35 +107,35 @@ describe("SharedAgent Validation", () => {
 
     it("rejects imports", () => {
       const source = `import fs from "fs";`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects require", () => {
       const source = `const fs = require("fs");`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects restricted globals like process", () => {
       const source = `console.log(process.env);`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects access to constructor", () => {
       const source = `const x = {}.constructor;`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects restricted host APIs", () => {
       const forbidden = ["fs", "path", "os", "child_process", "net", "http", "https", "shell"];
       for (const api of forbidden) {
         const source = `const x = ${api}.someMethod();`;
-        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${api}`).toThrow(OpenFlowError);
+        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${api}`).toThrow(OpenDynamicWorkflowError);
       }
     });
 
     it("rejects restricted property access", () => {
       const source = `const x = globalThis.process;`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
     });
 
     it("rejects element access aliases and computed escapes", () => {
@@ -150,13 +150,13 @@ describe("SharedAgent Validation", () => {
       ];
       for (const alias of aliases) {
         const source = `const x = ${alias};`;
-        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${alias}`).toThrow(OpenFlowError);
+        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${alias}`).toThrow(OpenDynamicWorkflowError);
       }
     });
 
     it("rejects dynamic element access", () => {
       const source = `const x = obj[someVar];`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
       try {
         validateSharedAgentSource(source, "bad.js");
       } catch (err: any) {
@@ -166,7 +166,7 @@ describe("SharedAgent Validation", () => {
 
     it("rejects 'this' keyword", () => {
       const source = `const x = this;`;
-      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenFlowError);
+      expect(() => validateSharedAgentSource(source, "bad.js")).toThrow(OpenDynamicWorkflowError);
       try {
         validateSharedAgentSource(source, "bad.js");
       } catch (err: any) {
@@ -178,7 +178,7 @@ describe("SharedAgent Validation", () => {
       const forbidden = ["Object", "Reflect", "Proxy", "AsyncFunction"];
       for (const api of forbidden) {
         const source = `const x = ${api}.keys({});`;
-        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${api}`).toThrow(OpenFlowError);
+        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${api}`).toThrow(OpenDynamicWorkflowError);
       }
     });
 
@@ -186,7 +186,7 @@ describe("SharedAgent Validation", () => {
       const globals = ["phase", "parallel", "pipeline", "args"];
       for (const g of globals) {
         const source = `const x = ${g};`;
-        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${g}`).toThrow(OpenFlowError);
+        expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${g}`).toThrow(OpenDynamicWorkflowError);
       }
     });
 
@@ -198,7 +198,7 @@ describe("SharedAgent Validation", () => {
           `const x = obj["${b}"];`,
         ];
         for (const source of variants) {
-          expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${source}`).toThrow(OpenFlowError);
+          expect(() => validateSharedAgentSource(source, "bad.js"), `Should reject ${source}`).toThrow(OpenDynamicWorkflowError);
         }
       }
     });

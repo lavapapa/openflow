@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createWorkflowRegistry, createRootWorkflowRegistry } from "../../../src/workflow/registry.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
 
 describe("WorkflowRegistry", () => {
@@ -42,7 +42,7 @@ describe("WorkflowRegistry", () => {
 
   it("throws on missing required definition", () => {
     const registry = createWorkflowRegistry([]);
-    expect(() => registry.require("missing")).toThrow(OpenFlowError);
+    expect(() => registry.require("missing")).toThrow(OpenDynamicWorkflowError);
     try {
       registry.require("missing");
     } catch (e: any) {

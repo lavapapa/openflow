@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { serializeError } from "../errors/serialize.js";
 import type { SerializedError } from "../types/errors.js";
 import type { ToolExecutionResult, ToolSummary, ToolExecutionContext } from "../types/tool.js";
@@ -26,10 +26,10 @@ export class DefaultToolExecutor implements ToolExecutor {
     // Listen to root signal
     if (deps.rootSignal) {
       if (deps.rootSignal.aborted) {
-        this.cancel(serializeError(new OpenFlowError(ErrorCode.USER_CANCELLED, "Root signal already aborted")));
+        this.cancel(serializeError(new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Root signal already aborted")));
       } else {
         deps.rootSignal.addEventListener("abort", () => {
-          this.cancel(serializeError(new OpenFlowError(ErrorCode.USER_CANCELLED, "Root signal aborted")));
+          this.cancel(serializeError(new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Root signal aborted")));
         }, { once: true });
       }
     }
@@ -47,7 +47,7 @@ export class DefaultToolExecutor implements ToolExecutor {
 
   private async doExecute<TOutput>(call: PreparedToolCall): Promise<ToolExecutionResult<TOutput>> {
     if (this.closed || this.cancelReason) {
-      const error = this.cancelReason || serializeError(new OpenFlowError(ErrorCode.USER_CANCELLED, "Tool executor cancelled"));
+      const error = this.cancelReason || serializeError(new OpenDynamicWorkflowError(ErrorCode.USER_CANCELLED, "Tool executor cancelled"));
       return this.terminalFailure(call, error, "cancelled", 0);
     }
 
@@ -80,7 +80,7 @@ export class DefaultToolExecutor implements ToolExecutor {
     // Prepare metadata with project-relative source path
     const definitionSourcePath = path.relative(this.deps.cwd, call.definition.sourcePath);
     const fullMetadata: any = {
-      schemaVersion: "openflow.tool.v1",
+      schemaVersion: "open-dynamic-workflow.tool.v1",
       runId: this.deps.runId,
       toolCallId,
       definition: call.definition.definition.id,
@@ -161,7 +161,7 @@ export class DefaultToolExecutor implements ToolExecutor {
 
     if (effectiveTimeoutMs !== undefined && effectiveTimeoutMs >= 0) {
       timeoutTimer = setTimeout(() => {
-        callAbortController.abort(new OpenFlowError(ErrorCode.PROCESS_TIMEOUT, `Tool ${call.definition.definition.id} timed out`));
+        callAbortController.abort(new OpenDynamicWorkflowError(ErrorCode.PROCESS_TIMEOUT, `Tool ${call.definition.definition.id} timed out`));
       }, effectiveTimeoutMs);
     }
 
@@ -182,7 +182,7 @@ export class DefaultToolExecutor implements ToolExecutor {
       try {
         await artifacts.writeToolMetadata(this.deps.artifactStore, toolCallId, serializedMetadata);
       } catch (err: any) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.TOOL_ARTIFACT_WRITE_FAILED,
           `Failed to write tool running metadata: ${err.message}`,
           { cause: err }
@@ -249,13 +249,13 @@ export class DefaultToolExecutor implements ToolExecutor {
         try {
           await artifacts.writeToolInvalidOutput(this.deps.artifactStore, toolCallId, boundedInvalidOutput, validation.errors);
         } catch (writeError: any) {
-          throw new OpenFlowError(
+          throw new OpenDynamicWorkflowError(
             ErrorCode.TOOL_ARTIFACT_WRITE_FAILED,
             `Failed to write invalid output artifact: ${writeError.message}`,
             { cause: writeError }
           );
         }
-        const error = serializeError(new OpenFlowError(ErrorCode.TOOL_INVALID_OUTPUT, "Tool output validation failed"));
+        const error = serializeError(new OpenDynamicWorkflowError(ErrorCode.TOOL_INVALID_OUTPUT, "Tool output validation failed"));
         return await this.terminalFailure(call, error, "failed", totalDurationMs, { 
           executionDurationMs, 
           queueDurationMs, 
@@ -289,7 +289,7 @@ export class DefaultToolExecutor implements ToolExecutor {
         
         await artifacts.writeToolMetadata(this.deps.artifactStore, toolCallId, serializedMetadata);
       } catch (writeError: any) {
-        const serialized = serializeError(new OpenFlowError(
+        const serialized = serializeError(new OpenDynamicWorkflowError(
           ErrorCode.TOOL_ARTIFACT_WRITE_FAILED,
           `Failed to write output artifacts: ${writeError.message}`,
           { cause: writeError }
@@ -353,7 +353,7 @@ export class DefaultToolExecutor implements ToolExecutor {
       const finishedAt = new Date(finishedAtTime).toISOString();
       const totalDurationMs = finishedAtTime - startTime;
       
-      const errorCode = error?.code || (error instanceof OpenFlowError ? error.code : undefined);
+      const errorCode = error?.code || (error instanceof OpenDynamicWorkflowError ? error.code : undefined);
       if (errorCode === ErrorCode.TOOL_ARTIFACT_WRITE_FAILED || errorCode === ErrorCode.TOOL_SERIALIZATION_FAILED) {
         throw error;
       }
@@ -436,7 +436,7 @@ export class DefaultToolExecutor implements ToolExecutor {
         await artifacts.writeToolError(this.deps.artifactStore, toolCallId, error);
         await artifacts.writeToolMetadata(this.deps.artifactStore, toolCallId, metadata);
       } catch (writeError: any) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.TOOL_ARTIFACT_WRITE_FAILED,
           `Failed to write failure artifacts for tool '${call.definition.definition.id}': ${writeError.message}`,
           { cause: writeError }

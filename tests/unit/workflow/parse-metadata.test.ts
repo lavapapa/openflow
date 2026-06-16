@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseWorkflow } from "../../../src/workflow/parse.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 
 describe("Parse Workflow Metadata", () => {
   it("parses valid simple metadata", () => {
@@ -31,7 +31,7 @@ describe("Parse Workflow Metadata", () => {
 
   it("throws on missing metadata", () => {
     const sourceText = `phase("run");`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata is not first statement", () => {
@@ -40,14 +40,14 @@ describe("Parse Workflow Metadata", () => {
       name: "bad",
       description: "Metadata is not first"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata is missing name", () => {
     const sourceText = `export const meta = {
       description: "No name"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata name is empty", () => {
@@ -55,14 +55,14 @@ describe("Parse Workflow Metadata", () => {
       name: "",
       description: "Empty name"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata description is missing", () => {
     const sourceText = `export const meta = {
       name: "valid-name"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata name is dynamic", () => {
@@ -70,7 +70,7 @@ describe("Parse Workflow Metadata", () => {
       name: "bad-" + Date.now(),
       description: "Dynamic name"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata description is dynamic (e.g. template literal expression)", () => {
@@ -78,7 +78,7 @@ describe("Parse Workflow Metadata", () => {
       name: "bad",
       description: \`Dynamic \${1+1}\`
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata phases contain non-literal strings", () => {
@@ -87,7 +87,7 @@ describe("Parse Workflow Metadata", () => {
       description: "description",
       phases: ["prep", String(123)]
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata contains spread properties", () => {
@@ -97,7 +97,7 @@ describe("Parse Workflow Metadata", () => {
       description: "description",
       ...extra
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("throws when metadata contains computed properties", () => {
@@ -106,7 +106,7 @@ describe("Parse Workflow Metadata", () => {
       description: "description",
       ["extra"]: "value"
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("parses static inputSchema metadata", () => {
@@ -139,7 +139,7 @@ describe("Parse Workflow Metadata", () => {
       description: "Dynamic schema",
       inputSchema: schema
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("rejects spread in inputSchema metadata", () => {
@@ -150,7 +150,7 @@ describe("Parse Workflow Metadata", () => {
         ...{ type: "object" }
       }
     };`;
-    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenFlowError);
+    expect(() => parseWorkflow({ sourcePath: "test.js", sourceText })).toThrow(OpenDynamicWorkflowError);
   });
 
   it("keeps inputSchema optional for existing workflows", () => {
@@ -181,7 +181,7 @@ describe("Parse Workflow Metadata", () => {
           ${c.prop}
         }
       };`;
-      expect(() => parseWorkflow({ sourcePath: "test.js", sourceText }), `Case ${c.name} should throw`).toThrow(OpenFlowError);
+      expect(() => parseWorkflow({ sourcePath: "test.js", sourceText }), `Case ${c.name} should throw`).toThrow(OpenDynamicWorkflowError);
     }
   });
 });

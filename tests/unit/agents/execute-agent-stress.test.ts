@@ -49,7 +49,7 @@ describe("DefaultAgentExecutor stress and edge cases", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -101,7 +101,7 @@ describe("DefaultAgentExecutor stress and edge cases", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -142,7 +142,7 @@ describe("DefaultAgentExecutor stress and edge cases", () => {
 
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-io-fail";
-    await store.createRun({ runId, outDir: path.join(TEST_OUT_DIR, runId), workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: path.join(TEST_OUT_DIR, runId), workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     
     // Mock appendText to fail
     (store as any).appendText = async () => {

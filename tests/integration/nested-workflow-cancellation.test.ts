@@ -9,7 +9,7 @@ async function runCliWithTimeout(args: string[]) {
   // We can't easily send SIGINT to main() in same process, 
   // so we'll use --timeout-ms to trigger internal cancellation.
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     return err;
   }

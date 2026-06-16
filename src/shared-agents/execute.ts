@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { DirectAgentCallInput, AgentResult } from "../types/agent.js";
 import type { ResolvedConfig } from "../types/config.js";
 import { sanitizeMetadata } from "../security/metadata.js";
@@ -65,13 +65,13 @@ export async function executeSharedAgent(
     artifactsDir: deps.artifactsDir,
     renderAgentPrompt: (customContext: unknown) => {
       if (!("agentPrompt" in definition) || typeof definition.agentPrompt !== "string") {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.SHARED_AGENT_PROMPT_RENDER_FAILED,
           "Cannot render agent prompt because 'agentPrompt' is not defined in this shared agent."
         );
       }
       if (!customContext || typeof customContext !== "object") {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           ErrorCode.SHARED_AGENT_PROMPT_RENDER_FAILED,
           "Context passed to renderAgentPrompt must be an object."
         );
@@ -96,7 +96,7 @@ export async function executeSharedAgent(
       return await definition.run(context, runtimeObj);
     });
   } catch (err: any) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_RUNTIME_FAILED,
       `Shared agent '${entry.id}' runtime execution failed: ${err.message}`,
       { cause: err }

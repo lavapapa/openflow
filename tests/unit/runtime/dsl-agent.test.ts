@@ -99,7 +99,7 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
     reporting: { mode: "pretty", verbose: false },
     cwd: "/workspace",
-    outDir: "/workspace/.openflow/runs",
+    outDir: "/workspace/.open-dynamic-workflow/runs",
     cliArgs: {}
   };
 
@@ -109,7 +109,7 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     config,
     args: {},
     cwd: "/workspace",
-    artifactsDir: "/workspace/.openflow/runs/run-test-1",
+    artifactsDir: "/workspace/.open-dynamic-workflow/runs/run-test-1",
     agentResults: [],
     scheduler: makeSchedulerWithResult(makeSuccessResult("agent-1")) as any,
     agentExecutor: { execute: vi.fn() },
@@ -196,7 +196,7 @@ describe("DSL: agent()", () => {
         security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
         reporting: { mode: "pretty", verbose: false },
         cwd: "/workspace",
-        outDir: "/workspace/.openflow/runs",
+        outDir: "/workspace/.open-dynamic-workflow/runs",
         cliArgs: {}
       }
     });
@@ -271,7 +271,7 @@ describe("DSL: agent()", () => {
         security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
         reporting: { mode: "pretty", verbose: false },
         cwd: "/workspace",
-        outDir: "/workspace/.openflow/runs",
+        outDir: "/workspace/.open-dynamic-workflow/runs",
         cliArgs: {}
       }
     });
@@ -501,7 +501,7 @@ describe("DSL: agent()", () => {
 
   describe("agent() cache integration", () => {
     it("returns a materialized result on cache hit and emits agent.cache_hit", async () => {
-      const runRoot = "/workspace/.openflow/runs/prev-run";
+      const runRoot = "/workspace/.open-dynamic-workflow/runs/prev-run";
       const fingerprint = computeAgentFingerprint({
         call: { id: "call-1", prompt: "hello" },
         provider: "mock",
@@ -529,7 +529,7 @@ describe("DSL: agent()", () => {
       };
 
       const artifactStore = {
-        getRunArtifacts: () => ({ rootDir: "/workspace/.openflow/runs/new-run" }),
+        getRunArtifacts: () => ({ rootDir: "/workspace/.open-dynamic-workflow/runs/new-run" }),
         isRunCreated: () => true,
         writeText: vi.fn(),
         writeJson: vi.fn(),
@@ -574,7 +574,7 @@ describe("DSL: agent()", () => {
       };
 
       const artifactStore = {
-        getRunArtifacts: () => ({ rootDir: "/workspace/.openflow/runs/new-run" }),
+        getRunArtifacts: () => ({ rootDir: "/workspace/.open-dynamic-workflow/runs/new-run" }),
         isRunCreated: () => true,
         writeText: vi.fn(),
         writeJson: vi.fn(),

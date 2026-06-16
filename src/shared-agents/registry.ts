@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { SharedAgentRegistryEntry } from "./types.js";
 
 export class SharedAgentRegistry {
@@ -7,7 +7,7 @@ export class SharedAgentRegistry {
 
   register(entry: SharedAgentRegistryEntry): void {
     if (typeof entry.id !== "string" || entry.id.trim() === "") {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
         `Shared agent in ${entry.sourcePath} must declare a non-empty id.`
       );
@@ -15,7 +15,7 @@ export class SharedAgentRegistry {
 
     const existing = this.entries.get(entry.id);
     if (existing) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SHARED_AGENT_DUPLICATE_ID,
         `Duplicate shared agent id '${entry.id}' in ${existing.sourcePath} and ${entry.sourcePath}.`
       );

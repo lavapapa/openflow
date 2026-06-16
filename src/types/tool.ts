@@ -34,7 +34,7 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   run(input: TInput, context: ToolExecutionContext): Promise<TOutput> | TOutput;
 }
 
-export const TOOL_DEFINITION_MARKER = Symbol.for("openflow.toolDefinition");
+export const TOOL_DEFINITION_MARKER = Symbol.for("open-dynamic-workflow.toolDefinition");
 
 export interface BrandedToolDefinition<TInput = unknown, TOutput = unknown>
   extends ToolDefinition<TInput, TOutput> {

@@ -31,7 +31,7 @@ async function runCli(args: string[], cwd: string = process.cwd()) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -59,8 +59,8 @@ describe("Tool CLI Integration", () => {
   let markerFile: string;
 
   beforeEach(async () => {
-    projectDir = await fs.mkdtemp(path.join(tmpdir(), "openflow-tool-cli-"));
-    toolsDir = path.join(projectDir, ".openflow/tools");
+    projectDir = await fs.mkdtemp(path.join(tmpdir(), "open-dynamic-workflow-tool-cli-"));
+    toolsDir = path.join(projectDir, ".open-dynamic-workflow/tools");
     workflowDir = path.join(projectDir, "workflows");
     markerFile = path.join(projectDir, "marker.txt");
 
@@ -149,7 +149,7 @@ describe("Tool CLI Integration", () => {
 
     for (const line of lines) {
       const event = JSON.parse(line);
-      expect(event.schemaVersion).toBe("openflow.event.v1");
+      expect(event.schemaVersion).toBe("open-dynamic-workflow.event.v1");
       if (event.type === "tool.started") foundStarted = true;
       if (event.type === "tool.completed") foundCompleted = true;
     }
@@ -232,17 +232,17 @@ describe("Tool CLI Integration", () => {
     expect(result.error.message).toContain("Tool 'missing-tool' was not found");
   });
 
-  it("should load tools that import @prmflow/openflow from project node_modules (T001)", async () => {
-    // Setup mock @prmflow/openflow in project node_modules
-    const nodeModules = path.join(projectDir, "node_modules/@prmflow/openflow");
+  it("should load tools that import @travisliu/open-dynamic-workflow from project node_modules (T001)", async () => {
+    // Setup mock @travisliu/open-dynamic-workflow in project node_modules
+    const nodeModules = path.join(projectDir, "node_modules/@travisliu/open-dynamic-workflow");
     await fs.mkdir(nodeModules, { recursive: true });
     await fs.writeFile(path.join(nodeModules, "package.json"), JSON.stringify({
-      name: "@prmflow/openflow",
+      name: "@travisliu/open-dynamic-workflow",
       version: "0.1.0",
       type: "module"
     }));
     await fs.writeFile(path.join(nodeModules, "index.js"), `
-      const marker = Symbol.for("openflow.toolDefinition");
+      const marker = Symbol.for("open-dynamic-workflow.toolDefinition");
       export function defineTool(def) {
         const copy = { ...def };
         Object.defineProperty(copy, marker, {
@@ -256,7 +256,7 @@ describe("Tool CLI Integration", () => {
     `);
 
     await fs.writeFile(path.join(toolsDir, "bare-import-tool.ts"), `
-      import { defineTool } from "@prmflow/openflow";
+      import { defineTool } from "@travisliu/open-dynamic-workflow";
       export default defineTool({
         id: "bare-import-tool",
         description: "bare",

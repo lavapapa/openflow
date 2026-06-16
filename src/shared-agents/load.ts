@@ -3,7 +3,7 @@ import { resolve, relative, join, extname, isAbsolute } from "node:path";
 import * as vm from "node:vm";
 import * as ts from "typescript";
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { SharedAgentRegistry } from "./registry.js";
 import { validateSharedAgentDefinition, validateSharedAgentSource } from "./validate.js";
 import { isDefinedSharedAgent } from "./define-agent.js";
@@ -44,7 +44,7 @@ export async function loadSharedAgentRegistry(
           const relativeToCwd = relative(realCwd, realTarget);
           const relativeToDir = relative(absolutePath, realTarget);
           if (relativeToCwd.startsWith("..") && relativeToDir.startsWith("..")) {
-            throw new OpenFlowError(
+            throw new OpenDynamicWorkflowError(
               ErrorCode.SHARED_AGENT_SECURITY_POLICY_VIOLATION,
               `Shared agent symlink '${fullPath}' points outside the workspace.`
             );
@@ -58,13 +58,13 @@ export async function loadSharedAgentRegistry(
         }
       }
     } catch (err) {
-      if (err instanceof OpenFlowError) throw err;
+      if (err instanceof OpenDynamicWorkflowError) throw err;
       // Ignore missing files/dirs if they were part of the default paths
     }
   }
 
   if (discoveredFiles.length > maxDefinitions) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
       `Discovered ${discoveredFiles.length} shared agent definitions, which exceeds the limit of ${maxDefinitions}.`
     );
@@ -111,7 +111,7 @@ function evaluateJsDefinition(sourceText: string, filePath: string): any {
         defineAgent: (def: any) => {
             captured = def;
             // Apply the marker so isDefinedSharedAgent(result) will pass
-            const SHARED_AGENT_MARKER = Symbol.for("openflow.sharedAgentDefinition");
+            const SHARED_AGENT_MARKER = Symbol.for("open-dynamic-workflow.sharedAgentDefinition");
             Object.defineProperty(def, SHARED_AGENT_MARKER, {
                 value: true,
                 enumerable: false,
@@ -127,7 +127,7 @@ function evaluateJsDefinition(sourceText: string, filePath: string): any {
         exports: moduleExports,
         module: { exports: moduleExports },
         require: (mod: string) => {
-            if (mod.includes("define-agent") || mod.includes("openflow")) {
+            if (mod.includes("define-agent") || mod.includes("open-dynamic-workflow")) {
                 return {
                     defineAgent: sandbox.defineAgent,
                     default: sandbox.defineAgent
@@ -147,7 +147,7 @@ function evaluateJsDefinition(sourceText: string, filePath: string): any {
         const script = new vm.Script(codeToRun, { filename: filePath });
         script.runInContext(context, { timeout: 250 });
     } catch (err: any) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
             ErrorCode.SHARED_AGENT_RUNTIME_FAILED,
             `Failed to evaluate shared agent ${filePath}: ${err.message}`
         );
@@ -156,7 +156,7 @@ function evaluateJsDefinition(sourceText: string, filePath: string): any {
     const result = (sandbox as any).sandboxDefault || (sandbox.module.exports as any).default;
     
     if (!isDefinedSharedAgent(result)) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
             ErrorCode.SHARED_AGENT_INVALID_DEFINITION,
             `Shared agent file ${filePath} does not export a valid definition using defineAgent() as the default export.`
         );
@@ -176,7 +176,7 @@ function transpileTs(sourceText: string, filePath: string): string {
     });
     return result.outputText;
   } catch (err: any) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SHARED_AGENT_RUNTIME_FAILED,
       `TypeScript transpilation failed for ${filePath}: ${err.message}`
     );

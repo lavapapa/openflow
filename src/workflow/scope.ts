@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { getActiveWorkflowInvocation, type WorkflowInvocationContext } from "./invocation-types.js";
 
@@ -52,7 +52,7 @@ export function assertToolAllowed(): DslExecutionScope {
   const scope = getDslExecutionScope();
   if (!scope) {
     // If no scope is present, it's an internal error because we should always have one during workflow execution.
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.INTERNAL_ERROR,
       "No active DSL execution scope found."
     );
@@ -60,7 +60,7 @@ export function assertToolAllowed(): DslExecutionScope {
 
   if (!scope.toolAllowed || !scope.topLevelWindow) {
     const restriction = scope.inheritedToolRestriction || scope.location;
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.TOOL_INVALID_CONTEXT,
       `tool() is not allowed in ${restriction.replace(/-/g, " ")} context.`
     );
@@ -91,7 +91,7 @@ export function assertToolAllowed(): DslExecutionScope {
     const maxAllowedFrames = hasVmContext ? 2 : 1;
 
     if (workflowFrames > maxAllowedFrames) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.TOOL_INVALID_CONTEXT,
         "tool() is not allowed in a nested helper or callback context."
       );

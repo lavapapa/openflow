@@ -72,7 +72,7 @@ export interface ListSummary {
 }
 
 export interface ListResult {
-  schemaVersion: "openflow.list.v1";
+  schemaVersion: "open-dynamic-workflow.list.v1";
   status: "succeeded" | "partially_succeeded" | "failed";
   resourceTypes: ListResourceType[];
   resources: ListedResource[];

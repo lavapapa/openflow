@@ -6,7 +6,7 @@ import * as ts from "typescript";
 import { BrandedToolDefinition, ToolRegistry } from "../types/tool.js";
 import { buildToolRegistry } from "./registry.js";
 import { isDefinedTool } from "./define-tool.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 
 export interface LoadToolRegistryInput {
   cwd: string;
@@ -108,7 +108,7 @@ export async function loadToolRegistry(input: LoadToolRegistryInput): Promise<To
     if (err.code === "ENOENT") {
       return buildToolRegistry({ definitions: [], maxDefinitions });
     }
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       "TOOL_INVALID_DEFINITION" as any,
       `Failed to read tools directory '${absoluteDir}': ${err.message}`
     );
@@ -118,7 +118,7 @@ export async function loadToolRegistry(input: LoadToolRegistryInput): Promise<To
   let tempDir: string | undefined;
 
   try {
-    const projectTmpDir = join(cwd, ".openflow", "tmp");
+    const projectTmpDir = join(cwd, ".open-dynamic-workflow", "tmp");
     await mkdir(projectTmpDir, { recursive: true });
     tempDir = await mkdtemp(join(projectTmpDir, "tools-"));
     await mirrorDirectory(absoluteDir, tempDir);
@@ -139,7 +139,7 @@ export async function loadToolRegistry(input: LoadToolRegistryInput): Promise<To
       }
 
       if (!isDefinedTool(definition)) {
-        throw new OpenFlowError(
+        throw new OpenDynamicWorkflowError(
           "TOOL_INVALID_DEFINITION" as any,
           `Tool file '${filePath}' does not have a valid default export created with defineTool().`
         );
@@ -148,8 +148,8 @@ export async function loadToolRegistry(input: LoadToolRegistryInput): Promise<To
       definitions.push({ definition, sourcePath: filePath });
     }
   } catch (err: any) {
-    if (err instanceof OpenFlowError) throw err;
-    throw new OpenFlowError(
+    if (err instanceof OpenDynamicWorkflowError) throw err;
+    throw new OpenDynamicWorkflowError(
       "TOOL_INVALID_DEFINITION" as any,
       `Failed to load tool definition: ${err.message}`
     );

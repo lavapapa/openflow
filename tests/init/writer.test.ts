@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { applyInitPlan } from "../../src/cli/init/writer.js";
 import * as fs from "node:fs/promises";
 import { ErrorCode } from "../../src/errors/codes.js";
-import { OpenFlowError } from "../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../src/errors/types.js";
 
 vi.mock("node:fs/promises");
 
@@ -20,8 +20,8 @@ describe("Init Writer Services", () => {
         {
           kind: "file",
           action: "create",
-          path: "/p/.openflow/config.yaml",
-          displayPath: ".openflow/config.yaml",
+          path: "/p/.open-dynamic-workflow/config.yaml",
+          displayPath: ".open-dynamic-workflow/config.yaml",
           content: "config content"
         },
         {
@@ -35,15 +35,15 @@ describe("Init Writer Services", () => {
 
     const result = await applyInitPlan(plan);
 
-    expect(mockMkdir).toHaveBeenCalledWith("/p/.openflow", { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith("/p/.open-dynamic-workflow", { recursive: true });
     expect(mockWriteFile).toHaveBeenCalledWith(
-      "/p/.openflow/config.yaml",
+      "/p/.open-dynamic-workflow/config.yaml",
       "config content",
       { flag: "wx" }
     );
     expect(mockMkdir).toHaveBeenCalledWith("/p/workflows", { recursive: true });
 
-    expect(result.created).toContain(".openflow/config.yaml");
+    expect(result.created).toContain(".open-dynamic-workflow/config.yaml");
     expect(result.created).toContain("workflows");
   });
 
@@ -148,7 +148,7 @@ describe("Init Writer Services", () => {
       ]
     } as any;
 
-    await expect(applyInitPlan(plan)).rejects.toThrow(OpenFlowError);
+    await expect(applyInitPlan(plan)).rejects.toThrow(OpenDynamicWorkflowError);
     await expect(applyInitPlan(plan)).rejects.toMatchObject({
       code: ErrorCode.ARTIFACT_WRITE_FAILED,
       message: expect.stringContaining("write race")

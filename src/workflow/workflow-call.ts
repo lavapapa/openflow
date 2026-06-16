@@ -1,5 +1,5 @@
 import { ErrorCode } from "../errors/codes.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import type { JsonObject } from "../types/common.js";
 import type { WorkflowCallInput, WorkflowFailureMode } from "../types/workflow.js";
 import { cloneJsonObject } from "./json.js";
@@ -15,7 +15,7 @@ export interface NormalizedWorkflowCall {
 
 export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       "workflow() input must be an object."
     );
@@ -24,7 +24,7 @@ export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
   const callInput = input as WorkflowCallInput;
 
   if (callInput.name === undefined || typeof callInput.name !== "string") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       "workflow() input must contain a valid 'name' string."
     );
@@ -32,14 +32,14 @@ export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
 
   const name = callInput.name.trim();
   if (name.length === 0) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       "workflow() name cannot be empty."
     );
   }
 
   if (isPathLikeWorkflowName(name)) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       `workflow() name '${name}' cannot be a path.`
     );
@@ -48,7 +48,7 @@ export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
   const args = callInput.args ? cloneJsonObject(callInput.args, "workflow() args") : {};
   const failureMode: WorkflowFailureMode = callInput.failureMode || "throw";
   if (failureMode !== "throw" && failureMode !== "settled") {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.WORKFLOW_INVALID_CALL,
       `workflow() failureMode must be 'throw' or 'settled', got '${failureMode}'.`
     );
@@ -57,7 +57,7 @@ export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
   let timeoutMs: number | undefined;
   if (callInput.timeoutMs !== undefined) {
     if (typeof callInput.timeoutMs !== "number" || !Number.isInteger(callInput.timeoutMs) || callInput.timeoutMs <= 0) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_INVALID_CALL,
         "workflow() timeoutMs must be a positive integer."
       );
@@ -68,7 +68,7 @@ export function normalizeWorkflowCall(input: unknown): NormalizedWorkflowCall {
   let concurrency: number | undefined;
   if (callInput.concurrency !== undefined) {
     if (typeof callInput.concurrency !== "number" || !Number.isInteger(callInput.concurrency) || callInput.concurrency <= 0) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.WORKFLOW_INVALID_CALL,
         "workflow() concurrency must be a positive integer."
       );

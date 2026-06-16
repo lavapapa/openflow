@@ -14,7 +14,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -48,11 +48,11 @@ providers:
     defaultModel: null
 security:
   passEnv:
-    - OPENFLOW_FAKE_PROVIDER_COUNTER
-    - OPENFLOW_FAKE_PROVIDER_JSON
-    - OPENFLOW_FAKE_PROVIDER_INVALID_JSON
-    - OPENFLOW_FAKE_PROVIDER_FAIL_ON
-    - OPENFLOW_FAKE_PROVIDER_EXIT_CODE
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_JSON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_INVALID_JSON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_FAIL_ON
+    - OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_EXIT_CODE
 workflow:
   discovery:
     include:
@@ -69,11 +69,11 @@ describe("resume/cache", () => {
   });
 
   afterEach(async () => {
-    delete process.env.OPENFLOW_FAKE_PROVIDER_COUNTER;
-    delete process.env.OPENFLOW_FAKE_PROVIDER_JSON;
-    delete process.env.OPENFLOW_FAKE_PROVIDER_INVALID_JSON;
-    delete process.env.OPENFLOW_FAKE_PROVIDER_FAIL_ON;
-    delete process.env.OPENFLOW_FAKE_PROVIDER_EXIT_CODE;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_JSON;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_INVALID_JSON;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_FAIL_ON;
+    delete process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_EXIT_CODE;
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
@@ -90,7 +90,7 @@ export default async (ctx) => {
   return [a.text, b.text];
 };`;
     await fs.writeFile(workflowPath, content, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("2");
@@ -129,7 +129,7 @@ export default async (ctx) => {
   await ctx.agent({ id: "c", prompt: "unchanged c" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("3");
@@ -168,7 +168,7 @@ export default async (ctx) => {
   }
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("5");
@@ -194,8 +194,8 @@ export default async (ctx) => {
   });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
-    process.env.OPENFLOW_FAKE_PROVIDER_INVALID_JSON = "1";
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_INVALID_JSON = "1";
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("1");
@@ -218,8 +218,8 @@ export default async (ctx) => {
   await ctx.agent({ id: "c", prompt: "ok c" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
-    process.env.OPENFLOW_FAKE_PROVIDER_FAIL_ON = "fail b";
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_FAIL_ON = "fail b";
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("3");
@@ -240,7 +240,7 @@ export default async (ctx) => {
   await ctx.agent({ id: "a", prompt: "no cache" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     const [firstRunId] = await listRunDirs(runsDir);
@@ -264,7 +264,7 @@ export default async (ctx) => {
   await ctx.agent({ id: "a", prompt: "journal a" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     const [firstRunId] = await listRunDirs(runsDir);
@@ -296,7 +296,7 @@ export default async (ctx) => {
   await ctx.agent({ definition: "wrapper" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", workflowPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("1");
@@ -336,7 +336,7 @@ export default async (ctx) => {
   await ctx.agent({ prompt: "parent agent 2" });
   return "done";
 };`, "utf8");
-    process.env.OPENFLOW_FAKE_PROVIDER_COUNTER = counterPath;
+    process.env.OPEN_DYNAMIC_WORKFLOW_FAKE_PROVIDER_COUNTER = counterPath;
 
     expect((await runCli(["run", parentPath, "--config", configPath, "--out", runsDir])).error).toBeNull();
     expect(await readCounter(counterPath)).toBe("3");
@@ -376,7 +376,7 @@ export default async (ctx) => {
     await fs.writeFile(path.join(toolsDir, "count-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "count-tool",
   description: "counts executions",
   inputSchema: { type: "object" },
@@ -451,7 +451,7 @@ tools:
     await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "miss-tool",
   description: "counts executions",
   inputSchema: { type: "object" },
@@ -527,7 +527,7 @@ export default async (ctx) => {
     await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "miss-tool",
   description: "counts executions",
   inputSchema: { type: "object" },
@@ -611,7 +611,7 @@ export default async (ctx) => {
     await fs.writeFile(path.join(toolsDir, "miss-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "miss-tool",
   description: "counts executions",
   inputSchema: { type: "object" },
@@ -680,7 +680,7 @@ export default async (ctx) => {
     await fs.writeFile(path.join(toolsDir, "live-tool.ts"), `
 import * as fs from "node:fs";
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "live-tool",
   description: "counts executions",
   inputSchema: { type: "object" },
@@ -742,7 +742,7 @@ export default async (ctx) => {
     
     await fs.writeFile(path.join(toolsDir, "fail-tool.ts"), `
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "fail-tool",
   description: "fails on demand",
   inputSchema: { type: "object" },
@@ -835,7 +835,7 @@ export default async (ctx) => {
     await fs.mkdir(toolsDir, { recursive: true });
     await fs.writeFile(path.join(toolsDir, "tool-1.ts"), `
 export default {
-  [Symbol.for("openflow.toolDefinition")]: true,
+  [Symbol.for("open-dynamic-workflow.toolDefinition")]: true,
   id: "tool-1",
   description: "test",
   inputSchema: { type: "object" },
