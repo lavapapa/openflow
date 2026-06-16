@@ -1,22 +1,59 @@
 import type { Reporter, ReporterStartInput, ReporterStreams, ReporterOptions } from "./reporter.js";
 import type { EventEnvelope } from "./events.js";
 import type { WorkflowRunResult } from "../types/workflow.js";
-import { sanitizeMetadata } from "../security/metadata.js";
 import { renderVerboseEvent } from "./verbose-formatter.js";
+import { PrettyViewBuilder } from "./pretty-view-builder.js";
+import { renderPrettyView } from "./pretty-renderer.js";
+import { resolveFailedSubpaths } from "./failed-artifacts.js";
+import type { PrettyExecutionNode } from "./pretty-view.js";
+import { formatDuration, getStatusMarker, formatPermission, formatStatusCounts } from "./pretty-format.js";
 
-function formatDuration(ms?: number): string {
-  if (typeof ms !== "number") return "";
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
+function renderNodeLine(node: PrettyExecutionNode, depth: number): string {
+  const indent = "  ".repeat(depth + 1);
+  const marker = getStatusMarker(node.status);
+  const duration = node.durationMs ? formatDuration(node.durationMs) : "";
 
-function displayAgentLabel(payload: { agentId: string; label?: string }): string {
-  return payload.label ?? payload.agentId;
+  switch (node.kind) {
+    case "phase": {
+      return `${indent}→ ${node.name}`;
+    }
+    case "workflow": {
+      if (node.isRoot) return "";
+      return `${indent}${marker} workflow ${node.name}${duration ? "  " + duration : ""}`;
+    }
+    case "agent": {
+      const parts: string[] = [node.label];
+      if (node.provider) {
+        parts.push(node.provider + (node.model ? "/" + node.model : ""));
+      }
+      const perm = formatPermission(node.permissions?.mode);
+      if (perm) {
+        parts.push(perm);
+      }
+      if (node.status === "failed" || node.status === "timed_out" || node.status === "cancelled") {
+        const statusText = node.status === "timed_out" ? "timed out" : node.status === "cancelled" ? "cancelled" : "failed";
+        parts.push(`${statusText} after ${duration}`);
+      } else if (duration) {
+        parts.push(duration);
+      }
+      return `${indent}${marker} ${parts.join("  ")}`;
+    }
+    case "tool": {
+      return `${indent}${marker} ${node.label}${duration ? "  " + duration : ""}`;
+    }
+    case "pipeline": {
+      const label = node.label ? `Pipeline ${node.label}` : "Pipeline";
+      return `${indent}${marker} ${label}${duration ? "  " + duration : ""}`;
+    }
+    default:
+      return "";
+  }
 }
 
 export class PrettyReporter implements Reporter {
   private readonly stdout: NodeJS.WritableStream;
   private readonly verbose: boolean;
+  private readonly builder: PrettyViewBuilder;
 
   constructor(
     private readonly streams: ReporterStreams,
@@ -24,229 +61,108 @@ export class PrettyReporter implements Reporter {
   ) {
     this.stdout = streams.stdout;
     this.verbose = !!options?.verbose;
+    this.builder = new PrettyViewBuilder();
   }
 
   start(input: ReporterStartInput): void {
-    const name = input.meta.name;
-    this.stdout.write(`◇ ${name}\n`);
+    try {
+      this.builder.addStart(input);
+      if (!this.verbose) {
+        this.stdout.write(`◇ ${input.meta.name}\n`);
+        if (input.workflow?.file) {
+          this.stdout.write(`  file: ${input.workflow.file}\n`);
+        }
+        if (input.runId) {
+          this.stdout.write(`  run:  ${input.runId}\n`);
+        }
+        this.stdout.write("\nExecution\n");
+      }
+    } catch (err) {
+      // Best effort
+    }
   }
 
   handle(event: EventEnvelope): void {
-    const type = event.type;
-    const payload = event.payload as any;
-
-    // Handle verbose command/result blocks
-    if (this.verbose) {
-      const verboseBlock = renderVerboseEvent(event);
-      if (verboseBlock) {
-        this.stdout.write(verboseBlock);
+    try {
+      if (event.type === "workflow.log") {
+        const payload = event.payload as any;
+        const workflowId = payload.workflowInvocationId;
+        const depth = workflowId ? this.builder.getWorkflowLogDepth(workflowId) : 0;
+        const indent = "  ".repeat(depth + 1);
+        this.stdout.write(`${indent}• ${payload.message}\n`);
         return;
       }
-    }
 
-    switch (type) {
-      case "phase.started": {
-        this.stdout.write(`→ Phase: ${payload.name}\n`);
-        break;
-      }
-      case "workflow.resolved": {
-        if (this.verbose) {
-          const strategy = payload.targetKind === "workflow-name"
-            ? `workflow name using workflow discovery patterns`
-            : `direct file path`;
-          this.stdout.write(`• Resolved target "${payload.requestedTarget}" as ${strategy}.\n`);
-        }
-        this.stdout.write(`  Workflow: ${payload.workflowFileRelative}\n`);
-        break;
-      }
-      case "workflow.log": {
-        this.stdout.write(`• ${payload.message}\n`);
-        break;
-      }
-      case "agent.queued": {
-        if (this.verbose) {
-          const label = displayAgentLabel(payload);
-          const providerStr = payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-          const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-          this.stdout.write(`• ${label} queued [${providerStr}]${permStr}\n`);
-          if (payload.metadata && Object.keys(payload.metadata).length > 0) {
-            this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
+      const nodeId = this.builder.addEvent(event);
+
+      if (nodeId) {
+        const node = this.builder.getNode(nodeId);
+        const depth = this.builder.getNodeDepth(nodeId);
+        if (node && depth !== null) {
+          const line = renderNodeLine(node, depth);
+          if (line) {
+            this.stdout.write(line + "\n");
           }
         }
-        break;
       }
-      case "agent.started": {
-        const label = displayAgentLabel(payload);
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-        this.stdout.write(`▶ ${label} started [${providerStr}]${permStr}\n`);
-        if (this.verbose && payload.metadata && Object.keys(payload.metadata).length > 0) {
-          this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
+
+      if (this.verbose) {
+        const verboseBlock = renderVerboseEvent(event);
+        if (verboseBlock) {
+          this.stdout.write(verboseBlock);
         }
-        break;
       }
-      case "agent.output": {
-        // In verbose mode, we suppress agent.output to avoid interleaving with command/result blocks.
-        // It's already rendered in the result block.
-        break;
-      }
-      case "agent.completed": {
-        const label = displayAgentLabel(payload);
-        const dur = formatDuration(payload.durationMs);
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-        this.stdout.write(`✓ ${label} succeeded [${providerStr}] ${dur}${permStr}\n`);
-        if (this.verbose && payload.metadata && Object.keys(payload.metadata).length > 0) {
-          this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
-        }
-        break;
-      }
-      case "agent.cache_hit": {
-        const label = displayAgentLabel(payload);
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        this.stdout.write(`↻ ${label} cache hit [${providerStr}]\n`);
-        break;
-      }
-      case "agent.failed": {
-        const label = displayAgentLabel(payload);
-        const errMsg = payload.error?.message || "Unknown error";
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-        this.stdout.write(`✕ ${label} failed [${providerStr}] ${errMsg}${permStr}\n`);
-        if (this.verbose && payload.metadata && Object.keys(payload.metadata).length > 0) {
-          this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
-        }
-        break;
-      }
-      case "agent.timed_out": {
-        const label = displayAgentLabel(payload);
-        const errMsg = payload.error?.message || "Timed out";
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-        this.stdout.write(`✕ ${label} timed out [${providerStr}] ${errMsg}${permStr}\n`);
-        if (this.verbose && payload.metadata && Object.keys(payload.metadata).length > 0) {
-          this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
-        }
-        break;
-      }
-      case "agent.cancelled": {
-        const label = displayAgentLabel(payload);
-        const providerStr = this.verbose && payload.model ? `${payload.provider}/${payload.model}` : payload.provider;
-        const permStr = payload.permissions?.mode === "dangerously-full-access" ? " [dangerously-full-access]" : "";
-        this.stdout.write(`• ${label} cancelled [${providerStr}]${permStr}\n`);
-        if (this.verbose && payload.metadata && Object.keys(payload.metadata).length > 0) {
-          this.stdout.write(`  Metadata: ${JSON.stringify(sanitizeMetadata(payload.metadata))}\n`);
-        }
-        break;
-      }
-      case "tool.queued": {
-        if (this.verbose) {
-          const label = payload.label ?? payload.definition;
-          this.stdout.write(`• ${label} tool queued\n`);
-        }
-        break;
-      }
-      case "tool.started": {
-        if (this.verbose) {
-          const label = payload.label ?? payload.definition;
-          this.stdout.write(`▶ ${label} tool started\n`);
-        }
-        break;
-      }
-      case "tool.completed": {
-        const label = payload.label ?? payload.definition;
-        const dur = formatDuration(payload.executionDurationMs);
-        this.stdout.write(`✓ ${label} tool ${dur}\n`);
-        break;
-      }
-      case "tool.failed": {
-        const label = payload.label ?? payload.definition;
-        const errMsg = payload.error?.message || "Unknown error";
-        this.stdout.write(`✕ ${label} tool failed: ${errMsg}\n`);
-        if (payload.artifactPath) {
-          this.stdout.write(`  Artifacts: ${payload.artifactPath}\n`);
-        }
-        break;
-      }
-      case "tool.timed_out": {
-        const label = payload.label ?? payload.definition;
-        this.stdout.write(`✕ ${label} tool timed out\n`);
-        if (payload.artifactPath) {
-          this.stdout.write(`  Artifacts: ${payload.artifactPath}\n`);
-        }
-        break;
-      }
-      case "tool.cancelled": {
-        if (this.verbose) {
-          const label = payload.label ?? payload.definition;
-          this.stdout.write(`• ${label} tool cancelled\n`);
-        }
-        break;
-      }
-      case "tool.cache_hit": {
-        const label = payload.label ?? payload.definition;
-        this.stdout.write(`↻ ${label} tool cache hit\n`);
-        break;
-      }
-      case "pipeline.started": {
-        const labelStr = payload.label ? ` (${payload.label})` : "";
-        this.stdout.write(`◇ Pipeline ${payload.pipelineId}${labelStr} started [strategy: ${payload.strategy}, items: ${payload.itemCount}]\n`);
-        break;
-      }
-      case "pipeline.stage.started": {
-        this.stdout.write(`  → Item ${payload.itemIndex}: Stage ${payload.stageName} started\n`);
-        break;
-      }
-      case "pipeline.stage.completed": {
-        const dur = formatDuration(payload.durationMs);
-        this.stdout.write(`  ✓ Item ${payload.itemIndex}: Stage ${payload.stageName} completed ${dur}\n`);
-        break;
-      }
-      case "pipeline.stage.failed": {
-        this.stdout.write(`  ✕ Item ${payload.itemIndex}: Stage ${payload.stageName} failed: ${payload.error?.message || "Unknown error"}\n`);
-        break;
-      }
-      case "pipeline.completed": {
-        const dur = formatDuration(payload.durationMs);
-        this.stdout.write(`✓ Pipeline ${payload.pipelineId} completed successfully ${dur}\n`);
-        if (payload.artifactPath) {
-          this.stdout.write(`  Artifacts: ${payload.artifactPath}\n`);
-        }
-        break;
-      }
-      case "pipeline.failed": {
-        this.stdout.write(`✕ Pipeline ${payload.pipelineId} failed\n`);
-        break;
-      }
-      case "workflow.invocation.started": {
-        this.stdout.write(`> workflow ${payload.workflowName} started (${payload.workflowInvocationId})\n`);
-        break;
-      }
-      case "workflow.invocation.completed": {
-        const dur = formatDuration(payload.durationMs);
-        this.stdout.write(`ok workflow ${payload.workflowName} completed in ${dur}\n`);
-        break;
-      }
-      case "workflow.invocation.failed": {
-        const dur = formatDuration(payload.durationMs);
-        this.stdout.write(`error workflow ${payload.workflowName} failed in ${dur}\n`);
-        break;
-      }
+    } catch (err) {
+      // Best effort
     }
   }
 
   finish(result: WorkflowRunResult): void {
-    const dur = formatDuration(result.durationMs);
-    const artifactsDir = result.artifactsDir;
-    if (artifactsDir) {
-      this.stdout.write(`Artifacts: ${artifactsDir}\n`);
-    }
-    if (result.status === "succeeded") {
-      this.stdout.write(`✔ Finished in ${dur}\n`);
-    } else if (result.status === "cancelled") {
-      this.stdout.write(`• Cancelled after ${dur}\n`);
-    } else if (result.status === "failed") {
-      this.stdout.write(`✘ Failed in ${dur}\n`);
+    try {
+      const view = this.builder.build(result);
+      
+      // Resolve failed subpaths (Developer B's responsibility)
+      try {
+        if (result.status !== "succeeded" && view.failureRecords.length > 0) {
+          view.artifacts.failedSubpaths = resolveFailedSubpaths(
+            result.artifactsDir || "",
+            view.failureRecords
+          );
+        }
+      } catch (err) {
+        // Fallback if resolver fails
+      }
+      
+      this.stdout.write("\nSummary\n");
+      const statusLabel = view.summary.status;
+      const totalDuration = formatDuration(view.summary.durationMs);
+      
+      this.stdout.write(`  status:    ${statusLabel}\n`);
+      this.stdout.write(`  workflows: ${formatStatusCounts(view.summary.workflowCounts)}\n`);
+      this.stdout.write(`  agents:    ${formatStatusCounts(view.summary.agentCounts)}\n`);
+      this.stdout.write(`  duration:  ${totalDuration}\n\n`);
+
+      this.stdout.write("Artifacts\n");
+      if (view.summary.status === "succeeded" && view.artifacts.failedSubpaths.length === 0) {
+        this.stdout.write(`  ${view.artifacts.rootDir}\n`);
+      } else {
+        this.stdout.write(`  run:    ${view.artifacts.rootDir}\n`);
+        if (view.artifacts.reportPath) {
+          this.stdout.write(`  report: ${view.artifacts.reportPath}\n`);
+        }
+        if (view.artifacts.eventsPath) {
+          this.stdout.write(`  events: ${view.artifacts.eventsPath}\n`);
+        }
+        if (view.artifacts.failedSubpaths.length > 0) {
+          this.stdout.write("  failed:\n");
+          for (const subpath of view.artifacts.failedSubpaths) {
+            this.stdout.write(`    - ${subpath}\n`);
+          }
+        }
+      }
+    } catch (err) {
+      // If everything fails, at least print something
+      this.stdout.write(`\n✘ Reporter Error: ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 }

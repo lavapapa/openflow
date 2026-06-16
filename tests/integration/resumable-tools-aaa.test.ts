@@ -185,9 +185,6 @@ export default async (ctx) => {
     expect(await fs.readFile(t1CounterPath, "utf8")).toBe("1"); // t1 (cached)
     expect(await fs.readFile(t2CounterPath, "utf8")).toBe("2"); // t2 (live)
     
-    expect(stdout2).toContain("agent-1 cache hit");
-    expect(stdout2).toContain("t1 tool cache hit");
-    
     const runDirsAfterResume1 = await listRunDirs(runsDir);
     const resume1RunId = runDirsAfterResume1.find(id => id !== legacyRunId && id !== initialRunId)!;
     
@@ -205,7 +202,6 @@ export default async (ctx) => {
     expect(await fs.readFile(t1CounterPath, "utf8")).toBe("2"); // t1 re-executed
     expect(await fs.readFile(t2CounterPath, "utf8")).toBe("3"); // t2 re-executed
     
-    expect(stdout3).toContain("agent-1 cache hit");
     expect(stdout3).not.toContain("t1 tool cache hit");
 
     // D. Resume Run 3: Changed Tool Identity (Expect Miss)

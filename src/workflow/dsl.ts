@@ -121,7 +121,11 @@ export function createDsl(runtime: RuntimeState) {
       throw new InvalidDslCallError("log() message must be a string.");
     }
     if (runtime.eventSink) {
-      const payload: { message: string; data?: unknown } = { message };
+      const activeInvocation = getActiveWorkflowInvocation();
+      const payload: { message: string; data?: unknown; workflowInvocationId?: string } = { message };
+      if (activeInvocation) {
+        payload.workflowInvocationId = activeInvocation.workflowInvocationId;
+      }
       if (data !== undefined) {
         payload.data = data;
       }

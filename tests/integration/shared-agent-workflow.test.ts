@@ -395,9 +395,9 @@ reporting:
     ]);
 
     // 5. Verify output contains metadata
-    expect(result.stdout).toContain('"sharedAgentId":"pretty-agent"');
-    expect(result.stdout).toContain('"sharedAgentSource":"registry"');
-    expect(result.stdout).toContain("✓ pretty-agent succeeded");
+    expect(result.stdout).toContain('"sharedAgentId": "pretty-agent"');
+    expect(result.stdout).toContain('"sharedAgentSource": "registry"');
+    expect(result.stdout).toContain("✓ pretty-agent  mock");
   });
 
   it("fails openflow run before execution when registry contains an invalid definition schema", async () => {

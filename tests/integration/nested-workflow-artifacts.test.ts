@@ -73,4 +73,31 @@ describe("Nested Workflow Artifacts", () => {
     expect(summary.workflowInvocationId).toBeDefined();
     expect(summary.parentWorkflowInvocationId).toBe(runId);
   });
+
+  it("Provides correct failure artifact guidance for nested failure", async () => {
+    const workflowPath = "tests/fixtures/workflows/nested/child-failure.workflow.js";
+    const stdoutData: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdoutData.push(chunk.toString());
+      return true;
+    });
+
+    try {
+      await runCli([
+        "run",
+        workflowPath,
+        "--provider", "mock",
+        "--config", configPath,
+        "--out", TEMP_DIR,
+        "--report", "pretty"
+      ]);
+    } finally {
+      stdoutSpy.mockRestore();
+    }
+
+    const stdout = stdoutData.join("");
+    expect(stdout).toContain("failed:");
+    // Should show error.json for the child workflow
+    expect(stdout).toMatch(/- workflows\/.*\/error\.json/);
+  });
 });

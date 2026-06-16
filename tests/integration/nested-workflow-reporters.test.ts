@@ -56,13 +56,34 @@ describe("Nested Workflow Reporters", () => {
       "--arg", "message=pretty-test"
     ]);
 
-    expect(stdout).toContain("> workflow parent-basic started");
-    expect(stdout).toContain("> workflow child-basic started");
-    expect(stdout).toContain("ok workflow child-basic completed");
-    expect(stdout).toContain("ok workflow parent-basic completed");
+    expect(stdout).toContain("Execution");
+    expect(stdout).toContain("✓ workflow child-basic");
+    expect(stdout).toContain("Summary");
+    expect(stdout.split("Summary").length - 1).toBe(1);
+    expect(stdout).toContain("status:    succeeded");
+    expect(stdout).toContain("workflows: 2 succeeded");
   });
 
   it("Pretty reporter shows nested failures", async () => {
+    const workflowPath = "tests/fixtures/workflows/nested/parent-settled-failure.workflow.js";
+    
+    const stdout = await runCli([
+      "run",
+      workflowPath,
+      "--provider", "mock",
+      "--config", configPath,
+      "--out", TEMP_DIR,
+      "--report", "pretty"
+    ]);
+
+    expect(stdout).toContain("Execution");
+    expect(stdout).toContain("✕ workflow child-failure");
+    expect(stdout).toContain("Summary");
+    expect(stdout).toContain("status:    succeeded");
+    expect(stdout).toContain("workflows: 1 succeeded, 1 failed");
+  });
+
+  it("Pretty reporter shows root-level failures", async () => {
     const workflowPath = "tests/fixtures/workflows/nested/child-failure.workflow.js";
     
     const stdout = await runCli([
@@ -74,7 +95,13 @@ describe("Nested Workflow Reporters", () => {
       "--report", "pretty"
     ]);
 
-    expect(stdout).toContain("> workflow child-failure started");
-    expect(stdout).toContain("error workflow child-failure failed");
+    // Root workflow name is child-failure
+    expect(stdout).toContain("◇ child-failure");
+    expect(stdout).toContain("Execution");
+    expect(stdout).toContain("Summary");
+    expect(stdout).toContain("status:    failed");
+    expect(stdout).toContain("workflows: 1 failed");
+    expect(stdout).toContain("Artifacts");
+    expect(stdout).toContain("failed:");
   });
 });

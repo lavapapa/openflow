@@ -311,9 +311,9 @@ workflow:
 
     // Assert
     expect(result.error).toBeNull();
-    // Check for "Workflow:" line that identifies the file
+    // Check for "file:" line that identifies the file
     expect(result.stdout).toContain("tests/fixtures/workflows/run-by-name/review.workflow.js");
-    expect(result.stdout).toContain("Workflow: ");
+    expect(result.stdout).toContain("file: ");
   });
 
   it("AT-21: Resume does not re-resolve moved name", async () => {

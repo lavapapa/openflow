@@ -132,9 +132,10 @@ describe("Pipeline Reporters Integration", () => {
     ]);
 
     expect(result.error).toBeNull();
-    expect(result.stdout).toContain("Pipeline ");
-    expect(result.stdout).toContain("started [strategy: item-streaming");
-    expect(result.stdout).toContain("completed successfully");
-    expect(result.stdout).toContain("Artifacts:");
+    expect(result.stdout).toContain("Execution");
+    expect(result.stdout).toContain("Pipeline");
+    expect(result.stdout).toContain("Summary");
+    expect(result.stdout).toContain("status:    succeeded");
+    expect(result.stdout).toContain("Artifacts");
   });
 });

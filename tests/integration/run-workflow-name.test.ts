@@ -80,7 +80,7 @@ describe("Integration - run workflow by name", () => {
     // Assert pretty output ordering: header first, then workflow path
     const stdoutLines = result.stdout.trim().split("\n");
     expect(stdoutLines[0]).toBe("◇ review");
-    expect(stdoutLines[1]).toContain("  Workflow: tests/fixtures/workflows/run-by-name/review.workflow.js");
+    expect(stdoutLines[1]).toContain("  file: tests/fixtures/workflows/run-by-name/review.workflow.js");
 
     expect(result.stdout).toContain("◇ review");
     expect(result.stdout).toContain("tests/fixtures/workflows/run-by-name/review.workflow.js");

@@ -101,6 +101,7 @@ export interface PhaseCompletedPayload {
 export interface WorkflowLogPayload {
   message: string;
   data?: unknown;
+  workflowInvocationId?: string;
 }
 
 export interface AgentQueuedPayload {

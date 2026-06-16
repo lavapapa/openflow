@@ -85,8 +85,8 @@ describe("Integration - mock run success", () => {
 
     // Verify pretty reporter output
     expect(result.stdout).toContain("◇ mock-success");
-    expect(result.stdout).toContain("→ Phase: review");
-    expect(result.stdout).toContain("→ Phase: summarize");
-    expect(result.stdout).toContain("Artifacts:");
+    expect(result.stdout).toContain("→ review");
+    expect(result.stdout).toContain("→ summarize");
+    expect(result.stdout).toContain("Artifacts");
   });
 });
