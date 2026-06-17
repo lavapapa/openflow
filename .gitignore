@@ -7,3 +7,5 @@ coverage/
 .antigravitycli/
 GEMINI.md
 docs/
+openflow/node_modules/
+

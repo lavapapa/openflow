@@ -11,6 +11,8 @@ import { listCommand } from "./commands/list.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { getPackageVersion } from "./package-info.js";
+import { exitCodeForError } from "../errors/exit-codes.js";
+
 
 function collectArgs(value: string, previous: string[]): string[] {
   return previous.concat([value]);
@@ -198,4 +200,64 @@ Examples:
 
   await program.parseAsync(argv, parseOptions);
 }
+
+// Backward compatibility helpers and runner for the legacy @prmflow/openflow wrapper package.
+function objectCode(value: unknown): string | undefined {
+  if (value && typeof value === "object" && "code" in value && typeof value.code === "string") {
+    return value.code;
+  }
+  return undefined;
+}
+
+function errorCause(value: unknown): unknown {
+  if (value && typeof value === "object" && "cause" in value) {
+    return value.cause;
+  }
+  return undefined;
+}
+
+function isCommanderControlError(error: unknown): boolean {
+  const code = objectCode(error);
+  const causeCode = objectCode(errorCause(error));
+  return (
+    code === "commander.helpDisplayed" ||
+    code === "commander.help" ||
+    code === "commander.version" ||
+    causeCode === "commander.helpDisplayed" ||
+    causeCode === "commander.help" ||
+    causeCode === "commander.version"
+  );
+}
+
+function isCommanderUsageError(error: unknown): boolean {
+  if (!(error instanceof OpenDynamicWorkflowError)) {
+    return false;
+  }
+  const causeCode = objectCode(error.cause);
+  return typeof causeCode === "string" && causeCode.startsWith("commander.");
+}
+
+export async function runCli(args: string[]): Promise<void> {
+  try {
+    await main([
+      process.argv[0] ?? "node",
+      process.argv[1] ?? "open-dynamic-workflow",
+      ...args
+    ]);
+  } catch (error) {
+    if (isCommanderControlError(error)) {
+      process.exitCode = 0;
+      return;
+    }
+
+    if (!isCommanderUsageError(error)) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(message);
+    }
+
+    process.exitCode = exitCodeForError(error);
+  }
+}
+
+
 

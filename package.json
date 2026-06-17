@@ -8,6 +8,17 @@
   "author": "Open Dynamic Workflow contributors",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    "./_comment": "Expose ./cli subpath for backward compatibility with @prmflow/openflow",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
+    }
+  },
   "bin": {
     "open-dynamic-workflow": "dist/bin/open-dynamic-workflow.js",
     "odw": "dist/bin/open-dynamic-workflow.js"
