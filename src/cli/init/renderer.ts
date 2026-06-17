@@ -62,7 +62,8 @@ export function buildGeneratedConfig(input: {
       discovery: {
         include: [workflowIncludePattern(workflowsDirDisplay)]
       },
-      maxDepth: 8
+      maxDepth: 8,
+      maxLoopRounds: 60
     }
   };
 

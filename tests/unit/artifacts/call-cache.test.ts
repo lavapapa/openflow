@@ -149,15 +149,35 @@ describe("call cache", () => {
     expect(cache.previousEntries.get(1)?.fingerprint).toBe("fp2");
   });
 
-  it("materializes cached agent results into current run root", async () => {
+  it("materializes cached agent results into current run root and preserves semantic fields in workflow-visible result", async () => {
     const prevRun = path.join(TEMP_DIR, "prev-agent-run");
     await fs.mkdir(path.join(prevRun, "agents/old-a"), { recursive: true });
     await fs.writeFile(path.join(prevRun, "agents/old-a/normalized-result.json"), JSON.stringify("ok"), "utf8");
+    const fakePrevResult = {
+      ok: true,
+      status: "succeeded",
+      id: "old-a",
+      provider: "codex",
+      model: "gpt-4",
+      text: "ok",
+      stdout: "hello stdout",
+      stderr: "hello stderr",
+      exitCode: 0,
+      durationMs: 1234,
+      artifacts: {
+        dir: "agents/old-a",
+        promptPath: "agents/old-a/prompt.txt",
+        stdoutPath: "agents/old-a/stdout.log",
+        stderrPath: "agents/old-a/stderr.log"
+      },
+      permissions: { mode: "default" }
+    };
+    await fs.writeFile(path.join(prevRun, "agents/old-a/agent-result.json"), JSON.stringify(fakePrevResult), "utf8");
 
-    let writtenFiles: string[] = [];
+    let writtenFiles: Record<string, any> = {};
     const store = {
-      writeText: async (relativePath: string) => { writtenFiles.push(relativePath); },
-      writeJson: async (relativePath: string) => { writtenFiles.push(relativePath); }
+      writeText: async (relativePath: string, content: string) => { writtenFiles[relativePath] = content; },
+      writeJson: async (relativePath: string, data: any) => { writtenFiles[relativePath] = data; }
     } as any;
 
     const result = await materializeCachedAgentResult({
@@ -170,7 +190,8 @@ describe("call cache", () => {
         fingerprint: "fp",
         status: "succeeded",
         resultPath: "agents/old-a/normalized-result.json",
-        agentId: "old-a"
+        agentId: "old-a",
+        agentResultPath: "agents/old-a/agent-result.json"
       },
       currentAgentId: "new-a",
       provider: "codex",
@@ -178,8 +199,34 @@ describe("call cache", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(writtenFiles).toContain("agents/new-a/normalized-result.json");
-    expect(writtenFiles).toContain("agents/new-a/cache-hit.json");
+    expect(result.durationMs).toBe(1234);
+    expect(result.stdout).toBe("hello stdout");
+    expect(result.stderr).toBe("hello stderr");
+    expect(result.cache).toBeUndefined();
+
+    const keys = Object.keys(result);
+    for (const key of keys) {
+      expect((result as any)[key]).not.toBeUndefined();
+    }
+
+    const artifactResult = (result as any).__artifactResult;
+    expect(artifactResult).toBeDefined();
+    expect(artifactResult.durationMs).toBe(0);
+    expect(artifactResult.stdout).toBe("");
+    expect(artifactResult.stderr).toBe("");
+    expect(artifactResult.cache).toEqual({
+      hit: true,
+      callId: undefined,
+      previousRunId: "prev-run",
+      previousAgentId: "old-a"
+    });
+
+    expect(writtenFiles["agents/new-a/normalized-result.json"]).toEqual("ok");
+    expect(writtenFiles["agents/new-a/cache-hit.json"]).toMatchObject({
+      sequence: 1,
+      previousAgentId: "old-a",
+      previousRunId: "prev-run"
+    });
   });
 
   it("materializes cached tool results into current run root", async () => {
@@ -309,6 +356,47 @@ describe("call cache", () => {
       resultPath: "tools/t-1/output.json"
     }));
     expect(store.writeJson).toHaveBeenCalledWith("tools/t-1/tool-result.json", result);
+  });
+
+  it("records loop calls into calls.jsonl and cache-index.json", async () => {
+    const runRoot = path.join(TEMP_DIR, "run-loop-rec");
+    await fs.mkdir(runRoot, { recursive: true });
+    
+    const store = {
+      getRunArtifacts: () => ({ rootDir: runRoot }),
+      isRunCreated: () => true,
+      appendJsonl: vi.fn(),
+      writeJson: vi.fn()
+    } as any;
+
+    const cache: RuntimeCallCache = {
+      readEnabled: true,
+      writeIndex: true,
+      currentEntries: [],
+      previousEntries: new Map(),
+      prefixCacheUsable: true
+    };
+
+    const { recordLoopCall } = await import("../../../src/artifacts/call-cache.js");
+
+    await recordLoopCall({
+      store,
+      cache,
+      sequence: 1,
+      loopId: "loop-1",
+      roundIndex: 1,
+      roundId: "loop-1-round-0001",
+      fingerprint: "fp-loop",
+      resultPath: "loops/loop-1/rounds/0001/round.json"
+    });
+
+    expect(store.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
+      kind: "loop",
+      loopId: "loop-1",
+      roundIndex: 1,
+      roundId: "loop-1-round-0001",
+      fingerprint: "fp-loop"
+    }));
   });
 
   it("rejects cached artifact paths that escape the previous run directory", async () => {

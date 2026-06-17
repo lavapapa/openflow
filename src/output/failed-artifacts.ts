@@ -33,6 +33,10 @@ export function resolveFailedSubpaths(
     } else if (record.kind === "pipeline") {
       // Priority: known pipeline artifact path
       candidates.push(record.artifactSubpath);
+    } else if (record.kind === "loop") {
+      // Priority: error.json, loop directory
+      candidates.push(record.specificFailureSubpath || (record.artifactSubpath ? path.join(record.artifactSubpath, "error.json") : "error.json"));
+      candidates.push(record.artifactSubpath);
     }
 
     for (const candidate of candidates) {

@@ -36,8 +36,9 @@ describe("PrettyRenderer", () => {
       summary: {
         status: "succeeded",
         durationMs: 1500,
-        workflowCounts: { succeeded: 1, failed: 0, cancelled: 0, total: 1 },
-        agentCounts: { succeeded: 1, failed: 0, cancelled: 0, total: 1 },
+        workflowCounts: { succeeded: 1, failed: 0, cancelled: 0, total: 1 } as any,
+        agentCounts: { succeeded: 1, failed: 0, cancelled: 0, total: 1 } as any,
+        loopCounts: { succeeded: 0, failed: 0, cancelled: 0, total: 0 } as any,
       },
       artifacts: {
         rootDir: "/tmp/run",
@@ -88,6 +89,7 @@ describe("PrettyRenderer", () => {
         durationMs: 1500,
         workflowCounts: { succeeded: 0, failed: 2, timed_out: 0, cancelled: 0, skipped: 0, total: 2 },
         agentCounts: { succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, skipped: 0, total: 0 },
+        loopCounts: { succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, skipped: 0, total: 0 },
       },
       artifacts: { rootDir: "/tmp/run", failedSubpaths: [] },
       failureRecords: [],

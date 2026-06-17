@@ -9,4 +9,5 @@ open-dynamic-workflow/
     basic-workflow.template.js
     parallel-workflow.template.js
     pipeline-workflow.template.js
+    loop-workflow.template.js
     tool-workflow.template.js

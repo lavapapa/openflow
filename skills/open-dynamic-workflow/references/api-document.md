@@ -51,6 +51,7 @@ Open Dynamic Workflow exposes these workflow DSL primitives:
 | `agent()`    | Run one provider-backed agent task or a shared agent definition. |
 | `parallel()` | Run independent async task thunks concurrently. |
 | `pipeline()` | Process many items through ordered stages.      |
+| `loop()`     | Repeat one stateful round callback until a terminal condition is reached. |
 | `phase()`    | Mark the current workflow phase.                |
 | `log()`      | Emit a workflow log event.                      |
 | `workflow()` | Invoke another workflow as a child.            |
@@ -424,7 +425,183 @@ agent tasks start immediately.
 
 ---
 
-## 6. `phase()`
+## 6. `loop()`
+
+Runs goal-oriented repeated execution of one callback against a single evolving state.
+
+Use `loop()` for workflows like review -> fix plan -> verify -> repeat until accepted. Use `pipeline()` instead when many independent items need the same ordered stages.
+
+### Example
+
+```ts
+const loopResult = await loop(
+  {
+    plan: "Initial migration plan",
+    remainingIssues: []
+  },
+  async (state, ctx) => {
+    const review = await ctx.agent({
+      id: ctx.agentId("review"),
+      provider: "codex",
+      prompt: `Review this plan:\n${JSON.stringify(state, null, 2)}`
+    });
+
+    const verification = await ctx.agent({
+      id: ctx.agentId("verify"),
+      provider: "codex",
+      prompt: `Return JSON with accepted, reason, remainingIssues, and revisedPlan:\n${JSON.stringify(review, null, 2)}`,
+      schema: {
+        type: "object",
+        properties: {
+          accepted: { type: "boolean" },
+          reason: { type: "string" },
+          remainingIssues: { type: "array", items: { type: "string" } },
+          revisedPlan: { type: "string" }
+        },
+        required: ["accepted", "reason", "remainingIssues", "revisedPlan"]
+      },
+      structuredOutput: { transport: "auto" }
+    });
+
+    if (verification.json?.accepted === true) {
+      return ctx.break(
+        { review, verification },
+        {
+          reason: verification.json.reason,
+          state: {
+            plan: verification.json.revisedPlan,
+            remainingIssues: []
+          }
+        }
+      );
+    }
+
+    return { review, verification };
+  },
+  {
+    label: "plan-review-loop",
+    maxRounds: 5,
+    failureMode: "fail-fast",
+    nextState: ({ state, round }) => ({
+      plan: round.result?.verification?.json?.revisedPlan ?? state.plan,
+      remainingIssues: round.result?.verification?.json?.remainingIssues ?? state.remainingIssues
+    })
+  }
+);
+```
+
+### Conceptual signature
+
+```ts
+loop<TState, TRoundResult, TFinal = TRoundResult>(
+  initialState: TState,
+  runRound: (
+    state: TState,
+    context: LoopRoundContext<TState, TRoundResult, TFinal>
+  ) => Promise<TRoundReturn<TRoundResult, TFinal>> | TRoundReturn<TRoundResult, TFinal>,
+  options?: LoopOptions<TState, TRoundResult, TFinal>
+): Promise<LoopResult<TState, TFinal>>;
+```
+
+### `LoopOptions`
+
+```ts
+interface LoopOptions<TState, TRoundResult, TFinal = TRoundResult> {
+  label?: string;
+  maxRounds?: number;
+  stopWhen?: (input: {
+    round: LoopRoundView<TRoundResult>;
+    state: TState;
+    history: LoopHistoryEntry[];
+  }) => boolean | Promise<boolean>;
+  nextState?: (input: {
+    state: TState;
+    round: LoopRoundView<TRoundResult>;
+    history: LoopHistoryEntry[];
+  }) => TState | Promise<TState>;
+  onFailureState?: (input: {
+    state: TState;
+    error: SerializedError;
+    round: LoopHistoryEntry;
+    history: LoopHistoryEntry[];
+  }) => TState | Promise<TState>;
+  failureMode?: "fail-fast" | "settled" | "continue";
+  timeoutMs?: number;
+  resultMode?: "history";
+  metadata?: Record<string, unknown>;
+}
+```
+
+### `LoopRoundContext`
+
+Inside a loop round, use the provided round context:
+
+```ts
+interface LoopRoundContext<TState, TRoundResult, TFinal = TRoundResult> {
+  loopId: string;
+  loopLabel?: string;
+  runId: string;
+  artifactsDir: string;
+  roundIndex: number;
+  roundId: string;
+  maxRounds: number;
+  signal: AbortSignal;
+
+  agent(input: AgentCallInput): Promise<AgentResult>;
+  workflow<T = unknown>(input: WorkflowCallInput): Promise<T | WorkflowSettledResult<T>>;
+  parallel<TTasks extends ParallelTasks<unknown>>(tasks: TTasks): Promise<ParallelResult<TTasks>>;
+  log(message: string, data?: unknown): void;
+  agentId(suffix?: string): string;
+  break<TBreakFinal = TFinal>(
+    value?: TBreakFinal,
+    options?: { reason?: string; state?: TState }
+  ): LoopBreak<TBreakFinal>;
+  sleep(ms: number): Promise<void>;
+}
+```
+
+### Terminal conditions
+
+The loop stops when one of these conditions occurs:
+
+* The round returns `ctx.break(value, { reason, state })`.
+* The round returns a top-level `{ break: true, value, reason, state }` object.
+* `stopWhen({ round, state, history })` returns true after a non-breaking round.
+* `maxRounds` is reached.
+* `timeoutMs` expires.
+* Workflow cancellation occurs.
+* `failureMode` stops execution after a failed round.
+
+### State progression
+
+* The first round receives `initialState`.
+* After a non-breaking round, `nextState({ state, round, history })` derives the state for the next round.
+* If `nextState` is omitted, the previous state is reused.
+* `nextState` is not called after break, stop, or final max-round termination.
+
+### Failure modes
+
+| Mode | Behavior |
+| ---- | -------- |
+| `"fail-fast"` | Default. A failed round records partial loop data and fails the workflow. |
+| `"settled"` | Records failure data and returns a failed `LoopResult` without failing the workflow. |
+| `"continue"` | Requires `onFailureState`; failed rounds use it to derive the next state and continue. |
+
+### Loop rules
+
+* `maxRounds` defaults to `5`.
+* `workflow.maxLoopRounds` defaults to `60` and is the global ceiling for loop `maxRounds`.
+* Static and runtime validation reject `maxRounds` above the resolved ceiling.
+* `ctx.agent()`, `ctx.workflow()`, and `ctx.parallel()` are allowed inside loop rounds.
+* Provider-backed work inside loop rounds must go through `ctx.agent()` and the scheduler.
+* Use `ctx.agentId("review")` for stable round-scoped agent IDs.
+* `tool()` and `ctx.tool()` are forbidden inside loop rounds.
+* A top-level `{ break: true }` return is control flow. Nest domain data if it needs a `break` field.
+* Loop events and reports should stay compact; full state/result details belong in artifacts.
+
+---
+
+## 7. `phase()`
 
 Marks the current workflow phase.
 
@@ -453,7 +630,7 @@ Rules:
 
 ---
 
-## 7. `log()`
+## 8. `log()`
 
 Emits a workflow log event.
 
@@ -478,7 +655,7 @@ Do not log:
 
 ---
 
-## 8. `workflow()`
+## 9. `workflow()`
 
 Invokes another workflow as a child of the current workflow.
 
@@ -525,7 +702,7 @@ type WorkflowCallInput = {
 
 ---
 
-## 9. `tool()`
+## 10. `tool()`
 
 Runs a registered, deterministic tool definition.
 
@@ -612,11 +789,11 @@ type ToolCallInput = {
 
 * Top-level workflow execution.
 * Top-level inside child workflows invoked via `workflow()`.
-* **Not allowed**: inside `parallel()`, inside pipeline stages (`pipeline()`), inside `defineAgent.run()`, or nested inside tool definitions.
+* **Not allowed**: inside `parallel()`, inside pipeline stages (`pipeline()`), inside loop rounds (`loop()`), inside `defineAgent.run()`, or nested inside tool definitions.
 
 ---
 
-## 10. Providers
+## 11. Providers
 
 Open Dynamic Workflow provider adapters coordinate external agent CLIs.
 
@@ -647,7 +824,7 @@ The `permissions` field on `agent()` affects provider CLI arguments at the adapt
 
 ---
 
-## 11. Model Selection
+## 12. Model Selection
 
 Model selection can be configured globally, per provider, from the CLI, or per agent.
 
@@ -672,7 +849,7 @@ const result = await agent({
 
 ---
 
-## 12. Reports
+## 13. Reports
 
 Open Dynamic Workflow supports three report modes.
 
@@ -706,7 +883,7 @@ Use for CI logs, dashboards, and live event consumers.
 
 ---
 
-## 13. Artifacts
+## 14. Artifacts
 
 Every run creates a local artifact directory.
 
@@ -766,7 +943,7 @@ Artifacts may contain prompts, source snippets, and model outputs. Treat them as
 
 ---
 
-## 14. Pipeline Events
+## 15. Pipeline Events
 
 Pipeline execution emits events such as:
 
@@ -787,7 +964,7 @@ JSONL consumers should treat unknown event types as forward-compatible and ignor
 
 ---
 
-## 15. Exit Codes
+## 16. Exit Codes
 
 | Code | Meaning                            |
 | ---: | ---------------------------------- |
@@ -803,7 +980,7 @@ JSONL consumers should treat unknown event types as forward-compatible and ignor
 
 ---
 
-## 16. Out-of-Scope or Gated Capabilities
+## 17. Out-of-Scope or Gated Capabilities
 
 Do not assume these are available unless explicitly implemented or enabled:
 
@@ -822,7 +999,7 @@ Do not assume these are available unless explicitly implemented or enabled:
 
 ---
 
-## 17. Resumable Runs & Determinism
+## 18. Resumable Runs & Determinism
 
 Open Dynamic Workflow supports resuming a previous run to reuse cached results for unchanged agent-call prefixes.
 
@@ -852,7 +1029,7 @@ To ensure a safe and predictable resume, Open Dynamic Workflow uses a **determin
 
 ---
 
-## 18. Common Validation Mistakes
+## 19. Common Validation Mistakes
 
 Bad: metadata is not first.
 
@@ -1054,9 +1231,73 @@ const myTool = tool; // ❌ Aliasing tool() is not allowed.
 await myTool({ definition: "read-json", args: { path: "data.json" } });
 ```
 
+Bad: calling `tool()` inside a loop round.
+
+```ts
+const result = await loop({}, async (state, ctx) => {
+  const data = await ctx.tool({ definition: "read-json", args: { path: "input.json" } }); // ❌ ctx.tool() is not available in loop rounds.
+  return data;
+});
+```
+
+Good: call `tool()` before the loop, or call a child workflow that performs top-level tool work.
+
+```ts
+const input = await tool({ definition: "read-json", args: { path: "input.json" } });
+
+const result = await loop(input, async (state, ctx) => {
+  const review = await ctx.agent({
+    id: ctx.agentId("review"),
+    prompt: `Review this input:\n${JSON.stringify(state, null, 2)}`
+  });
+  return ctx.break(review, { reason: "reviewed" });
+});
+```
+
+Bad: using an unbounded or above-ceiling loop.
+
+```ts
+const result = await loop({}, async () => {
+  return {};
+}, {
+  maxRounds: 1000 // ❌ Rejected when workflow.maxLoopRounds is the default 60.
+});
+```
+
+Good:
+
+```ts
+const result = await loop({}, async (state, ctx) => {
+  return ctx.break({ done: true }, { reason: "complete" });
+}, {
+  maxRounds: 5
+});
+```
+
+Bad: returning top-level `{ break: true }` as ordinary domain data.
+
+```ts
+const result = await loop({}, async () => {
+  return { break: true, value: "domain flag" }; // ❌ Stops the loop.
+});
+```
+
+Good:
+
+```ts
+const result = await loop({}, async () => {
+  return {
+    result: {
+      break: true,
+      value: "domain flag"
+    }
+  };
+});
+```
+
 ---
 
-## 18. Minimal Workflow Template
+## 20. Minimal Workflow Template
 
 ```ts
 export const meta = {
@@ -1094,7 +1335,7 @@ export default {
 
 ---
 
-## 19. Parallel Workflow Template
+## 21. Parallel Workflow Template
 
 ```ts
 export const meta = {
@@ -1141,7 +1382,7 @@ export default {
 
 ---
 
-## 20. Pipeline Workflow Template
+## 22. Pipeline Workflow Template
 
 ```ts
 export const meta = {
@@ -1220,7 +1461,78 @@ export default {
 
 ---
 
-## 21. Tool Workflow Template
+## 23. Loop Workflow Template
+
+```ts
+export const meta = {
+  name: "loop-review",
+  description: "Iteratively review and improve a plan until accepted or max rounds is reached",
+  phases: ["iterate", "summarize"]
+};
+
+phase("iterate");
+
+const loopResult = await loop(
+  {
+    plan: "Initial implementation plan",
+    remainingIssues: []
+  },
+  async (state, ctx) => {
+    const review = await ctx.agent({
+      id: ctx.agentId("review"),
+      provider: "codex",
+      prompt: `Review this plan and identify remaining issues:\n${JSON.stringify(state, null, 2)}`
+    });
+
+    const verification = await ctx.agent({
+      id: ctx.agentId("verify"),
+      provider: "codex",
+      prompt: `Verify and return JSON with accepted, reason, remainingIssues, and revisedPlan:\n${JSON.stringify(review, null, 2)}`,
+      schema: {
+        type: "object",
+        properties: {
+          accepted: { type: "boolean" },
+          reason: { type: "string" },
+          remainingIssues: { type: "array", items: { type: "string" } },
+          revisedPlan: { type: "string" }
+        },
+        required: ["accepted", "reason", "remainingIssues", "revisedPlan"]
+      },
+      structuredOutput: { transport: "auto" }
+    });
+
+    if (verification.json?.accepted === true) {
+      return ctx.break(
+        { review, verification },
+        {
+          reason: verification.json.reason,
+          state: { plan: verification.json.revisedPlan, remainingIssues: [] }
+        }
+      );
+    }
+
+    return { review, verification };
+  },
+  {
+    label: "loop-review",
+    maxRounds: 5,
+    nextState: ({ state, round }) => ({
+      plan: round.result?.verification?.json?.revisedPlan ?? state.plan,
+      remainingIssues: round.result?.verification?.json?.remainingIssues ?? state.remainingIssues
+    })
+  }
+);
+
+phase("summarize");
+
+export default {
+  loopResult
+};
+```
+
+---
+
+## 24. Tool Workflow Template
 
 ```ts
 export const meta = {
@@ -1256,7 +1568,7 @@ export default {
 
 ---
 
-## 22. Workflow Patterns
+## 25. Workflow Patterns
 
 These patterns show standard architectures for organizing Open Dynamic Workflow workflows.
 

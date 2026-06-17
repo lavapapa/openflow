@@ -78,6 +78,7 @@ export interface ValidateWorkflowOptions {
   workflowInputSchemas?: ReadonlyMap<string, unknown> | undefined;
   knownToolIds?: ReadonlySet<string> | undefined;
   toolRegistry?: ToolRegistry | undefined;
+  maxLoopRounds?: number | undefined;
 }
 
 function getObjectLiteralProperty(node: ts.ObjectLiteralExpression, name: string): ts.Expression | undefined {
@@ -356,7 +357,7 @@ export function validateWorkflow(
     const callPrefix = isContextForm ? `${contextName}.tool()` : "tool()";
 
     if (isForbiddenContext) {
-      report(node, `${callPrefix} is not allowed in this context (parallel, pipeline stage, or shared agent).`);
+      report(node, `${callPrefix} is not allowed in this context (parallel, pipeline stage, loop round, or shared agent).`);
     }
 
     if (!firstArg) {
@@ -453,6 +454,132 @@ export function validateWorkflow(
 
     if (!argsExpr) {
       report(firstArg, `${callPrefix} is missing required 'args' property.`);
+    }
+  }
+
+  function validateLoopCall(node: ts.CallExpression, isContextForm: boolean, contextName: string = "ctx") {
+    const callPrefix = isContextForm ? `${contextName}.loop()` : "loop()";
+
+    if (node.arguments.length < 2) {
+      report(node, `${callPrefix} requires at least two arguments: initialState and runRound.`);
+      return;
+    }
+    if (node.arguments.length > 3) {
+      report(node, `${callPrefix} accepts at most three arguments.`);
+      return;
+    }
+
+    const runRound = node.arguments[1];
+    if (runRound && !ts.isArrowFunction(runRound) && !ts.isFunctionExpression(runRound)) {
+      report(runRound, `${callPrefix} second argument must be a function expression or arrow function.`);
+    }
+
+    const optionsArg = node.arguments[2];
+    if (optionsArg) {
+      if (ts.isObjectLiteralExpression(optionsArg)) {
+        const allowedLoopOptionKeys = new Set([
+          "label",
+          "maxRounds",
+          "stopWhen",
+          "nextState",
+          "onFailureState",
+          "failureMode",
+          "timeoutMs",
+          "resultMode",
+          "metadata"
+        ]);
+
+        const propsMap = new Map<string, ts.Expression>();
+        for (const prop of optionsArg.properties) {
+          if (ts.isSpreadAssignment(prop)) {
+            report(prop, `${callPrefix} does not support spread properties in options.`);
+            continue;
+          }
+          if (!ts.isPropertyAssignment(prop)) {
+            report(prop, `${callPrefix} does not support shorthand or method properties in options.`);
+            continue;
+          }
+          if (!ts.isIdentifier(prop.name) && !ts.isStringLiteral(prop.name)) {
+            report(prop.name, `${callPrefix} does not support computed property names in options.`);
+            continue;
+          }
+          const key = prop.name.text;
+          if (!allowedLoopOptionKeys.has(key)) {
+            report(prop.name, `${callPrefix} options contain unsupported key '${key}'.`);
+            continue;
+          }
+          propsMap.set(key, prop.initializer);
+        }
+
+        for (const [key, init] of propsMap.entries()) {
+          const isStatic = isStaticValue(init);
+          const staticVal = isStatic ? parseStaticProperties(init) : undefined;
+
+          if (key === "maxRounds") {
+            if (isStatic) {
+              const ceiling = options.maxLoopRounds ?? 60;
+              if (typeof staticVal !== "number" || isNaN(staticVal) || !Number.isInteger(staticVal) || staticVal < 1) {
+                report(init, "maxRounds must be a positive integer.");
+              } else if (staticVal > ceiling) {
+                report(init, `maxRounds (${staticVal}) exceeds the configured ceiling of ${ceiling}.`);
+              }
+            }
+          } else if (key === "timeoutMs") {
+            if (isStatic) {
+              if (typeof staticVal !== "number" || isNaN(staticVal) || !Number.isInteger(staticVal) || staticVal <= 0) {
+                report(init, "timeoutMs must be a positive integer.");
+              }
+            }
+          } else if (key === "failureMode") {
+            if (isStatic) {
+              if (typeof staticVal !== "string") {
+                report(init, "failureMode must be a string literal.");
+              } else if (staticVal !== "fail-fast" && staticVal !== "settled" && staticVal !== "continue") {
+                report(init, "failureMode must be 'fail-fast', 'settled', or 'continue'.");
+              }
+            }
+          } else if (key === "resultMode") {
+            if (isStatic) {
+              if (typeof staticVal !== "string") {
+                report(init, "resultMode must be a string literal.");
+              } else if (staticVal !== "history") {
+                report(init, "resultMode must be 'history'.");
+              }
+            }
+          } else if (key === "label") {
+            if (isStatic) {
+              if (typeof staticVal !== "string") {
+                report(init, "label must be a string literal.");
+              } else if (staticVal.trim() === "") {
+                report(init, "label cannot be empty.");
+              }
+            }
+          } else if (key === "metadata") {
+            if (isStatic) {
+              if (typeof staticVal !== "object" || staticVal === null || Array.isArray(staticVal)) {
+                report(init, "metadata must be an object literal.");
+              }
+            }
+          } else if (key === "stopWhen" || key === "nextState" || key === "onFailureState") {
+            if (!ts.isArrowFunction(init) && !ts.isFunctionExpression(init)) {
+              report(init, `${key} must be a function expression or arrow function.`);
+            }
+          }
+        }
+
+        const failureModeInit = propsMap.get("failureMode");
+        if (failureModeInit && isStaticValue(failureModeInit)) {
+          const fmVal = parseStaticProperties(failureModeInit);
+          if (fmVal === "continue") {
+            const onFailureStateInit = propsMap.get("onFailureState");
+            if (!onFailureStateInit) {
+              report(optionsArg, "onFailureState is required when failureMode is 'continue'.");
+            }
+          }
+        }
+      } else if (isStaticValue(optionsArg)) {
+        report(optionsArg, `${callPrefix} options must be an object literal.`);
+      }
     }
   }
 
@@ -805,6 +932,17 @@ export function validateWorkflow(
           return;
         } else if (calleeText === "parallel") {
           nextForbiddenContext = true;
+        } else if (calleeText === "loop") {
+          validateLoopCall(node, false);
+          node.arguments.forEach((arg, idx) => {
+            if (idx === 1) {
+              // Forbidden context for the round callback
+              visit(arg, true, nextFunctionDepth);
+            } else {
+              visit(arg, nextForbiddenContext, nextFunctionDepth);
+            }
+          });
+          return;
         } else if (calleeText === "defineAgent") {
           const firstArg = node.arguments[0];
           if (firstArg && ts.isObjectLiteralExpression(firstArg)) {
@@ -832,6 +970,16 @@ export function validateWorkflow(
             validateAgentCall(node, true, obj.text);
           } else if (prop.text === "workflow") {
             validateWorkflowCall(node, true, obj.text);
+          } else if (prop.text === "loop") {
+            validateLoopCall(node, true, obj.text);
+            node.arguments.forEach((arg, idx) => {
+              if (idx === 1) {
+                visit(arg, true, nextFunctionDepth);
+              } else {
+                visit(arg, nextForbiddenContext, nextFunctionDepth);
+              }
+            });
+            return;
           } else if (prop.text === "tool") {
             validateToolCall(node, true, nextForbiddenContext, obj.text);
           }
@@ -1027,6 +1175,7 @@ export function validateRegistryDependencies(
     allowDynamicSharedAgentIds?: boolean | undefined;
     toolRegistry?: ToolRegistry | undefined;
     rootWorkflowPath?: string | undefined;
+    maxLoopRounds?: number | undefined;
   }
 ): void {
   const definitions = registry.list();
@@ -1091,7 +1240,8 @@ export function validateRegistryDependencies(
       knownWorkflowNames,
       workflowInputSchemas,
       allowDynamicSharedAgentIds: options.allowDynamicSharedAgentIds,
-      toolRegistry: options.toolRegistry
+      toolRegistry: options.toolRegistry,
+      maxLoopRounds: options.maxLoopRounds
     });
 
     const localErrors = issues.filter(issue => issue.severity !== "warning").map(issue => issue.message);

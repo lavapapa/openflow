@@ -555,9 +555,15 @@ describe("DSL: agent()", () => {
       const result = await dsl.agent({ id: "call-1", prompt: "hello" });
 
       expect(result.ok).toBe(true);
-      expect(result.cache?.hit).toBe(true);
-      expect(result.cache?.previousAgentId).toBe("old-agent");
+      expect(result.cache).toBeUndefined();
       expect(runtime.scheduler.schedule).not.toHaveBeenCalled();
+
+      expect(artifactStore.writeJson).toHaveBeenCalledWith(
+        "agents/call-1/agent-result.json",
+        expect.objectContaining({
+          cache: expect.objectContaining({ hit: true })
+        })
+      );
       
       const hitEvent = runtime.eventSink.events.find(e => e.type === "agent.cache_hit");
       expect(hitEvent).toBeDefined();

@@ -1,4 +1,11 @@
-import type { AgentVerboseCommandPayload, AgentVerboseResultPayload, EventEnvelope } from "./events.js";
+import type {
+  AgentVerboseCommandPayload,
+  AgentVerboseResultPayload,
+  EventEnvelope,
+  LoopStartedPayload,
+  LoopRoundTerminalPayload,
+  LoopTerminalPayload,
+} from "./events.js";
 
 export function indentBlock(text: string, spaces: number = 2): string {
   const indentation = " ".repeat(spaces);
@@ -135,12 +142,79 @@ export function formatVerboseResult(payload: AgentVerboseResultPayload, sequence
   return lines.join("\n") + "\n";
 }
 
+export function formatVerboseLoopStarted(payload: LoopStartedPayload, sequence?: number, timestamp?: string): string {
+  const label = payload.label ?? payload.loopId;
+  const lines: string[] = [];
+  lines.push(`Loop started: ${label}`);
+  if (sequence !== undefined && timestamp !== undefined) {
+    lines.push(`  Event: #${sequence} ${timestamp}`);
+  }
+  lines.push(`  Max rounds: ${payload.maxRounds}`);
+  if (payload.timeoutMs) lines.push(`  Timeout: ${formatDuration(payload.timeoutMs)}`);
+  if (payload.artifactPath) lines.push(`  Artifacts: ${payload.artifactPath}`);
+  return lines.join("\n") + "\n";
+}
+
+export function formatVerboseLoopRoundTerminal(payload: LoopRoundTerminalPayload, sequence?: number, timestamp?: string): string {
+  const label = payload.label ?? payload.loopId;
+  const dur = formatDuration(payload.durationMs);
+  const lines: string[] = [];
+  lines.push(`Loop round: ${label} round ${payload.roundIndex + 1} ${payload.status} ${dur}`);
+  if (sequence !== undefined && timestamp !== undefined) {
+    lines.push(`  Event: #${sequence} ${timestamp}`);
+  }
+  if (payload.break) lines.push(`  Break: true`);
+  if (payload.reason) lines.push(`  Reason: ${payload.reason}`);
+  if (payload.artifactPath) lines.push(`  Artifacts: ${payload.artifactPath}`);
+  if (payload.error) {
+    lines.push(`  Error: ${payload.error.message}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+export function formatVerboseLoopTerminal(payload: LoopTerminalPayload, sequence?: number, timestamp?: string): string {
+  const label = payload.label ?? payload.loopId;
+  const dur = formatDuration(payload.durationMs);
+  const lines: string[] = [];
+  lines.push(`Loop finished: ${label} ${payload.status} ${dur}`);
+  if (sequence !== undefined && timestamp !== undefined) {
+    lines.push(`  Event: #${sequence} ${timestamp}`);
+  }
+  lines.push(`  Rounds: ${payload.roundCount}/${payload.maxRounds}`);
+  lines.push(`  Accepted: ${payload.accepted}`);
+  if (payload.reason) lines.push(`  Reason: ${payload.reason}`);
+  if (payload.artifactPath) lines.push(`  Artifacts: ${payload.artifactPath}`);
+  if (payload.error) {
+    lines.push(`  Error: ${payload.error.message}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
 export function renderVerboseEvent(envelope: EventEnvelope): string | undefined {
   if (envelope.type === "agent.verbose.command") {
     return formatVerboseCommand(envelope.payload as AgentVerboseCommandPayload, envelope.sequence, envelope.timestamp);
   }
   if (envelope.type === "agent.verbose.result") {
     return formatVerboseResult(envelope.payload as AgentVerboseResultPayload, envelope.sequence, envelope.timestamp);
+  }
+  if (envelope.type === "loop.started") {
+    return formatVerboseLoopStarted(envelope.payload as LoopStartedPayload, envelope.sequence, envelope.timestamp);
+  }
+  if (
+    envelope.type === "loop.round.completed" ||
+    envelope.type === "loop.round.failed" ||
+    envelope.type === "loop.round.cancelled" ||
+    envelope.type === "loop.round.timed_out"
+  ) {
+    return formatVerboseLoopRoundTerminal(envelope.payload as LoopRoundTerminalPayload, envelope.sequence, envelope.timestamp);
+  }
+  if (
+    envelope.type === "loop.completed" ||
+    envelope.type === "loop.failed" ||
+    envelope.type === "loop.cancelled" ||
+    envelope.type === "loop.timed_out"
+  ) {
+    return formatVerboseLoopTerminal(envelope.payload as LoopTerminalPayload, envelope.sequence, envelope.timestamp);
   }
   return undefined;
 }

@@ -45,6 +45,19 @@ function renderNodeLine(node: PrettyExecutionNode, depth: number): string {
       const label = node.label ? `Pipeline ${node.label}` : "Pipeline";
       return `${indent}${marker} ${label}${duration ? "  " + duration : ""}`;
     }
+    case "loop": {
+      const parts: string[] = [`loop ${node.label ?? node.id}`];
+      if (node.roundCount !== undefined) {
+        parts.push(`${node.roundCount}${node.maxRounds ? "/" + node.maxRounds : ""} rounds`);
+      }
+      if (node.accepted !== undefined) {
+        parts.push(node.accepted ? "accepted" : "max rounds");
+      }
+      if (duration) {
+        parts.push(duration);
+      }
+      return `${indent}${marker} ${parts.join("  ")}`;
+    }
     default:
       return "";
   }
@@ -140,6 +153,7 @@ export class PrettyReporter implements Reporter {
       this.stdout.write(`  status:    ${statusLabel}\n`);
       this.stdout.write(`  workflows: ${formatStatusCounts(view.summary.workflowCounts)}\n`);
       this.stdout.write(`  agents:    ${formatStatusCounts(view.summary.agentCounts)}\n`);
+      this.stdout.write(`  loops:     ${formatStatusCounts(view.summary.loopCounts)}\n`);
       this.stdout.write(`  duration:  ${totalDuration}\n\n`);
 
       this.stdout.write("Artifacts\n");

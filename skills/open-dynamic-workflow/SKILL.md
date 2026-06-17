@@ -1,6 +1,6 @@
 ---
 name: open-dynamic-workflow
-description: Create, review, validate, and improve Open Dynamic Workflow workflow scripts that orchestrate Codex, Gemini, and mock provider agents through agent(), parallel(), pipeline(), phase(), log(), and tool().
+description: Create, review, validate, and improve Open Dynamic Workflow workflow scripts that orchestrate Codex, Gemini, and mock provider agents through agent(), parallel(), pipeline(), loop(), phase(), log(), workflow(), and tool().
 ---
 
 # Purpose
@@ -16,6 +16,7 @@ Use this skill for requests such as:
 - Review an existing workflow for API correctness, validation errors, concurrency risks, provider selection, structured output, and CI usability.
 - Explain how to run, validate, configure, or troubleshoot an Open Dynamic Workflow workflow.
 - Refactor a workflow to use `parallel()` or `pipeline()` appropriately.
+- Add iterative review/fix/verify behavior with `loop()` when a single stateful process should repeat until accepted, stopped, failed, timed out, or `maxRounds` is reached.
 
 Do not use this skill when the user only wants a general explanation of agent orchestration, generic JavaScript help unrelated to Open Dynamic Workflow, or implementation work inside the Open Dynamic Workflow runtime itself unless the user explicitly asks to modify Open Dynamic Workflow.
 
@@ -23,7 +24,7 @@ Do not use this skill when the user only wants a general explanation of agent or
 
 Consult these files when needed:
 
-- `references/api-document.md`: Syntax reference for workflow file shape, `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `workflow()`, `tool()`, providers, reports, artifacts, exit codes, templates, and common validation mistakes.
+- `references/api-document.md`: Syntax reference for workflow file shape, `agent()`, `parallel()`, `pipeline()`, `loop()`, `phase()`, `log()`, `workflow()`, `tool()`, providers, reports, artifacts, exit codes, templates, and common validation mistakes.
 - `references/cli-commands.md`: Command reference for `open-dynamic-workflow run`, `open-dynamic-workflow validate`, and `open-dynamic-workflow doctor`.
 - `references/configuration.md`: Configuration reference for `.open-dynamic-workflow/config.yaml`, provider settings, security settings, reporting settings, and precedence rules.
 
@@ -41,6 +42,7 @@ When using this skill:
    - Use a single `agent()` when one agent can complete the task.
    - Use `parallel()` when independent reviews or analyses can run concurrently and then be summarized.
    - Use `pipeline()` when many items must pass through the same ordered stages.
+   - Use `loop()` when one stateful goal should repeat through serial rounds until explicit break, `stopWhen`, `maxRounds`, timeout, cancellation, or failure policy termination.
    - Use fan-out / fan-in when multiple independent branches should be summarized by a final agent.
 
 3. Draft valid workflow metadata first.
@@ -54,9 +56,13 @@ When using this skill:
    - Use `parallel()` with task thunks, not already-started promises.
    - Use `pipeline()` with named stage objects.
    - Use `ctx.agent()` inside pipeline stage `run()` functions.
+   - Use `loop(initialState, async (state, ctx) => ..., options)` for iterative stateful work.
+   - Use `ctx.agent()`, `ctx.workflow()`, and `ctx.parallel()` inside loop round callbacks.
+   - Use `ctx.break(value, { reason, state })` or return `{ break: true, value, reason, state }` to stop a loop successfully.
+   - Use `nextState` to advance state after a non-breaking round; when omitted, the previous state is reused.
    - Use `phase()` to mark major progress points.
    - Use `log()` only for non-sensitive operational metadata.
-   - Use `tool()` for invoking registered, deterministic tool definitions (only at workflow top level or inside a child workflow, not inside `parallel()` or pipeline stages).
+   - Use `tool()` for invoking registered, deterministic tool definitions (only at workflow top level or inside a child workflow, not inside `parallel()`, pipeline stages, or loop rounds).
 
 5. Select providers intentionally.
    - Use `codex` for correctness, security, code reasoning, implementation review, and safety checks.
@@ -82,6 +88,7 @@ When using this skill:
 8. Make concurrency and failure behavior explicit when it matters.
    - Document expected `--concurrency`, `--timeout-ms`, and `--fail-fast` usage for CLI runs.
    - For `pipeline()`, choose `strategy`, `concurrency`, and `failFast` based on whether partial item failure should be tolerated.
+   - For `loop()`, choose `maxRounds`, `failureMode`, `timeoutMs`, `stopWhen`, and `nextState` based on whether partial round failure should stop, settle, or continue with `onFailureState`.
    - Prefer item-tolerant behavior for analysis pipelines unless the user wants strict gating.
 
 9. Add run instructions.
@@ -96,7 +103,10 @@ When using this skill:
    - Check that `parallel()` receives functions.
    - Check that `pipeline()` stages are named objects.
    - Check that pipeline stages use `ctx.agent()`.
+   - Check that `loop()` has an initial state, a round callback, valid options, and a bounded `maxRounds`.
+   - Check that loop rounds use `ctx.agent()`, `ctx.workflow()`, and `ctx.parallel()`, not top-level `agent()` for round-local provider work.
    - Check that `tool()` is only called at top level or inside child workflows, and uses valid/registered definition IDs.
+   - Check that `tool()` is not called or aliased inside `parallel()` callbacks, pipeline stages, loop rounds, or shared-agent definitions.
    - Check for secrets in prompts/logs.
    - Check that `permissions` is only present where autonomous execution is explicitly intended, and that a comment explains why.
    - Check that the final result is exported.
@@ -112,7 +122,10 @@ When using this skill:
 - Do not pass already-started promises into `parallel()`.
 - Do not use anonymous callback shorthand as a pipeline stage.
 - Do not call global `agent()` from inside a pipeline stage; use `ctx.agent()`.
-- Do not call `tool()` inside `parallel()` callbacks, pipeline stages, or `defineAgent.run()`.
+- Do not call global `agent()` from inside a loop round when the work belongs to that round; use `ctx.agent()` and stable IDs such as `ctx.agentId("review")`.
+- Do not call `tool()` inside `parallel()` callbacks, pipeline stages, loop rounds, or `defineAgent.run()`.
+- Do not write unbounded loops. Use `loop()` with explicit `maxRounds`; the default is 5 and the global ceiling is configured by `workflow.maxLoopRounds` (default 60).
+- Do not use top-level domain data shaped like `{ break: true }` as a normal loop round result; top-level `break: true` is loop control flow. Nest domain data if it needs a `break` field.
 - Do not assume automatic patch application, automatic commits, automatic merge, approval gates, DAG pipelines, retries, worktree isolation, container isolation, distributed execution, or resumable runs are available unless explicitly implemented.
 - Do not log secrets, tokens, credentials, full private source dumps, or unnecessary raw provider output.
 - Only set `permissions: { mode: "dangerously-full-access" }` when the workflow explicitly requires autonomous execution without approval prompts. Document the reason in a workflow comment adjacent to the agent call.
@@ -329,6 +342,97 @@ export default {
 };
 ```
 
+## Example request: create an iterative loop workflow
+
+User request:
+
+```text
+Create a workflow that repeatedly reviews a plan, asks another agent to improve it, and stops when verification accepts it.
+```
+
+Example response workflow:
+
+```ts
+export const meta = {
+  name: "review-fix-verify-loop",
+  description: "Iteratively review, improve, and verify a plan until accepted or max rounds is reached.",
+  phases: ["iterate", "summarize"]
+};
+
+phase("iterate");
+
+const loopResult = await loop(
+  {
+    plan: "Initial migration plan",
+    remainingIssues: []
+  },
+  async (state, ctx) => {
+    const review = await ctx.agent({
+      id: ctx.agentId("review"),
+      provider: "codex",
+      prompt: `Review this plan and remaining issues:\n${JSON.stringify(state, null, 2)}`
+    });
+
+    const improvement = await ctx.agent({
+      id: ctx.agentId("improve"),
+      provider: "gemini",
+      prompt: `Improve the plan based on this review:\n${JSON.stringify(review, null, 2)}`
+    });
+
+    const verification = await ctx.agent({
+      id: ctx.agentId("verify"),
+      provider: "codex",
+      prompt: `Return JSON with accepted, reason, remainingIssues, and revisedPlan:\n${JSON.stringify(improvement, null, 2)}`,
+      schema: {
+        type: "object",
+        properties: {
+          accepted: { type: "boolean" },
+          reason: { type: "string" },
+          remainingIssues: { type: "array", items: { type: "string" } },
+          revisedPlan: { type: "string" }
+        },
+        required: ["accepted", "reason", "remainingIssues", "revisedPlan"]
+      },
+      structuredOutput: { transport: "auto" }
+    });
+
+    if (verification.json?.accepted === true) {
+      return ctx.break(
+        { review, improvement, verification },
+        {
+          reason: verification.json.reason,
+          state: {
+            plan: verification.json.revisedPlan,
+            remainingIssues: []
+          }
+        }
+      );
+    }
+
+    return {
+      review,
+      improvement,
+      verification
+    };
+  },
+  {
+    label: "plan-review-loop",
+    maxRounds: 5,
+    failureMode: "fail-fast",
+    nextState: ({ state, round }) => ({
+      plan: round.result?.verification?.json?.revisedPlan ?? state.plan,
+      remainingIssues: round.result?.verification?.json?.remainingIssues ?? state.remainingIssues
+    })
+  }
+);
+
+phase("summarize");
+
+export default {
+  loopResult
+};
+```
+
 ## Example commands
 
 ```bash
@@ -350,6 +454,7 @@ Before returning a final Open Dynamic Workflow workflow, confirm:
 - `parallel()` receives functions, not promises.
 - `pipeline()` stages are named objects.
 - Pipeline stages call `ctx.agent()`.
+- `loop()` uses a bounded `maxRounds`, round-local `ctx.agent()` calls, and explicit break or `stopWhen` conditions.
 - Provider choices are intentional and explainable.
 - Structured output schemas are valid JSON Schema objects.
 - Structured output uses a supported transport: `auto`, `prompt`, or `validate-only`.

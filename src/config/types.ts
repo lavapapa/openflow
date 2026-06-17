@@ -72,6 +72,7 @@ export interface WorkflowDiscoveryConfig {
 export interface WorkflowConfig {
   discovery: WorkflowDiscoveryConfig;
   maxDepth: number;
+  maxLoopRounds: number;
 }
 
 export interface OrchestrationConfig {

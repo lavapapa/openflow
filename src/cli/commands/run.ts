@@ -126,7 +126,8 @@ export async function runWorkflowService(
     candidatePaths: resolved.candidatePaths,
     sharedAgentRegistry,
     toolRegistry,
-    allowDynamicSharedAgentIds: config.sharedAgents?.allowDynamicIds
+    allowDynamicSharedAgentIds: config.sharedAgents?.allowDynamicIds,
+    maxLoopRounds: config.workflow.maxLoopRounds
   });
 
   // Retrieve root workflow

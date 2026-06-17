@@ -404,4 +404,10 @@ export function validateConfig(config: OpenDynamicWorkflowConfig): void {
       "Config value 'workflow.maxDepth' must be a positive integer."
     );
   }
+  if (!Number.isInteger(config.workflow.maxLoopRounds) || config.workflow.maxLoopRounds < 1) {
+    throw new OpenDynamicWorkflowError(
+      ErrorCode.CONFIG_VALIDATION_ERROR,
+      "Config value 'workflow.maxLoopRounds' must be a positive integer."
+    );
+  }
 }

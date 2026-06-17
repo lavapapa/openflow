@@ -144,6 +144,9 @@ open-dynamic-workflow validate workflows/review.ts
 * Unsupported imports and restricted APIs are rejected.
 * Supported `pipeline()` usage is accepted.
 * Obviously invalid `pipeline()` usage is rejected.
+* Static `loop()` call shapes and `LoopOptions` are checked.
+* Static loop `maxRounds` values must be positive integers and must not exceed `workflow.maxLoopRounds` (default 60).
+* `tool()` and `ctx.tool()` usage inside loop callbacks is rejected.
 * Shared agent definitions in `sharedAgents.dir` are loaded and validated.
 * Verifies that `agent({ definition })` and `ctx.agent({ definition })` calls use string literal IDs that exist in the shared agent registry (when `sharedAgents.allowDynamicIds` is false).
 * Tool definitions in `tools.dir` are loaded and validated.
@@ -226,4 +229,3 @@ When executing `open-dynamic-workflow run` or `open-dynamic-workflow validate`, 
 Unlike workflows or shared agents, tool definitions are trusted application extensions. They may execute unrestricted JavaScript with host access (e.g., read/write files, execute shell commands, import packages, or perform network requests).
 However, tool definitions must be declared with `defineTool()` and have valid default exports. Duplicate or invalid tool definitions will cause a `TOOL_INVALID_DEFINITION` or `TOOL_DUPLICATE_DEFINITION` validation error.
 Individual `tool({ definition })` calls are checked statically during validation to ensure they reference a registered tool ID.
-

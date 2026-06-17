@@ -212,4 +212,17 @@ describe("Tool Composition Validation", () => {
     const issues = validateWorkflow(parsed, options);
     expect(issues.some(i => i.message.includes("flow.tool() is not allowed in this context"))).toBe(true);
   });
+
+  it("rejects tool() inside loop() round callback", () => {
+    const parsed = createParsed(`
+      export default async function(ctx) {
+        await ctx.loop({ count: 0 }, async (state, ctx) => {
+          await ctx.tool({ definition: "test-tool", args: {} });
+        });
+      }
+    `);
+    const issues = validateWorkflow(parsed, options);
+    expect(issues.some(i => i.message.includes("is not allowed in this context"))).toBe(true);
+    expect(issues.some(i => i.message.includes("loop round"))).toBe(true);
+  });
 });

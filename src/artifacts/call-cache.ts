@@ -6,6 +6,7 @@ import type { ToolExecutionResult, ToolFailureMode } from "../types/tool.js";
 import type { ArtifactStore } from "../types/artifacts.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import { getActiveLoopContext } from "../loop/context.js";
 
 export type CallCacheStatus =
   | "succeeded"
@@ -15,7 +16,7 @@ export type CallCacheStatus =
   | "skipped";
 
 export interface BaseCallCacheEntry {
-  kind: "agent" | "tool";
+  kind: "agent" | "tool" | "loop";
   sequence: number;
   callId?: string | undefined;
   fingerprint: string;
@@ -36,7 +37,14 @@ export interface ToolCallCacheEntry extends BaseCallCacheEntry {
   toolResultPath?: string | undefined;
 }
 
-export type CallCacheEntry = AgentCallCacheEntry | ToolCallCacheEntry;
+export interface LoopCallCacheEntry extends BaseCallCacheEntry {
+  kind: "loop";
+  loopId: string;
+  roundIndex?: number | undefined;
+  roundId?: string | undefined;
+}
+
+export type CallCacheEntry = AgentCallCacheEntry | ToolCallCacheEntry | LoopCallCacheEntry;
 
 export interface CallCacheIndex {
   schemaVersion: "open-dynamic-workflow.cache-index.v1";
@@ -134,7 +142,11 @@ export function computeToolFingerprint(input: {
     .digest("hex");
 }
 
-export function resolveCallId(input: AgentCallInput): string | undefined {
+export function resolveCallId(input: AgentCallInput, executionId?: string): string | undefined {
+  const activeLoop = getActiveLoopContext();
+  if (activeLoop && executionId) {
+    return executionId;
+  }
   return input.id ?? input.label;
 }
 
@@ -154,7 +166,14 @@ export function findPrefixCacheHit(input: {
 }): ToolCallCacheEntry | undefined;
 export function findPrefixCacheHit(input: {
   cache?: RuntimeCallCache | undefined;
-  kind: "agent" | "tool";
+  kind: "loop";
+  sequence: number;
+  callId?: string | undefined;
+  fingerprint: string;
+}): LoopCallCacheEntry | undefined;
+export function findPrefixCacheHit(input: {
+  cache?: RuntimeCallCache | undefined;
+  kind: "agent" | "tool" | "loop";
   sequence: number;
   callId?: string | undefined;
   fingerprint: string;
@@ -177,6 +196,120 @@ export function findPrefixCacheHit(input: {
   }
 
   return entry;
+}
+
+function buildWorkflowVisibleCachedAgentResult(
+  cachedResult: AgentResult | undefined,
+  normalized: any,
+  input: {
+    currentAgentId: string;
+    label?: string | undefined;
+    provider: string;
+    model?: string | undefined;
+    permissions: AgentPermissions;
+    agentDir: string;
+  }
+): AgentSuccessResult {
+  if (cachedResult?.ok) {
+    const res = {
+      ...cachedResult,
+      id: input.currentAgentId,
+      label: input.label ?? cachedResult.label,
+      provider: input.provider ?? cachedResult.provider,
+      model: input.model ?? cachedResult.model,
+    };
+    if (cachedResult.cache === undefined) {
+      delete (res as any).cache;
+    }
+    return removeUndefinedProperties(res) as AgentSuccessResult;
+  }
+
+  const res: AgentSuccessResult = {
+    ok: true,
+    status: "succeeded",
+    id: input.currentAgentId,
+    label: input.label,
+    provider: input.provider as any,
+    model: input.model,
+    text: typeof normalized === "string" ? normalized : JSON.stringify(normalized),
+    json: typeof normalized === "string" ? undefined : normalized,
+    stdout: "",
+    stderr: "",
+    exitCode: 0,
+    durationMs: 0,
+    artifacts: {
+      dir: input.agentDir,
+      promptPath: `${input.agentDir}/prompt.txt`,
+      stdoutPath: `${input.agentDir}/stdout.log`,
+      stderrPath: `${input.agentDir}/stderr.log`,
+      rawResultPath: `${input.agentDir}/raw-result.json`,
+      normalizedResultPath: `${input.agentDir}/normalized-result.json`
+    },
+    permissions: input.permissions
+  };
+  return removeUndefinedProperties(res);
+}
+
+function buildCurrentRunCachedAgentArtifactResult(
+  cachedResult: AgentResult | undefined,
+  normalized: any,
+  input: {
+    currentAgentId: string;
+    label?: string | undefined;
+    provider: string;
+    model?: string | undefined;
+    permissions: AgentPermissions;
+    agentDir: string;
+    agentArtifacts: any;
+    entry: AgentCallCacheEntry;
+    previousRunId?: string | undefined;
+  }
+): AgentSuccessResult {
+  if (cachedResult?.ok) {
+    const res: AgentSuccessResult = {
+      ...cachedResult,
+      id: input.currentAgentId,
+      label: input.label ?? cachedResult.label,
+      provider: (input.provider as any) ?? cachedResult.provider,
+      model: input.model ?? cachedResult.model,
+      stdout: "",
+      stderr: "",
+      durationMs: 0,
+      artifacts: input.agentArtifacts,
+      cache: {
+        hit: true,
+        callId: input.entry.callId,
+        previousRunId: input.previousRunId,
+        previousAgentId: input.entry.agentId
+      },
+      permissions: input.permissions
+    };
+    return removeUndefinedProperties(res);
+  }
+
+  const res: AgentSuccessResult = {
+    ok: true,
+    status: "succeeded",
+    id: input.currentAgentId,
+    label: input.label,
+    provider: input.provider as any,
+    model: input.model,
+    text: typeof normalized === "string" ? normalized : JSON.stringify(normalized),
+    json: typeof normalized === "string" ? undefined : normalized,
+    stdout: "",
+    stderr: "",
+    exitCode: 0,
+    durationMs: 0,
+    artifacts: input.agentArtifacts,
+    cache: {
+      hit: true,
+      callId: input.entry.callId,
+      previousRunId: input.previousRunId,
+      previousAgentId: input.entry.agentId
+    },
+    permissions: input.permissions
+  };
+  return removeUndefinedProperties(res);
 }
 
 export async function materializeCachedAgentResult(input: {
@@ -211,21 +344,21 @@ export async function materializeCachedAgentResult(input: {
     resultPath: input.entry.resultPath
   });
 
-  if (cachedResult?.ok) {
-    const agentArtifacts: Record<string, string | undefined> & {
-      dir: string;
-      promptPath: string;
-      stdoutPath: string;
-      stderrPath: string;
-    } = {
-      dir: agentDir,
-      promptPath: `${agentDir}/prompt.txt`,
-      stdoutPath: `${agentDir}/stdout.log`,
-      stderrPath: `${agentDir}/stderr.log`,
-      rawResultPath: `${agentDir}/raw-result.json`,
-      normalizedResultPath: `${agentDir}/normalized-result.json`
-    };
+  const agentArtifacts: Record<string, string | undefined> & {
+    dir: string;
+    promptPath: string;
+    stdoutPath: string;
+    stderrPath: string;
+  } = {
+    dir: agentDir,
+    promptPath: `${agentDir}/prompt.txt`,
+    stdoutPath: `${agentDir}/stdout.log`,
+    stderrPath: `${agentDir}/stderr.log`,
+    rawResultPath: `${agentDir}/raw-result.json`,
+    normalizedResultPath: `${agentDir}/normalized-result.json`
+  };
 
+  if (cachedResult?.ok) {
     if (cachedResult.permissions) {
       agentArtifacts.permissionsPath = `${agentDir}/permissions.json`;
       await input.store.writeJson(`${agentDir}/permissions.json`, cachedResult.permissions);
@@ -234,62 +367,40 @@ export async function materializeCachedAgentResult(input: {
       agentArtifacts.metadataPath = `${agentDir}/metadata.json`;
       await input.store.writeJson(`${agentDir}/metadata.json`, cachedResult.metadata);
     }
-
-    const success: AgentSuccessResult = {
-      ...cachedResult,
-      id: input.currentAgentId,
-      label: input.label,
-      provider: input.provider,
-      model: input.model,
-      stdout: "",
-      stderr: "",
-      durationMs: 0,
-      artifacts: agentArtifacts,
-      cache: {
-        hit: true,
-        callId: input.entry.callId,
-        previousRunId: input.previousRunId,
-        previousAgentId: input.entry.agentId
-      },
-      permissions: input.permissions
-    };
-    await input.store.writeJson(`${agentDir}/raw-result.json`, success);
-    await input.store.writeJson(`${agentDir}/agent-result.json`, success);
-    return removeUndefinedProperties(success);
   }
 
-  const success: AgentSuccessResult = {
-    ok: true,
-    status: "succeeded",
-    id: input.currentAgentId,
+  const workflowResult = buildWorkflowVisibleCachedAgentResult(cachedResult, normalized, {
+    currentAgentId: input.currentAgentId,
     label: input.label,
     provider: input.provider,
     model: input.model,
-    text: typeof normalized === "string" ? normalized : JSON.stringify(normalized),
-    json: typeof normalized === "string" ? undefined : normalized,
-    stdout: "",
-    stderr: "",
-    exitCode: 0,
-    durationMs: 0,
-    artifacts: {
-      dir: agentDir,
-      promptPath: `${agentDir}/prompt.txt`,
-      stdoutPath: `${agentDir}/stdout.log`,
-      stderrPath: `${agentDir}/stderr.log`,
-      rawResultPath: `${agentDir}/raw-result.json`,
-      normalizedResultPath: `${agentDir}/normalized-result.json`
-    },
-    cache: {
-      hit: true,
-      callId: input.entry.callId,
-      previousRunId: input.previousRunId,
-      previousAgentId: input.entry.agentId
-    },
-    permissions: input.permissions
-  };
-  await input.store.writeJson(`${agentDir}/raw-result.json`, success);
-  await input.store.writeJson(`${agentDir}/agent-result.json`, success);
-  return removeUndefinedProperties(success);
+    permissions: input.permissions,
+    agentDir
+  });
+
+  const artifactResult = buildCurrentRunCachedAgentArtifactResult(cachedResult, normalized, {
+    currentAgentId: input.currentAgentId,
+    label: input.label,
+    provider: input.provider,
+    model: input.model,
+    permissions: input.permissions,
+    agentDir,
+    agentArtifacts,
+    entry: input.entry,
+    previousRunId: input.previousRunId
+  });
+
+  await input.store.writeJson(`${agentDir}/raw-result.json`, artifactResult);
+  await input.store.writeJson(`${agentDir}/agent-result.json`, artifactResult);
+
+  Object.defineProperty(workflowResult, "__artifactResult", {
+    value: artifactResult,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  });
+
+  return workflowResult;
 }
 
 export async function materializeCachedToolResult(input: {
@@ -428,6 +539,38 @@ export async function recordToolCall(input: {
   });
 }
 
+export async function recordLoopCall(input: {
+  store?: ArtifactStore | undefined;
+  cache?: RuntimeCallCache | undefined;
+  sequence: number;
+  loopId: string;
+  roundIndex?: number | undefined;
+  roundId?: string | undefined;
+  fingerprint: string;
+  resultPath: string;
+  status?: CallCacheStatus;
+}): Promise<void> {
+  if (!input.store || typeof input.store.getRunArtifacts !== "function") return;
+
+  const entry: LoopCallCacheEntry = {
+    kind: "loop",
+    sequence: input.sequence,
+    callId: input.loopId,
+    loopId: input.loopId,
+    roundIndex: input.roundIndex,
+    roundId: input.roundId,
+    fingerprint: input.fingerprint,
+    status: input.status ?? "succeeded",
+    resultPath: input.resultPath
+  };
+
+  await recordCallEntry({
+    store: input.store,
+    cache: input.cache,
+    entry
+  });
+}
+
 async function recordCallEntry(input: {
   store: ArtifactStore;
   cache?: RuntimeCallCache | undefined;
@@ -518,8 +661,8 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
 
-  // Detect kind or fallback to legacy agent detection
-  const kind = record.kind === "tool" ? "tool" : "agent";
+  // Detect kind
+  const kind = record.kind === "tool" ? "tool" : (record.kind === "loop" ? "loop" : "agent");
 
   if (kind === "agent") {
     if (
@@ -559,6 +702,26 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
         toolCallId: record.toolCallId,
         definitionId: record.definitionId,
         toolResultPath: typeof record.toolResultPath === "string" ? record.toolResultPath : undefined
+      };
+    }
+  } else if (kind === "loop") {
+    if (
+      typeof record.sequence === "number" &&
+      typeof record.fingerprint === "string" &&
+      typeof record.status === "string" &&
+      typeof record.resultPath === "string" &&
+      typeof record.loopId === "string"
+    ) {
+      return {
+        kind: "loop",
+        sequence: record.sequence,
+        callId: typeof record.callId === "string" ? record.callId : undefined,
+        fingerprint: record.fingerprint,
+        status: record.status as CallCacheStatus,
+        resultPath: record.resultPath,
+        loopId: record.loopId,
+        roundIndex: typeof record.roundIndex === "number" ? record.roundIndex : undefined,
+        roundId: typeof record.roundId === "string" ? record.roundId : undefined
       };
     }
   }

@@ -268,6 +268,57 @@ export class PrettyViewBuilder {
         }
         return payload.pipelineId;
       }
+
+      case "loop.started": {
+        const workflowId = payload.workflowInvocationId || this.getActiveWorkflowId();
+        const node: any = {
+          id: payload.loopId,
+          kind: "loop",
+          label: payload.label,
+          status: "running",
+          maxRounds: payload.maxRounds,
+          roundCount: 0,
+        };
+        if (payload.artifactPath) node.artifactPath = payload.artifactPath;
+        this.nodesById.set(node.id, node);
+        this.attachToParent(workflowId, node);
+        return node.id;
+      }
+
+      case "loop.round.completed":
+      case "loop.round.failed":
+      case "loop.round.cancelled":
+      case "loop.round.timed_out": {
+        const node = this.nodesById.get(payload.loopId) as any;
+        if (node) {
+          node.roundCount = Math.max(node.roundCount ?? 0, payload.roundIndex);
+        }
+        return payload.loopId;
+      }
+
+      case "loop.completed":
+      case "loop.failed":
+      case "loop.cancelled":
+      case "loop.timed_out": {
+        const node = this.nodesById.get(payload.loopId) as any;
+        if (node) {
+          const statusPart = type.split(".").pop();
+          if (statusPart) {
+            if (statusPart === "completed") {
+              node.status = "succeeded";
+            } else {
+              node.status = this.mapStatus(statusPart);
+            }
+          }
+          node.durationMs = payload.durationMs;
+          node.roundCount = payload.roundCount;
+          node.maxRounds = payload.maxRounds;
+          node.accepted = payload.accepted;
+          node.reason = payload.reason;
+          if (payload.artifactPath) node.artifactPath = payload.artifactPath;
+        }
+        return payload.loopId;
+      }
     }
     return undefined;
   }
@@ -310,6 +361,7 @@ export class PrettyViewBuilder {
   private buildSummary(result: WorkflowRunResult): any {
     const workflowCounts: StatusCounts = { succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, skipped: 0, total: 0 };
     const agentCounts: StatusCounts = { succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, skipped: 0, total: 0 };
+    const loopCounts: StatusCounts = { succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, skipped: 0, total: 0 };
 
     for (const node of this.nodesById.values()) {
       if (node.kind === "workflow") {
@@ -326,6 +378,13 @@ export class PrettyViewBuilder {
         else if (node.status === "timed_out") agentCounts.timed_out++;
         else if (node.status === "cancelled") agentCounts.cancelled++;
         else if (node.status === "skipped") agentCounts.skipped++;
+      } else if (node.kind === "loop") {
+        loopCounts.total++;
+        if (node.status === "succeeded") loopCounts.succeeded++;
+        else if (node.status === "failed") loopCounts.failed++;
+        else if (node.status === "timed_out") loopCounts.timed_out++;
+        else if (node.status === "cancelled") loopCounts.cancelled++;
+        else if (node.status === "skipped") loopCounts.skipped++;
       }
     }
 
@@ -334,6 +393,7 @@ export class PrettyViewBuilder {
       durationMs: result.durationMs,
       workflowCounts,
       agentCounts,
+      loopCounts,
     };
   }
 
@@ -374,7 +434,7 @@ export class PrettyViewBuilder {
               record.specificFailureSubpath = aNode.artifacts.stderrPath;
             }
           }
-        } else if (node.kind === "workflow" || node.kind === "tool" || node.kind === "pipeline") {
+        } else if (node.kind === "workflow" || node.kind === "tool" || node.kind === "pipeline" || node.kind === "loop") {
           record.artifactSubpath = (node as any).artifactPath;
         }
 

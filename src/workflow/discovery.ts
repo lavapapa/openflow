@@ -20,10 +20,11 @@ export interface DiscoverWorkflowRegistryInput {
   candidatePaths?: string[] | undefined;
   allowDynamicSharedAgentIds?: boolean;
   toolRegistry?: ToolRegistry;
+  maxLoopRounds?: number;
 }
 
 export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryInput): Promise<WorkflowRegistry> {
-  const { rootWorkflowPath, cwd, include, sharedAgentRegistry, candidatePaths } = input;
+  const { rootWorkflowPath, cwd, include, sharedAgentRegistry, candidatePaths, maxLoopRounds } = input;
   const absoluteCwd = resolve(cwd);
   const absoluteRootPath = resolve(absoluteCwd, rootWorkflowPath);
 
@@ -106,7 +107,8 @@ export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryIn
         allowImports: false,
         sharedAgentRegistry,
         allowDynamicSharedAgentIds: input.allowDynamicSharedAgentIds,
-        toolRegistry: input.toolRegistry
+        toolRegistry: input.toolRegistry,
+        maxLoopRounds
       });
     }
 
@@ -156,7 +158,8 @@ export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryIn
     sharedAgentRegistry,
     allowDynamicSharedAgentIds: input.allowDynamicSharedAgentIds,
     toolRegistry: input.toolRegistry,
-    rootWorkflowPath: absoluteRootPath
+    rootWorkflowPath: absoluteRootPath,
+    maxLoopRounds
   });
 
   return registry;

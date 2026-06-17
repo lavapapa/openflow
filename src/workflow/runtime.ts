@@ -121,7 +121,9 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       toolRegistry: input.toolRegistry,
       toolExecutor: deps.toolExecutor,
       toolCallIds: new Set(),
-      toolCounter: 0
+      toolCounter: 0,
+      loopCounter: 0,
+      loopSummaries: []
     };
 
     const invocationManager = new DefaultWorkflowInvocationManager({
@@ -434,6 +436,7 @@ export function buildSucceededRunResult(
     pipelines: runtime.pipelineSummaries,
     workflows: runtime.workflowSummaries,
     tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
@@ -471,6 +474,7 @@ export function buildFailedRunResult(
     pipelines: runtime.pipelineSummaries,
     workflows: runtime.workflowSummaries,
     tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
@@ -509,6 +513,7 @@ export function buildCancelledRunResult(
     pipelines: runtime.pipelineSummaries,
     workflows: runtime.workflowSummaries,
     tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,

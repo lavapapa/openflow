@@ -120,4 +120,29 @@ describe("Merge Config", () => {
     // discovery should remain default
     expect(merged.workflow.discovery.include).toEqual(["workflows/**/*.ts"]);
   });
+
+  it("workflow.maxLoopRounds overrides defaults", () => {
+    const fileConfig: any = {
+      workflow: {
+        maxLoopRounds: 10
+      }
+    };
+    const merged = mergeConfig(DEFAULT_CONFIG, fileConfig, {});
+    expect(merged.workflow.maxLoopRounds).toBe(10);
+    // maxDepth should remain default
+    expect(merged.workflow.maxDepth).toBe(8);
+    // discovery should remain default
+    expect(merged.workflow.discovery.include).toEqual(["workflows/**/*.ts"]);
+  });
+
+  it("workflow.maxDepth preserves maxLoopRounds default", () => {
+    const fileConfig: any = {
+      workflow: {
+        maxDepth: 3
+      }
+    };
+    const merged = mergeConfig(DEFAULT_CONFIG, fileConfig, {});
+    expect(merged.workflow.maxDepth).toBe(3);
+    expect(merged.workflow.maxLoopRounds).toBe(60);
+  });
 });

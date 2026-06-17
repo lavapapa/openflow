@@ -42,7 +42,17 @@ export type EventType =
   | "tool.cache_hit"
   | "tool.failed"
   | "tool.timed_out"
-  | "tool.cancelled";
+  | "tool.cancelled"
+  | "loop.started"
+  | "loop.round.started"
+  | "loop.round.completed"
+  | "loop.round.failed"
+  | "loop.round.cancelled"
+  | "loop.round.timed_out"
+  | "loop.completed"
+  | "loop.failed"
+  | "loop.cancelled"
+  | "loop.timed_out";
 
 export interface EventEnvelope<TPayload = unknown> {
   schemaVersion: "open-dynamic-workflow.event.v1";
@@ -371,4 +381,53 @@ export interface AgentVerboseResultPayload {
   artifacts: AgentArtifacts;
   permissions: AgentPermissions;
   metadata?: Record<string, unknown> | undefined;
+}
+
+export interface LoopStartedPayload {
+  loopId: string;
+  workflowInvocationId: string;
+  label?: string;
+  maxRounds: number;
+  timeoutMs?: number;
+  artifactPath?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LoopRoundStartedPayload {
+  loopId: string;
+  workflowInvocationId: string;
+  label?: string;
+  roundIndex: number;
+  roundId: string;
+  startedAt: string;
+  artifactPath?: string;
+}
+
+export interface LoopRoundTerminalPayload {
+  loopId: string;
+  workflowInvocationId: string;
+  label?: string;
+  roundIndex: number;
+  roundId: string;
+  status: "completed" | "failed" | "cancelled" | "timed_out";
+  durationMs: number;
+  break: boolean;
+  stopMatched?: boolean;
+  reason?: string;
+  artifactPath?: string;
+  error?: SerializedError;
+}
+
+export interface LoopTerminalPayload {
+  loopId: string;
+  workflowInvocationId: string;
+  label?: string;
+  status: "satisfied" | "max_rounds" | "failed" | "cancelled" | "timed_out";
+  accepted: boolean;
+  roundCount: number;
+  maxRounds: number;
+  durationMs: number;
+  reason?: string;
+  artifactPath?: string;
+  error?: SerializedError;
 }

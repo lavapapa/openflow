@@ -26,6 +26,9 @@ import { serializeError } from "../errors/serialize.js";
 import { cloneJsonValue } from "./json.js";
 import { getActiveWorkflowInvocation } from "./invocation-types.js";
 import { assertToolAllowed, withToolForbidden } from "./scope.js";
+import { runLoop } from "../loop/run.js";
+import { getActiveLoopContext, recordLoopChildAgentId } from "../loop/context.js";
+import { createLoopAgentId } from "../loop/id.js";
 import type { ToolCallInput, ToolExecutionResult, ToolSettledResult, ToolFailureMode } from "../types/tool.js";
 import type { PreparedToolCall } from "../tools/executor-types.js";
 import type { 
@@ -212,6 +215,41 @@ export function createDsl(runtime: RuntimeState) {
       }
     }
 
+    const activeLoop = getActiveLoopContext();
+    if (activeLoop) {
+      const roundPrefix = activeLoop.roundId;
+      const isAlreadyScoped = normalizedId === roundPrefix || normalizedId.startsWith(roundPrefix + "-");
+      if (!isAlreadyScoped) {
+        let suffix: string;
+        if (input.id) {
+          suffix = input.id;
+        } else {
+          const rawLabel = input.label?.trim();
+          const idPattern = /^[A-Za-z0-9_.:-]+$/;
+          const isValidLabel = rawLabel &&
+            rawLabel !== "" &&
+            rawLabel !== "." &&
+            rawLabel !== ".." &&
+            !rawLabel.includes("/") &&
+            !rawLabel.includes("\\") &&
+            !rawLabel.includes("..") &&
+            idPattern.test(rawLabel);
+
+          if (isValidLabel) {
+            suffix = rawLabel;
+          } else {
+            suffix = `agent-${++runtime.agentCounter}`;
+          }
+        }
+        normalizedId = createLoopAgentId({
+          loopId: activeLoop.loopId,
+          roundIndex: activeLoop.roundIndex,
+          suffix
+        });
+      }
+      recordLoopChildAgentId(normalizedId);
+    }
+
     if (activePipeline) {
       recordChildAgentId(normalizedId);
     }
@@ -229,7 +267,7 @@ export function createDsl(runtime: RuntimeState) {
 
     const sequence = (runtime.callSequence ?? 0) + 1;
     runtime.callSequence = sequence;
-    const callId = resolveCallId(input);
+    const callId = resolveCallId(input, normalizedId);
     const fingerprint = computeAgentFingerprint({
       call: input,
       provider: normalizedProvider,
@@ -258,7 +296,8 @@ export function createDsl(runtime: RuntimeState) {
         model: resolved.model,
         permissions: resolvedPermissions
       });
-      runtime.agentResults.push(cachedResult);
+      const artifactResult = (cachedResult as any).__artifactResult || cachedResult;
+      runtime.agentResults.push(artifactResult);
       runtime.eventSink?.emit("agent.cache_hit", {
         agentId: normalizedId,
         label: input.label,
@@ -268,7 +307,7 @@ export function createDsl(runtime: RuntimeState) {
         callId,
         previousRunId: runtime.callCache.previousRunId,
         previousAgentId: cachedEntry.agentId,
-        artifacts: cachedResult.artifacts
+        artifacts: artifactResult.artifacts
       });
       await recordAgentCall({
         store: runtime.artifactStore,
@@ -276,7 +315,7 @@ export function createDsl(runtime: RuntimeState) {
         sequence,
         callId,
         fingerprint,
-        result: cachedResult
+        result: artifactResult
       });
       return cachedResult;
     }
@@ -296,11 +335,19 @@ export function createDsl(runtime: RuntimeState) {
         let onAbort: (() => void) | undefined;
 
         const invocationSignal = activeInvocation?.signal;
+        const activeLoop = getActiveLoopContext();
+        const loopSignal = activeLoop?.signal;
 
-        if ((activePipeline && activePipeline.stageSignal) || invocationSignal) {
+        if ((activePipeline && activePipeline.stageSignal) || invocationSignal || loopSignal) {
           const combinedController = new AbortController();
           onAbort = () => {
-            combinedController.abort(schedulerSignal.reason || activePipeline?.stageSignal?.reason || invocationSignal?.reason || "Aborted");
+            combinedController.abort(
+              schedulerSignal.reason || 
+              activePipeline?.stageSignal?.reason || 
+              invocationSignal?.reason || 
+              loopSignal?.reason ||
+              "Aborted"
+            );
           };
           if (schedulerSignal.aborted) {
             combinedController.abort(schedulerSignal.reason);
@@ -308,12 +355,19 @@ export function createDsl(runtime: RuntimeState) {
             combinedController.abort(activePipeline.stageSignal.reason);
           } else if (invocationSignal?.aborted) {
             combinedController.abort(invocationSignal.reason);
+          } else if (loopSignal?.aborted) {
+            combinedController.abort(loopSignal.reason);
           } else {
             schedulerSignal.addEventListener("abort", onAbort);
             if (activePipeline?.stageSignal) {
               activePipeline.stageSignal.addEventListener("abort", onAbort);
             }
-            invocationSignal?.addEventListener("abort", onAbort);
+            if (invocationSignal) {
+              invocationSignal.addEventListener("abort", onAbort);
+            }
+            if (loopSignal) {
+              loopSignal.addEventListener("abort", onAbort);
+            }
           }
           finalSignal = combinedController.signal;
         }
@@ -346,6 +400,7 @@ export function createDsl(runtime: RuntimeState) {
               activePipeline.stageSignal.removeEventListener("abort", onAbort);
             }
             invocationSignal?.removeEventListener("abort", onAbort);
+            loopSignal?.removeEventListener("abort", onAbort);
           }
         }
       }
@@ -394,6 +449,12 @@ export function createDsl(runtime: RuntimeState) {
     if (!input || typeof input !== "object") {
       throw new InvalidDslCallError("agent() requires an input object.");
     }
+
+    const activeLoop = getActiveLoopContext();
+    if (activeLoop?.signal.aborted) {
+      throw activeLoop.signal.reason;
+    }
+
     if ("definition" in input && input.definition !== undefined) {
       if (!runtime.sharedAgentRegistry) {
         throw new OpenDynamicWorkflowError(
@@ -492,8 +553,107 @@ export function createDsl(runtime: RuntimeState) {
     return runDirectAgent(input as any);
   };
 
+  const workflowFunction = async <T>(input: WorkflowCallInput): Promise<T | WorkflowSettledResult<T>> => {
+    const activeInvocation = getActiveWorkflowInvocation();
+    if (!activeInvocation) {
+      throw new OpenDynamicWorkflowError(
+        ErrorCode.WORKFLOW_FAILED,
+        "workflow() can only be called from within a workflow invocation."
+      );
+    }
+    if (!runtime.invocationManager) {
+      throw new OpenDynamicWorkflowError(
+        ErrorCode.WORKFLOW_FAILED,
+        "Workflow invocation manager is not available."
+      );
+    }
+
+    const activeLoop = getActiveLoopContext();
+    if (activeLoop?.signal.aborted) {
+      throw activeLoop.signal.reason;
+    }
+
+    let effectiveParent = activeInvocation;
+    let onAbort: (() => void) | undefined;
+
+    if (activeLoop?.signal) {
+      const combinedController = new AbortController();
+      onAbort = () => {
+        combinedController.abort(activeLoop.signal.reason || activeInvocation.signal.reason || "Aborted");
+      };
+      if (activeLoop.signal.aborted) {
+        combinedController.abort(activeLoop.signal.reason);
+      } else if (activeInvocation.signal.aborted) {
+        combinedController.abort(activeInvocation.signal.reason);
+      } else {
+        activeLoop.signal.addEventListener("abort", onAbort);
+        activeInvocation.signal.addEventListener("abort", onAbort);
+      }
+      effectiveParent = {
+        ...activeInvocation,
+        signal: combinedController.signal,
+        abortController: combinedController,
+      };
+    }
+
+    try {
+      const result = await runtime.invocationManager.invokeChild<T>(effectiveParent, input);
+      return result;
+    } finally {
+      if (onAbort) {
+        activeLoop?.signal.removeEventListener("abort", onAbort);
+        activeInvocation.signal.removeEventListener("abort", onAbort);
+      }
+    }
+  };
+
+  const parallelFunction = async <T>(
+    tasks: Record<string, () => Promise<T>> | Array<() => Promise<T>>
+  ): Promise<Record<string, T> | T[]> => {
+    if (!tasks || typeof tasks !== "object") {
+      throw new InvalidDslCallError("parallel() requires an array or an object of task thunks.");
+    }
+
+    const activeLoop = getActiveLoopContext();
+    if (activeLoop?.signal.aborted) {
+      throw activeLoop.signal.reason;
+    }
+
+    if (Array.isArray(tasks)) {
+      const promises = tasks.map((task, idx) => {
+        if (typeof task !== "function") {
+          throw new InvalidDslCallError(`parallel() task at index ${idx} must be a function.`);
+        }
+        return withToolForbidden("parallel-task", () => task());
+      });
+      return Promise.all(promises);
+    } else {
+      const keys = Object.keys(tasks);
+      const promises = keys.map((key) => {
+        const task = tasks[key];
+        if (typeof task !== "function") {
+          throw new InvalidDslCallError(`parallel() task '${key}' must be a function.`);
+        }
+        return withToolForbidden("parallel-task", () => task());
+      });
+      const results = await Promise.all(promises);
+      const resultObj: Record<string, T> = {};
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i]!;
+        resultObj[key] = results[i]!;
+      }
+      return resultObj;
+    }
+  };
+
   const runTool = async (input: ToolCallInput): Promise<unknown> => {
     const scope = assertToolAllowed();
+
+    const activeLoop = getActiveLoopContext();
+    if (activeLoop?.signal.aborted) {
+      throw activeLoop.signal.reason;
+    }
+
     const normalizedInput = normalizeToolCallInput(input, runtime);
     
     if (!runtime.toolRegistry || !runtime.toolExecutor) {
@@ -517,123 +677,147 @@ export function createDsl(runtime: RuntimeState) {
     }
     runtime.toolCallIds?.add(toolCallId);
 
-    const failureMode = normalizedInput.failureMode || "throw";
     const activeInvocation = getActiveWorkflowInvocation();
+    const failureMode = normalizedInput.failureMode || "throw";
 
-    const preparedCall: PreparedToolCall = {
-      toolCallId,
-      definition,
-      args: cloneJsonValue(normalizedInput.args, "tool args"),
-      label: normalizedInput.label,
-      failureMode,
-      timeoutMs: normalizedInput.timeoutMs || definition.definition.defaultTimeoutMs,
-      deadline: activeInvocation?.deadlineAt,
-      metadata: normalizedInput.metadata ? (cloneJsonValue(normalizedInput.metadata, "tool metadata") as Record<string, unknown>) : undefined,
-      workflowInvocationId: scope.workflowInvocationId,
-      parentWorkflowInvocationId: scope.parentWorkflowInvocationId,
-      queuedAt: new Date().toISOString(),
-      artifactPath: `tools/${toolCallId}/output.json`,
-      invocationSignal: activeInvocation?.signal || runtime.abortController.signal
-    };
+    let invocationSignal = activeInvocation?.signal || runtime.abortController.signal;
+    let onAbort: (() => void) | undefined;
+    if (activeLoop?.signal) {
+      const combinedController = new AbortController();
+      onAbort = () => combinedController.abort(activeLoop.signal.reason || invocationSignal.reason);
+      if (activeLoop.signal.aborted) {
+        combinedController.abort(activeLoop.signal.reason);
+      } else if (invocationSignal.aborted) {
+        combinedController.abort(invocationSignal.reason);
+      } else {
+        activeLoop.signal.addEventListener("abort", onAbort);
+        invocationSignal.addEventListener("abort", onAbort);
+      }
+      invocationSignal = combinedController.signal;
+    }
 
-    const isCacheable = !!definition.definition.cacheable;
-    let sequence: number | undefined;
-    let fingerprint: string | undefined;
-    let callId: string | undefined;
+    try {
+      const preparedCall: PreparedToolCall = {
+        toolCallId,
+        definition,
+        args: cloneJsonValue(normalizedInput.args, "tool args"),
+        label: normalizedInput.label,
+        failureMode,
+        timeoutMs: normalizedInput.timeoutMs || definition.definition.defaultTimeoutMs,
+        deadline: activeInvocation?.deadlineAt,
+        metadata: normalizedInput.metadata ? (cloneJsonValue(normalizedInput.metadata, "tool metadata") as Record<string, unknown>) : undefined,
+        workflowInvocationId: scope.workflowInvocationId,
+        parentWorkflowInvocationId: scope.parentWorkflowInvocationId,
+        queuedAt: new Date().toISOString(),
+        artifactPath: `tools/${toolCallId}/output.json`,
+        invocationSignal
+      };
 
-    if (isCacheable) {
-      sequence = (runtime.callSequence ?? 0) + 1;
-      runtime.callSequence = sequence;
-      callId = normalizedInput.id ?? normalizedInput.label;
-      fingerprint = computeToolFingerprint({
-        definitionId: definition.definition.id,
-        args: preparedCall.args,
-        timeoutMs: preparedCall.timeoutMs,
-        metadata: preparedCall.metadata,
-        sourcePath: definition.sourcePath,
-        definitionVersion: definition.definition.metadata?.version
-      });
+      const isCacheable = !!definition.definition.cacheable;
+      let sequence: number | undefined;
+      let fingerprint: string | undefined;
+      let callId: string | undefined;
 
-      const cachedEntry = findPrefixCacheHit({
-        cache: runtime.callCache,
-        kind: "tool",
-        sequence,
-        callId,
-        fingerprint
-      });
-
-      if (cachedEntry && runtime.artifactStore && runtime.callCache?.previousRunRoot) {
-        const cachedResult = await materializeCachedToolResult({
-          store: runtime.artifactStore,
-          previousRunRoot: runtime.callCache.previousRunRoot,
-          previousRunId: runtime.callCache.previousRunId,
-          entry: cachedEntry,
-          currentToolCallId: toolCallId,
+      if (isCacheable) {
+        sequence = (runtime.callSequence ?? 0) + 1;
+        runtime.callSequence = sequence;
+        callId = normalizedInput.id ?? normalizedInput.label;
+        fingerprint = computeToolFingerprint({
           definitionId: definition.definition.id,
-          failureMode,
-          label: normalizedInput.label,
-          workflowInvocationId: scope.workflowInvocationId,
-          parentWorkflowInvocationId: scope.parentWorkflowInvocationId
+          args: preparedCall.args,
+          timeoutMs: preparedCall.timeoutMs,
+          metadata: preparedCall.metadata,
+          sourcePath: definition.sourcePath,
+          definitionVersion: definition.definition.metadata?.version
         });
 
-        runtime.eventSink?.emit("tool.cache_hit", {
-          toolCallId,
-          definition: definition.definition.id,
-          label: normalizedInput.label,
+        const cachedEntry = findPrefixCacheHit({
+          cache: runtime.callCache,
+          kind: "tool",
           sequence,
           callId,
-          previousRunId: runtime.callCache.previousRunId,
-          previousToolCallId: cachedEntry.toolCallId,
-          artifactPath: cachedResult.artifactPath
+          fingerprint
         });
 
+        if (cachedEntry && runtime.artifactStore && runtime.callCache?.previousRunRoot) {
+          const cachedResult = await materializeCachedToolResult({
+            store: runtime.artifactStore,
+            previousRunRoot: runtime.callCache.previousRunRoot,
+            previousRunId: runtime.callCache.previousRunId,
+            entry: cachedEntry,
+            currentToolCallId: toolCallId,
+            definitionId: definition.definition.id,
+            failureMode,
+            label: normalizedInput.label,
+            workflowInvocationId: scope.workflowInvocationId,
+            parentWorkflowInvocationId: scope.parentWorkflowInvocationId
+          });
+
+          runtime.eventSink?.emit("tool.cache_hit", {
+            toolCallId,
+            definition: definition.definition.id,
+            label: normalizedInput.label,
+            sequence,
+            callId,
+            previousRunId: runtime.callCache.previousRunId,
+            previousToolCallId: cachedEntry.toolCallId,
+            artifactPath: cachedResult.artifactPath
+          });
+
+          await recordToolCall({
+            store: runtime.artifactStore,
+            cache: runtime.callCache,
+            sequence,
+            callId,
+            fingerprint,
+            result: cachedResult
+          });
+
+          const toolResult = returnToolResult(cachedResult, failureMode);
+          runtime.toolResults.push(cachedResult);
+          if (runtime.toolExecutor) {
+            runtime.toolExecutor.addSummary({
+              toolCallId: cachedResult.toolCallId,
+              definition: cachedResult.definitionId,
+              status: cachedResult.status,
+              ok: cachedResult.ok,
+              workflowInvocationId: cachedResult.workflowInvocationId,
+              parentWorkflowInvocationId: cachedResult.parentWorkflowInvocationId,
+              durationMs: cachedResult.durationMs,
+              artifactPath: cachedResult.artifactPath!,
+              cache: cachedResult.cache
+            });
+          }
+          return toolResult;
+        }
+      } else {
+        if (runtime.callCache) {
+          runtime.callCache.prefixCacheUsable = false;
+        }
+      }
+
+      const result = await runtime.toolExecutor.execute(preparedCall);
+
+      if (isCacheable && sequence !== undefined && fingerprint !== undefined) {
         await recordToolCall({
           store: runtime.artifactStore,
           cache: runtime.callCache,
           sequence,
           callId,
           fingerprint,
-          result: cachedResult
+          result
         });
-
-        const toolResult = returnToolResult(cachedResult, failureMode);
-        runtime.toolResults.push(cachedResult);
-        if (runtime.toolExecutor) {
-          runtime.toolExecutor.addSummary({
-            toolCallId: cachedResult.toolCallId,
-            definition: cachedResult.definitionId,
-            status: cachedResult.status,
-            ok: cachedResult.ok,
-            workflowInvocationId: cachedResult.workflowInvocationId,
-            parentWorkflowInvocationId: cachedResult.parentWorkflowInvocationId,
-            durationMs: cachedResult.durationMs,
-            artifactPath: cachedResult.artifactPath!,
-            cache: cachedResult.cache
-          });
-        }
-        return toolResult;
       }
-    } else {
-      if (runtime.callCache) {
-        runtime.callCache.prefixCacheUsable = false;
+
+      runtime.toolResults.push(result);
+      return returnToolResult(result, failureMode);
+    } finally {
+      if (onAbort) {
+        activeLoop?.signal.removeEventListener("abort", onAbort);
+        const originalInvocationSignal = activeInvocation?.signal || runtime.abortController.signal;
+        originalInvocationSignal.removeEventListener("abort", onAbort);
       }
     }
-
-    const result = await runtime.toolExecutor.execute(preparedCall);
-
-    if (isCacheable && sequence !== undefined && fingerprint !== undefined) {
-      await recordToolCall({
-        store: runtime.artifactStore,
-        cache: runtime.callCache,
-        sequence,
-        callId,
-        fingerprint,
-        result
-      });
-    }
-
-    runtime.toolResults.push(result);
-    return returnToolResult(result, failureMode);
   };
 
   function returnToolResult(result: ToolExecutionResult, failureMode: ToolFailureMode): unknown {
@@ -715,39 +899,7 @@ export function createDsl(runtime: RuntimeState) {
     agent: runAgentCall,
     tool: runTool,
 
-    parallel: async <T>(
-      tasks: Record<string, () => Promise<T>> | Array<() => Promise<T>>
-    ): Promise<Record<string, T> | T[]> => {
-      if (!tasks || typeof tasks !== "object") {
-        throw new InvalidDslCallError("parallel() requires an array or an object of task thunks.");
-      }
-
-      if (Array.isArray(tasks)) {
-        const promises = tasks.map((task, idx) => {
-          if (typeof task !== "function") {
-            throw new InvalidDslCallError(`parallel() task at index ${idx} must be a function.`);
-          }
-          return withToolForbidden("parallel-task", () => task());
-        });
-        return Promise.all(promises);
-      } else {
-        const keys = Object.keys(tasks);
-        const promises = keys.map((key) => {
-          const task = tasks[key];
-          if (typeof task !== "function") {
-            throw new InvalidDslCallError(`parallel() task '${key}' must be a function.`);
-          }
-          return withToolForbidden("parallel-task", () => task());
-        });
-        const results = await Promise.all(promises);
-        const resultObj: Record<string, T> = {};
-        for (let i = 0; i < keys.length; i++) {
-          const key = keys[i]!;
-          resultObj[key] = results[i]!;
-        }
-        return resultObj;
-      }
-    },
+    parallel: parallelFunction,
 
     pipeline: async <I, O>(
       items: I[],
@@ -764,22 +916,23 @@ export function createDsl(runtime: RuntimeState) {
       });
     },
 
-    workflow: async <T>(input: WorkflowCallInput): Promise<T | WorkflowSettledResult<T>> => {
+    workflow: workflowFunction,
+
+    loop: async (initialState: any, runRound: any, options?: any) => {
       const activeInvocation = getActiveWorkflowInvocation();
-      if (!activeInvocation) {
-        throw new OpenDynamicWorkflowError(
-          ErrorCode.WORKFLOW_FAILED,
-          "workflow() can only be called from within a workflow invocation."
-        );
-      }
-      if (!runtime.invocationManager) {
-        throw new OpenDynamicWorkflowError(
-          ErrorCode.WORKFLOW_FAILED,
-          "Workflow invocation manager is not available."
-        );
-      }
-      const result = await runtime.invocationManager.invokeChild<T>(activeInvocation, input);
-      return result;
+      return runLoop({
+        initialState,
+        runRound,
+        options,
+        runtime,
+        signal: activeInvocation?.signal || runtime.abortController.signal,
+        dsl: {
+          agent: runAgentCall,
+          workflow: workflowFunction,
+          parallel: parallelFunction,
+          log: logWorkflow
+        }
+      });
     }
   };
 }

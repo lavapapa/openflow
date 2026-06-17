@@ -69,7 +69,8 @@ export async function validateWorkflowService(
     candidatePaths: resolved.candidatePaths,
     sharedAgentRegistry,
     toolRegistry,
-    allowDynamicSharedAgentIds: config.sharedAgents?.allowDynamicIds
+    allowDynamicSharedAgentIds: config.sharedAgents?.allowDynamicIds,
+    maxLoopRounds: config.workflow.maxLoopRounds
   });
 
   // Find root workflow in registry by path

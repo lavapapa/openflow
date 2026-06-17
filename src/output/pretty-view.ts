@@ -25,6 +25,7 @@ export interface PrettySummaryView {
   durationMs: number;
   workflowCounts: StatusCounts;
   agentCounts: StatusCounts;
+  loopCounts: StatusCounts;
 }
 
 /**
@@ -42,7 +43,7 @@ export interface PrettyArtifactsView {
  * Shared failure record contract passed to Developer B's resolver.
  */
 export interface PrettyFailureRecord {
-  kind: "agent" | "workflow" | "tool" | "pipeline";
+  kind: "agent" | "workflow" | "tool" | "pipeline" | "loop";
   status: "failed" | "timed_out" | "cancelled";
   artifactSubpath?: string;
   specificFailureSubpath?: string;
@@ -88,12 +89,23 @@ export interface PipelineNode extends BaseNode {
   label?: string;
 }
 
+export interface LoopNode extends BaseNode {
+  kind: "loop";
+  label?: string;
+  roundCount?: number;
+  maxRounds?: number;
+  accepted?: boolean;
+  reason?: string;
+  artifactPath?: string;
+}
+
 export type PrettyExecutionNode =
   | PhaseNode
   | WorkflowNode
   | AgentNode
   | ToolNode
-  | PipelineNode;
+  | PipelineNode
+  | LoopNode;
 
 export interface PrettyRunView {
   header: PrettyHeaderView;

@@ -227,7 +227,7 @@ describe("DSL shared-agent calls", () => {
       const result = await dsl.agent({ definition: "cached-wrapper" });
 
       expect(result.ok).toBe(true);
-      expect(result.cache?.hit).toBe(true);
+      expect(result.cache).toBeUndefined();
       expect(runtime.scheduler.schedule).not.toHaveBeenCalled();
     });
   });

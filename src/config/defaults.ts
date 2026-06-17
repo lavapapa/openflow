@@ -105,7 +105,8 @@ export const DEFAULT_CONFIG: OpenDynamicWorkflowConfig = {
     discovery: {
       include: ["workflows/**/*.ts"]
     },
-    maxDepth: 8
+    maxDepth: 8,
+    maxLoopRounds: 60
   },
   reporting: {
     mode: "pretty",

@@ -7,6 +7,7 @@ export type DslExecutionLocation =
   | "workflow-top-level"
   | "parallel-task"
   | "pipeline-stage"
+  | "loop-round"
   | "shared-agent-definition"
   | "tool-definition"
   | "provider-callback"

@@ -10,7 +10,10 @@ A workflow script defines which agents run, how they are coordinated, what outpu
 
 ## Start with an AI-generated workflow
 
-`Run a workflow that uses Codex to review correctness and security, uses Gemini to review tests and operations, then uses Gemini to summarize the result.`
+To get started quickly, you can describe the workflow you want in natural language to an AI coding assistant to generate the workflow script. Once generated, use the CLI to validate and run it:
+
+Prompt with skill:
+`/open-dynamic-workflow Run a workflow that uses Codex to review correctness and security, uses Gemini to review tests and operations, then uses Gemini to summarize the result.`
 
 ![Open Dynamic Workflow](images/demo.png)
 
@@ -96,6 +99,7 @@ The skill will choose the right workflow pattern, generate a valid workflow file
 | Parallel review  | Multiple independent reviews can run at the same time.                  |
 | Pipeline         | Many items need to pass through the same ordered stages.                |
 | Fan-out / fan-in | Multiple branches run first, then a final agent summarizes the results. |
+| Loop             | Repeated, stateful execution runs until a terminal condition is met.    |
 
 ### Demo 1: Single Agent Workflow
 
@@ -157,6 +161,10 @@ Expected result:
 * Separate `review` and `summarize` phases.
 * A final exported result containing both raw reviews and summary.
 
+## Advanced Usage
+
+For more complex orchestration patterns, Open Dynamic Workflow supports tool execution, child workflows, and goal-oriented loops.
+
 ### Demo 5: Tool-Assisted Workflow
 
 Use this when the workflow should load or compute local data through a registered tool before asking an agent to analyze it.
@@ -185,6 +193,22 @@ Expected result:
 * A parent workflow that calls `workflow()`.
 * JSON-safe `args` passed to the child workflow.
 * A final summary step in the parent workflow.
+
+### Demo 7: Goal-Oriented Loop Workflow
+
+Use this when a repeated, stateful callback should run until a specific goal or condition is satisfied (e.g., review-fix-verify loops).
+
+```text
+/openflow-workflow-writer Create a workflow that runs a goal-oriented loop to review and fix code in src/auth.ts. In each round, use Codex to review remaining issues, Gemini to generate a fix plan, and Codex to verify the plan. Loop up to 5 times or stop when the plan is accepted. Include commands to validate and run it.
+```
+
+Expected result:
+
+* A workflow that uses `loop()`.
+* A round callback returning either `ctx.break()` or `{ break: true }` when the verification succeeds.
+* Loop options including `maxRounds` (default is 5) and `nextState` to pass the updated code/issues/plan to the next round.
+* The loop result containing the final value, state, and concise round history.
+* Commands such as `npx @travisliu/open-dynamic-workflow validate workflows/loop-review.ts` and `npx @travisliu/open-dynamic-workflow run workflows/loop-review.ts`.
 
 ### Prompting Tips
 

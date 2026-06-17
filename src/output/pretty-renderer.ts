@@ -27,6 +27,7 @@ export function renderPrettyView(view: PrettyRunView): string {
   lines.push(`  status:    ${statusLabel}`);
   lines.push(`  workflows: ${formatStatusCounts(view.summary.workflowCounts)}`);
   lines.push(`  agents:    ${formatStatusCounts(view.summary.agentCounts)}`);
+  lines.push(`  loops:     ${formatStatusCounts(view.summary.loopCounts)}`);
   lines.push(`  duration:  ${totalDuration}`);
   lines.push("");
 
@@ -98,6 +99,20 @@ function renderExecutionNodes(nodes: PrettyExecutionNode[], depth: number, lines
       case "pipeline": {
         const label = node.label ? `Pipeline ${node.label}` : "Pipeline";
         lines.push(`${indent}${marker} ${label}${duration ? "  " + duration : ""}`);
+        break;
+      }
+      case "loop": {
+        const parts: string[] = [`loop ${node.label ?? node.id}`];
+        if (node.roundCount !== undefined) {
+          parts.push(`${node.roundCount}${node.maxRounds ? "/" + node.maxRounds : ""} rounds`);
+        }
+        if (node.accepted !== undefined) {
+          parts.push(node.accepted ? "accepted" : "max rounds");
+        }
+        if (duration) {
+          parts.push(duration);
+        }
+        lines.push(`${indent}${marker} ${parts.join("  ")}`);
         break;
       }
     }
