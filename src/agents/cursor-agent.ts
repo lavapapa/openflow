@@ -205,7 +205,7 @@ export class CursorAgentAdapter implements AgentAdapter {
           };
         }
       }
-    } catch (err) {
+    } catch {
       // JSON parsing failed, fall back to plain text
     }
 

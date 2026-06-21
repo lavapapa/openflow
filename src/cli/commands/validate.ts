@@ -5,7 +5,7 @@ import { discoverWorkflowRegistry } from "../../workflow/discovery.js";
 import { resolveWorkflowTarget } from "../../workflow/resolve-target.js";
 import { loadSharedAgentRegistry } from "../../shared-agents/load.js";
 import { loadToolRegistry } from "../../tools/load.js";
-import { printValidationSuccess, printValidationIssues } from "../print.js";
+import { printValidationSuccess } from "../print.js";
 import * as path from "node:path";
 
 export interface ValidateCommandInput {

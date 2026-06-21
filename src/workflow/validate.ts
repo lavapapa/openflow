@@ -171,7 +171,7 @@ export function validateWorkflow(
     }
   }
 
-  function validateSharedAgentInput(idArg: ts.Node | undefined, inputArg: ts.Node | undefined, isDefinitionForm: boolean = false) {
+  function validateSharedAgentInput(idArg: ts.Node | undefined, inputArg: ts.Node | undefined) {
     if (!options.sharedAgentRegistry || !idArg || !ts.isStringLiteral(idArg)) {
       return;
     }
@@ -182,7 +182,7 @@ export function validateWorkflow(
     }
     
     const schema = entry.definition.inputSchema;
-    let parsedInput = parseStaticProperties(inputArg);
+    const parsedInput = parseStaticProperties(inputArg);
     
     if (parsedInput === undefined) {
       if (!inputArg) {
@@ -195,7 +195,9 @@ export function validateWorkflow(
               report(sourceFile, `Shared agent '${id}' requires input matching schema.`);
             }
           }
-        } catch (err) {}
+        } catch {
+          // ignore validation errors
+        }
       }
       return;
     }
@@ -227,7 +229,9 @@ export function validateWorkflow(
           report(inputArg || sourceFile, `Shared agent '${id}' input validation failed: ${error.message}${path}`);
         }
       }
-    } catch (err: any) {}
+    } catch {
+      // ignore validation errors
+    }
   }
 
   function validateInputAgainstSchema(name: string, schema: any, argsExpr: ts.Expression | undefined) {
@@ -265,7 +269,9 @@ export function validateWorkflow(
           report(argsExpr || sourceFile, `Workflow '${name}' input validation failed: ${error.message}${path}`);
         }
       }
-    } catch (err) {}
+    } catch {
+      // ignore validation errors
+    }
   }
 
   function validateWorkflowCall(node: ts.CallExpression, isContextForm: boolean, contextName: string = "workflow") {
@@ -847,7 +853,7 @@ export function validateWorkflow(
     if (definitionProp) {
       const definitionArg = ts.isPropertyAssignment(definitionProp) ? definitionProp.initializer : undefined;
       validateSharedAgentId(definitionArg);
-      validateSharedAgentInput(definitionArg, firstArg, true);
+      validateSharedAgentInput(definitionArg, firstArg);
     } else {
       if (!promptProp && !hasSpread) {
         report(firstArg, `${callPrefix} is missing required 'prompt' property.`);
@@ -957,7 +963,7 @@ export function validateWorkflow(
 
     let nextForbiddenContext = isForbiddenContext;
     let nextFunctionDepth = functionDepth;
-    let nextInsideLoopRun = isInsideLoopRun;
+    const nextInsideLoopRun = isInsideLoopRun;
     let nextInsideMainWorkflow = isInsideMainWorkflow;
     const nextLoopContextNames = new Set(loopContextNames);
 

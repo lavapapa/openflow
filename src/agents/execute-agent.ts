@@ -9,11 +9,9 @@ import type {
 import { EventBus } from "../orchestration/event-bus.js";
 import { createDefaultProviderRegistry } from "./registry.js";
 import { runProcess } from "./process-runner.js";
-import { validateJson } from "../structured/validate-json.js";
 import { normalizeAgentOutput } from "../structured/normalize-agent-output.js";
 import {
   buildProviderEnv,
-  shouldRedactEnvName,
   redactText,
   StreamRedactor,
   collectSecretValues,
@@ -597,7 +595,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
             reject(new Error("Aborted"));
           });
         });
-      } catch (err: any) {
+      } catch {
         const reason = String(input.signal.reason);
         if (reason.includes("timed out")) {
           timedOut = true;

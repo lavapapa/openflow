@@ -1,9 +1,8 @@
 import * as path from "node:path";
 import * as vm from "node:vm";
-import type { ParsedWorkflow, WorkflowRunResult, WorkflowMeta, ResolvedWorkflowIdentity } from "../types/workflow.js";
+import type { ParsedWorkflow, WorkflowRunResult, ResolvedWorkflowIdentity } from "../types/workflow.js";
 import type { ResolvedConfig, CliRunOptions } from "../types/config.js";
-import type { AgentResult, AgentFailureResult } from "../types/agent.js";
-import type { SerializedError } from "../types/errors.js";
+
 import type { ArtifactStore } from "../types/artifacts.js";
 import type { AgentExecutor } from "../agents/execution-types.js";
 import type { RuntimeEventSink } from "../orchestration/scheduler.js";
@@ -14,7 +13,6 @@ import type { RuntimeState } from "./types.js";
 import { type WorkflowRegistry, createRootWorkflowRegistry } from "./registry.js";
 import { serializeError } from "../errors/serialize.js";
 import { createLinkedAbortController } from "../orchestration/cancellation.js";
-import { shouldTriggerFailFast } from "../orchestration/fail-fast.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import { loadRuntimeCallCache } from "../artifacts/call-cache.js";
@@ -22,7 +20,7 @@ import type { SharedAgentRegistry } from "../shared-agents/registry.js";
 
 import { DefaultWorkflowInvocationManager } from "./invocation-manager.js";
 import type { WorkflowInvocationContext } from "./invocation-types.js";
-import { withActiveWorkflowInvocation, getActiveWorkflowInvocation } from "./invocation-types.js";
+import { getActiveWorkflowInvocation } from "./invocation-types.js";
 import { cloneJsonValue, cloneJsonObject } from "./json.js";
 import { withDslExecutionScope, withToolTopLevelWindow } from "./scope.js";
 import type { ToolRegistry } from "../types/tool.js";

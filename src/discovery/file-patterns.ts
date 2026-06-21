@@ -12,7 +12,7 @@ export async function* walk(dir: string): AsyncGenerator<string> {
         yield res;
       }
     }
-  } catch (err) {
+  } catch {
     // Directory might not exist
   }
 }

@@ -729,10 +729,6 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
   return undefined;
 }
 
-function isCallCacheEntry(value: unknown): value is CallCacheEntry {
-  return normalizeCallCacheEntry(value) !== undefined;
-}
-
 function callIdsCompatible(previous?: string, current?: string): boolean {
   if (previous === undefined && current === undefined) return true;
   return previous === current;

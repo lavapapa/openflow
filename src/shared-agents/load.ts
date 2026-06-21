@@ -1,5 +1,5 @@
-import { readFile, readdir, stat, realpath, lstat } from "node:fs/promises";
-import { resolve, relative, join, extname, isAbsolute } from "node:path";
+import { readFile, readdir, stat, realpath } from "node:fs/promises";
+import { resolve, relative, join, extname } from "node:path";
 import * as vm from "node:vm";
 import * as ts from "typescript";
 import { ErrorCode } from "../errors/codes.js";
@@ -7,7 +7,6 @@ import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { SharedAgentRegistry } from "./registry.js";
 import { validateSharedAgentDefinition, validateSharedAgentSource } from "./validate.js";
 import { isDefinedSharedAgent } from "./define-agent.js";
-import type { SharedAgentDefinition, SharedAgentRegistryEntry } from "./types.js";
 
 export interface LoadSharedAgentRegistryInput {
   cwd: string;
@@ -104,12 +103,9 @@ export async function loadSharedAgentRegistry(
 }
 
 function evaluateJsDefinition(sourceText: string, filePath: string): any {
-    let captured: any = undefined;
     const moduleExports = {};
-    
     const sandbox = {
         defineAgent: (def: any) => {
-            captured = def;
             // Apply the marker so isDefinedSharedAgent(result) will pass
             const SHARED_AGENT_MARKER = Symbol.for("open-dynamic-workflow.sharedAgentDefinition");
             Object.defineProperty(def, SHARED_AGENT_MARKER, {

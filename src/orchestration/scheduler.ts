@@ -1,5 +1,5 @@
 import type { Scheduler, ScheduledTask, ScheduleOptions, AbortReason } from "../types/scheduler.js";
-import type { AgentResult, AgentTaskState, AgentPermissions } from "../types/agent.js";
+import type { AgentResult, AgentTaskState } from "../types/agent.js";
 import type { WorkflowEventType } from "../types/events.js";
 import { createLinkedAbortController } from "./cancellation.js";
 import { sanitizeMetadata } from "../security/metadata.js";
@@ -201,7 +201,7 @@ export class DefaultScheduler implements Scheduler {
 
           let isSuccess = true;
           let agentStatus = "succeeded";
-          let agentResult: any = result;
+          const agentResult: any = result;
 
           if (agentResult && typeof agentResult === "object" && "ok" in agentResult) {
             isSuccess = agentResult.ok;

@@ -2,7 +2,7 @@ import type { AgentCallInput, AgentResult } from "./agent.js";
 import type { JsonObject, JsonValue, WorkflowStatus } from "./common.js";
 import type { SerializedError } from "./errors.js";
 import type { PipelineStage, PipelineOptions, PipelineResult, PipelineSummary } from "../pipeline/types.js";
-import type { ToolSummary, ToolCallInput, ToolExecutionResult, ToolSettledResult } from "./tool.js";
+import type { ToolSummary, ToolCallInput, ToolSettledResult } from "./tool.js";
 import type { LoopInput, LoopSettledResult, LoopSummary } from "../loop/types.js";
 
 export type { PipelineStage, PipelineOptions, PipelineResult, PipelineSummary };

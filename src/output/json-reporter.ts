@@ -1,4 +1,4 @@
-import type { Reporter, ReporterStartInput, ReporterStreams, ReporterOptions } from "./reporter.js";
+import type { Reporter, ReporterStreams, ReporterOptions } from "./reporter.js";
 import type { EventEnvelope } from "./events.js";
 import type { WorkflowRunResult } from "../types/workflow.js";
 import { renderVerboseEvent } from "./verbose-formatter.js";
@@ -14,7 +14,7 @@ export class JsonReporter implements Reporter {
     this.verbose = !!options?.verbose;
   }
 
-  start(input: ReporterStartInput): void {
+  start(): void {
     // start() writes nothing
   }
 

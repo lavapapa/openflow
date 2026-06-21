@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { resolve, relative, isAbsolute, join } from "node:path";
+import { resolve, relative, isAbsolute } from "node:path";
 import { loadWorkflow } from "./load.js";
 import { parseWorkflow } from "./parse.js";
 import { assertWorkflowValid, validateRegistryDependencies } from "./validate.js";
@@ -68,7 +68,7 @@ export async function discoverWorkflowRegistry(input: DiscoverWorkflowRegistryIn
     let canonicalPath: string;
     try {
       canonicalPath = await fs.realpath(absolutePath);
-    } catch (err) {
+    } catch {
       canonicalPath = absolutePath;
     }
     

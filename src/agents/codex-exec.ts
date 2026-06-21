@@ -311,7 +311,9 @@ function tryParseEmbeddedJson(text: string): unknown | undefined {
         if (parsed !== null && typeof parsed === "object") {
           return parsed;
         }
-      } catch {}
+      } catch {
+        // ignore JSON parsing errors for markdown block fallback
+      }
     }
   }
   return undefined;

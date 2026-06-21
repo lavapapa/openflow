@@ -88,7 +88,7 @@ export function validateAndNormalizePipelineArgs(
   }
 
   // 3. Validate options
-  let normalizedOptions: NormalizedPipelineOptions = {
+  const normalizedOptions: NormalizedPipelineOptions = {
     strategy: DEFAULT_PIPELINE_OPTIONS.strategy,
     preserveOrder: DEFAULT_PIPELINE_OPTIONS.preserveOrder,
     failFast: DEFAULT_PIPELINE_OPTIONS.failFast,

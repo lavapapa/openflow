@@ -1,4 +1,4 @@
-import type { AgentCallInput, AgentResult, AgentPermissions, DirectAgentCallInput, DefinitionAgentCallInput } from "../types/agent.js";
+import type { AgentCallInput, AgentResult, AgentPermissions, DirectAgentCallInput } from "../types/agent.js";
 import type { ScheduledTask, ScheduleOptions } from "../types/scheduler.js";
 import type { AgentExecutionInput } from "../agents/execution-types.js";
 import type { RuntimeState } from "./types.js";
@@ -18,8 +18,7 @@ import {
   materializeCachedToolResult,
   recordAgentCall,
   recordToolCall,
-  resolveCallId,
-  type ToolCallCacheEntry
+  resolveCallId
 } from "../artifacts/call-cache.js";
 import { executeSharedAgent } from "../shared-agents/execute.js";
 import { serializeError } from "../errors/serialize.js";

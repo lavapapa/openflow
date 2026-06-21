@@ -15,7 +15,7 @@ export function findDefaultDefineCall(
   for (const statement of sourceFile.statements) {
     if (ts.isExportAssignment(statement)) {
       // export default ...
-      let expression = statement.expression;
+      const expression = statement.expression;
 
       // Handle defineAgent({ ... })
       if (ts.isCallExpression(expression)) {

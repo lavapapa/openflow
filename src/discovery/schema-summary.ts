@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { extractStaticValue, StaticValue } from "./static-values.js";
+import { extractStaticValue } from "./static-values.js";
 
 /**
  * Extracts a static object literal from an AST node if possible.

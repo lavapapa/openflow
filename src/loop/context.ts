@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { LoopContext } from "./types.js";
-import { createLoopAgentId, normalizeLoopLabel } from "./id.js";
+import { createLoopAgentId } from "./id.js";
 import type { AgentCallInput, AgentResult } from "../types/agent.js";
 import type { WorkflowCallInput, WorkflowSettledResult } from "../types/workflow.js";
 

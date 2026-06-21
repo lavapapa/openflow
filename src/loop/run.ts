@@ -1,5 +1,5 @@
 import { validateAndNormalizeLoopArgs, validateLoopRunResult } from "./validate.js";
-import { createLoopId, createRoundId, createLoopAgentId } from "./id.js";
+import { createLoopId, createRoundId } from "./id.js";
 import {
   buildLoopStartedPayload,
   buildLoopRoundStartedPayload,
@@ -42,7 +42,6 @@ import { collectSecretValues, redactJsonValue, redactSerializedError } from "../
 import type {
   LoopRoundRecord,
   LoopSettledResult,
-  NormalizedLoopInput,
   LoopStatus,
   LoopRoundStatus,
 } from "./types.js";
@@ -63,6 +62,7 @@ export interface RunLoopInput<TState = unknown> {
     workflow: (input: WorkflowCallInput) => Promise<any>;
     log: (message: string, data?: unknown) => void;
   };
+  _stateType?: TState;
 }
 
 function terminalLoopEventType(status: LoopStatus): "loop.completed" | "loop.failed" | "loop.cancelled" | "loop.timed_out" | "loop.max_rounds" {

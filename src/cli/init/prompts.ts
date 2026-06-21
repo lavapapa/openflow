@@ -39,13 +39,13 @@ export async function promptProviderSelection({ stdin, stdout, candidates }: Pro
 
     stdout.write(`Invalid selection: ${answer}. Falling back to recommendation.\n`);
     return { defaultProvider: recommendation, selectedReason: "interactive-choice" };
-  } catch (err) {
+  } catch {
     rl.close();
     return "cancel";
   }
 }
 
-export async function promptUnavailableRequestedProvider({ stdin, stdout, requested, candidates }: PromptInput & { requested: string; candidates: ProviderCandidate[] }): Promise<ProviderSelection | "cancel"> {
+export async function promptUnavailableRequestedProvider({ stdin, stdout, requested }: PromptInput & { requested: string; candidates: ProviderCandidate[] }): Promise<ProviderSelection | "cancel"> {
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
   stdout.write(`Warning: requested provider "${requested}" was not found in PATH.\n`);
@@ -66,7 +66,7 @@ export async function promptUnavailableRequestedProvider({ stdin, stdout, reques
       selectedReason: "interactive-choice"
     };
     return "cancel";
-  } catch (err) {
+  } catch {
     rl.close();
     return "cancel";
   }
@@ -90,7 +90,7 @@ export async function confirmInitPlan({ stdin, stdout, plan }: PromptInput & { p
     const answer = (await rl.question("\nContinue? (y/n) [y]: ")).trim().toLowerCase();
     rl.close();
     return answer === "" || answer === "y" || answer === "yes";
-  } catch (err) {
+  } catch {
     rl.close();
     return false;
   }

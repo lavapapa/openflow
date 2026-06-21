@@ -64,10 +64,8 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
   console.log(`✓ open-dynamic-workflow ${await getPackageVersion()}`);
 
   // current working directory is writable check
-  let isCwdWritable = false;
   try {
     await fs.access(cwd, fs.constants.W_OK);
-    isCwdWritable = true;
     console.log("✓ Current directory writable");
   } catch {
     console.log("✕ Current directory not writable");
@@ -75,11 +73,9 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
 
   // .open-dynamic-workflow/runs can be created or accessed check
   const runsDir = path.resolve(cwd, ".open-dynamic-workflow/runs");
-  let runsDirOk = false;
   try {
     await fs.mkdir(runsDir, { recursive: true });
     await fs.access(runsDir, fs.constants.W_OK);
-    runsDirOk = true;
     console.log(`✓ Artifact directory available: .open-dynamic-workflow/runs`);
   } catch {
     console.log("✕ Artifact directory unavailable");

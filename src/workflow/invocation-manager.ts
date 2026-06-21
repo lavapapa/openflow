@@ -266,7 +266,7 @@ export class DefaultWorkflowInvocationManager implements WorkflowInvocationManag
         startedAt
       });
       artifactPath = beginResult.artifactPath;
-    } catch (err) {
+    } catch {
       // Ignore or log
     }
 

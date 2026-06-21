@@ -5,7 +5,7 @@ import type {
   PipelineStageResult,
   NormalizedPipelineOptions
 } from "./types.js";
-import { ConcurrencyLimiter, createLimiter, getEffectiveStageConcurrency } from "./concurrency.js";
+import { createLimiter, getEffectiveStageConcurrency } from "./concurrency.js";
 import { runStage } from "./stage-runner.js";
 import { createLinkedAbortController } from "../orchestration/cancellation.js";
 import {

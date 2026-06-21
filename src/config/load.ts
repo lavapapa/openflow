@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { parse } from "yaml";
 import { ErrorCode } from "../errors/codes.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
@@ -69,7 +68,7 @@ export async function loadConfig(input: LoadConfigInput): Promise<ResolvedOpenDy
           { cause: err }
         );
       }
-    } catch (err) {
+    } catch {
       // If default config doesn't exist, ignore and use defaults
     }
   }

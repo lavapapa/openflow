@@ -2,12 +2,11 @@ import { ErrorCode } from "../../errors/codes.js";
 import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
 import { discoverWorkflowRegistry } from "../../workflow/discovery.js";
-import { resolveWorkflowTarget, type ResolvedWorkflowTarget } from "../../workflow/resolve-target.js";
+import { resolveWorkflowTarget } from "../../workflow/resolve-target.js";
 import { parseKeyValueArgs, parsePositiveInteger, parseReportMode } from "../args.js";
 import { printDryRunSummary } from "../print.js";
-import { DefaultRuntimeRunner, type RuntimeRunner, type WorkflowRunResult } from "../../runtime/public.js";
+import { DefaultRuntimeRunner, type RuntimeRunner } from "../../runtime/public.js";
 import { FileSystemArtifactStore } from "../../artifacts/run-store.js";
-import { createDefaultProviderRegistry } from "../../agents/registry.js";
 import { DefaultAgentExecutor } from "../../agents/execute-agent.js";
 import { createReporter } from "../../output/reporter.js";
 import { EventBus } from "../../orchestration/event-bus.js";
@@ -15,7 +14,6 @@ import { loadSharedAgentRegistry } from "../../shared-agents/load.js";
 import { loadToolRegistry } from "../../tools/load.js";
 import { DefaultToolExecutor } from "../../tools/executor.js";
 import * as path from "node:path";
-import { resolveUserPath } from "../paths.js";
 
 export interface RunCommandDeps {
   runtimeRunner: RuntimeRunner;

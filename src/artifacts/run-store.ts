@@ -4,7 +4,7 @@ import type { ArtifactStore, RunArtifacts, CreateRunInput, RunManifest } from ".
 import { createInitialManifest, updateManifestStatus } from "./manifest.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
-import { resolveUserPath, resolveProjectPath } from "../cli/paths.js";
+import { resolveProjectPath } from "../cli/paths.js";
 
 export function defaultRunsDir(cwd = process.cwd()): string {
   return resolveProjectPath(".open-dynamic-workflow/runs", cwd);

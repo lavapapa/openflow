@@ -5,7 +5,6 @@ import { parseInitOptions } from "../args.js";
 import {
   ResolvedInitOptions,
   ProviderSelection,
-  InitPlan,
   InitResult,
   ProviderCandidate
 } from "../init/types.js";

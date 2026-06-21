@@ -92,7 +92,7 @@ export async function collectCandidateFiles(input: {
                   absolutePath: targetPath,
                   relativePath: relativePathToReport,
                 });
-              } catch (err) {
+              } catch {
                 diagnostics.push(normalizeDiagnosticSeverity(listDiagnostic({
                   resourceType,
                   code: LIST_FILE_UNREADABLE,
@@ -178,7 +178,7 @@ export async function collectCandidateFiles(input: {
               absolutePath: targetPath,
               relativePath: relativePathToReport,
             });
-          } catch (err) {
+          } catch {
             diagnostics.push(normalizeDiagnosticSeverity(listDiagnostic({
               resourceType,
               code: LIST_FILE_UNREADABLE,

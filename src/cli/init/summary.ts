@@ -1,4 +1,4 @@
-import { InitResult, InitPlan, ProviderSelection, InitSmokeTestResult } from "./types.js";
+import { InitResult, InitPlan, ProviderSelection } from "./types.js";
 
 export function providerSelectionReason(selection: ProviderSelection): string {
   let text = `Selected default provider: ${selection.defaultProvider}\nReason: ${selection.selectedReason}`;

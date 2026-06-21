@@ -1,5 +1,5 @@
 import { resolve, relative, isAbsolute } from "node:path";
-import { access, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { ErrorCode } from "../errors/codes.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { resolveDiscoveryDirectories } from "../discovery/directories.js";
@@ -123,7 +123,7 @@ export async function resolveWorkflowTarget(
 export async function resolveWorkflowFileTarget(
   input: ResolveWorkflowFileTargetInput
 ): Promise<ResolvedWorkflowTarget> {
-  const { target, cwd, config, fallbackFromName = false } = input;
+  const { target, cwd, config } = input;
   const absolutePath = resolve(cwd, target);
 
   let canonicalPath: string;

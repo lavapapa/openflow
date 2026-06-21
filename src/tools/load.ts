@@ -1,6 +1,5 @@
 import { readdir, readFile, stat, mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
-import { join, resolve, extname, dirname, relative } from "node:path";
-import { tmpdir } from "node:os";
+import { join, resolve, extname, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as ts from "typescript";
 import { BrandedToolDefinition, ToolRegistry } from "../types/tool.js";
