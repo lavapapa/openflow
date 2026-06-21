@@ -55,7 +55,7 @@
     "start": "node dist/bin/open-dynamic-workflow.js",
     "typecheck": "npm run check",
     "check": "tsc --noEmit",
-    "lint": "npm run check",
+    "lint": "eslint .",
     "test": "vitest run --reporter=dot --no-color",
     "prepack": "npm run clean && npm run build",
     "pack:local": "npm pack",
@@ -66,7 +66,10 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "20",
+    "eslint": "^10.5.0",
+    "typescript-eslint": "^8.61.1",
     "vitest": "^3.1.0"
   },
   "dependencies": {
