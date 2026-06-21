@@ -1,7 +1,7 @@
 node_modules/
 dist/
-.open-dynamic-workflow/
-workflows/
+/.open-dynamic-workflow/
+/workflows/
 coverage/
 *.log
 .DS_Store
@@ -9,4 +9,3 @@ coverage/
 GEMINI.md
 docs/
 openflow/node_modules/
-
