@@ -194,6 +194,44 @@ For Xiaobai Scholar the host should use a shared session/project workspace for
 the first workflow run and the follow-up Pi conversation. OpenFlow should not
 create product-specific directory names; it only resolves the effective cwd.
 
+### Pi session persistence
+
+Pi SDK session persistence is provider runtime behavior, not workflow DSL. The
+`pi-sdk` provider accepts serializable config fields:
+
+- `sessionPersistence: "memory" | "create" | "continue-recent" | "continue-recent-any-cwd"`
+- `sessionDir`
+- `sessionFile`
+- `sessionId`
+
+The default remains `memory` for compatibility. Host products that need durable
+threads should pass a stable `sessionDir` or `sessionFile` from their control
+plane. `continue-recent-any-cwd` exists for products that keep one product
+thread across multiple run workspaces; it opens the newest JSONL session in the
+given directory without filtering by current cwd.
+
+### Runtime-only Pi custom tools
+
+Pi `customTools` can contain executable functions, so they must not live in YAML
+config, workflow metadata, run-input artifacts, or provider override snapshots.
+OpenFlow exposes them only through SDK runtime options:
+
+```ts
+createOpenFlow({
+  workspace: { cwd },
+  providerRuntime: {
+    "pi-sdk": {
+      customTools: [hostDefinedTool]
+    }
+  }
+});
+```
+
+This keeps OpenFlow generic while allowing a host application to inject a tool
+such as `xiaobai_start_workflow`. The tool implementation remains in the host
+composition root and calls the host Run Control Plane directly. The workflow
+script still sees only generic `agent()` calls.
+
 ### `handoff`
 
 Do not pretend the runtime can guarantee LLM file outputs. Instead, give the

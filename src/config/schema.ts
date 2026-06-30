@@ -132,6 +132,9 @@ export function validateConfig(config: OpenDynamicWorkflowConfig): void {
       "baseUrl",
       "api",
       "agentDir",
+      "sessionDir",
+      "sessionId",
+      "sessionFile",
     ];
 
     for (const field of stringFields) {
@@ -217,6 +220,16 @@ export function validateConfig(config: OpenDynamicWorkflowConfig): void {
       throw new OpenDynamicWorkflowError(
         ErrorCode.CONFIG_VALIDATION_ERROR,
         `Provider '${name}' approvalMode must be 'approve', 'no-approve', or 'omit'.`
+      );
+    }
+
+    if (
+      provider.sessionPersistence !== undefined &&
+      !["memory", "create", "continue-recent", "continue-recent-any-cwd"].includes(provider.sessionPersistence)
+    ) {
+      throw new OpenDynamicWorkflowError(
+        ErrorCode.CONFIG_VALIDATION_ERROR,
+        `Provider '${name}' sessionPersistence must be 'memory', 'create', 'continue-recent', or 'continue-recent-any-cwd'.`
       );
     }
 

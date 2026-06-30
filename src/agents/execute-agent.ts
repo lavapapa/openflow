@@ -18,7 +18,7 @@ import type {
   AgentVerboseResultPayload
 } from "../output/events.js";
 import { EventBus } from "../orchestration/event-bus.js";
-import { createDefaultProviderRegistry } from "./registry.js";
+import { createDefaultProviderRegistry, type ProviderRuntimeMap } from "./registry.js";
 import { runProcess } from "./process-runner.js";
 import { normalizeAgentOutput } from "../structured/normalize-agent-output.js";
 import {
@@ -55,15 +55,18 @@ export class DefaultAgentExecutor implements AgentExecutor {
   private readonly config: ResolvedConfig;
   private readonly artifactStore: ArtifactStore;
   private readonly eventBus: EventBus;
+  private readonly providerRuntime: ProviderRuntimeMap | undefined;
 
   constructor(deps: {
     config: ResolvedConfig;
     artifactStore: ArtifactStore;
     eventBus: EventBus;
+    providerRuntime?: ProviderRuntimeMap | undefined;
   }) {
     this.config = deps.config;
     this.artifactStore = deps.artifactStore;
     this.eventBus = deps.eventBus;
+    this.providerRuntime = deps.providerRuntime;
   }
 
   async execute(input: AgentExecutionInput): Promise<AgentResult> {
@@ -108,7 +111,10 @@ export class DefaultAgentExecutor implements AgentExecutor {
   }
 
   private async executeInternal(input: AgentExecutionInput): Promise<AgentResult> {
-    const registry = createDefaultProviderRegistry({ config: this.config });
+    const registry = createDefaultProviderRegistry({
+      config: this.config,
+      providerRuntime: this.providerRuntime
+    });
     const adapter = registry.get(input.provider);
     const resolvedPerms = input.permissions || { mode: "default" };
     const sanitizedMetadata = sanitizeMetadata(input.metadata);

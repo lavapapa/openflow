@@ -54,6 +54,10 @@ export interface ProviderConfig {
   noThemes?: boolean;
   compaction?: boolean;
   retry?: boolean;
+  sessionPersistence?: "memory" | "create" | "continue-recent" | "continue-recent-any-cwd";
+  sessionDir?: string;
+  sessionId?: string;
+  sessionFile?: string;
   tools?: string[];
   excludeTools?: string[];
   maxContextChars?: number;

@@ -4,6 +4,7 @@ import type { EventEnvelope } from "../output/events.js";
 import type { EventSubscriber } from "../orchestration/event-bus.js";
 import type { JsonObject, ProviderName } from "../types/common.js";
 import type { ProviderConfig } from "../config/types.js";
+import type { ProviderRuntimeMap } from "../agents/registry.js";
 import type { WorkflowRunResult } from "../types/workflow.js";
 import { defaultRunsDir } from "../artifacts/run-store.js";
 import { prepareWorkflowRun, readRunJson } from "../runtime/run-service.js";
@@ -16,6 +17,7 @@ export interface OpenFlowClientOptions {
     runsDir?: string | undefined;
   };
   configPath?: string | undefined;
+  providerRuntime?: ProviderRuntimeMap | undefined;
 }
 
 export type WorkflowInput =
@@ -30,6 +32,7 @@ export interface RunInput {
   defaultProvider?: ProviderName | undefined;
   model?: string | undefined;
   providers?: Record<string, ProviderOverride> | undefined;
+  providerRuntime?: ProviderRuntimeMap | undefined;
   concurrency?: number | undefined;
   timeoutMs?: number | undefined;
   maxAgentCalls?: number | undefined;
@@ -47,6 +50,7 @@ export interface ResumeInput {
   defaultProvider?: ProviderName | undefined;
   model?: string | undefined;
   providers?: Record<string, ProviderOverride> | undefined;
+  providerRuntime?: ProviderRuntimeMap | undefined;
   signal?: AbortSignal | undefined;
 }
 
@@ -174,6 +178,7 @@ export function createOpenFlow(options: OpenFlowClientOptions): OpenFlowClient {
       defaultProvider: input.defaultProvider,
       model: input.model,
       providers: input.providers,
+      providerRuntime: input.providerRuntime ?? options.providerRuntime,
       concurrency: input.concurrency,
       timeoutMs: input.timeoutMs,
       maxAgentCalls: input.maxAgentCalls,
@@ -226,6 +231,7 @@ export function createOpenFlow(options: OpenFlowClientOptions): OpenFlowClient {
         defaultProvider: input.defaultProvider,
         model: input.model,
         providers: input.providers,
+        providerRuntime: input.providerRuntime ?? options.providerRuntime,
         resume: previousRunRoot,
         signal: input.signal,
         resumedFromRunId: previousRunId

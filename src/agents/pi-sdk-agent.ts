@@ -1,3 +1,4 @@
+import { existsSync, readdirSync, statSync } from "node:fs";
 import * as path from "node:path";
 import type {
   AgentExecutionContext,
@@ -29,6 +30,14 @@ export interface PiSdkAgentProviderConfig extends ProviderConfig {
   maxContextChars?: number;
   compaction?: boolean;
   retry?: boolean;
+  sessionPersistence?: "memory" | "create" | "continue-recent" | "continue-recent-any-cwd";
+  sessionDir?: string;
+  sessionId?: string;
+  sessionFile?: string;
+}
+
+export interface PiSdkAgentRuntimeOptions {
+  customTools?: any[];
 }
 
 interface PiSdkModule {
@@ -45,12 +54,14 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
   readonly name = "pi-sdk";
   readonly kind = "sdk" as const;
   private readonly config: PiSdkAgentProviderConfig;
+  private readonly runtimeOptions: PiSdkAgentRuntimeOptions;
 
-  constructor(config?: PiSdkAgentProviderConfig) {
+  constructor(config?: PiSdkAgentProviderConfig, runtimeOptions?: PiSdkAgentRuntimeOptions) {
     this.config = config ?? {
       command: "pi-sdk",
       defaultModel: null
     };
+    this.runtimeOptions = runtimeOptions ?? {};
   }
 
   async checkHealth(): Promise<ProviderHealth> {
@@ -163,6 +174,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
     });
     await loader.reload();
 
+    const sessionManager = createPiSdkSessionManager(sdk, input, this.config);
     const { session } = await sdk.createAgentSession({
       cwd: input.cwd,
       agentDir,
@@ -172,9 +184,10 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       thinkingLevel,
       resourceLoader: loader,
       settingsManager,
-      sessionManager: sdk.SessionManager.inMemory(input.cwd),
+      sessionManager,
       tools: resolveTools(input, this.config),
-      excludeTools: this.config.excludeTools
+      excludeTools: this.config.excludeTools,
+      customTools: this.runtimeOptions.customTools
     });
 
     let streamedText = "";
@@ -206,7 +219,12 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
         exitCode: 0,
         parsed: {
           text,
-          raw: { text, provider: piProvider, model: modelId }
+          raw: {
+            text,
+            provider: piProvider,
+            model: modelId,
+            piSession: readPiSessionInfo(sessionManager)
+          }
         }
       };
     } finally {
@@ -222,6 +240,53 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       raw: { text: input.stdout }
     };
   }
+}
+
+export function createPiSdkSessionManager(
+  sdk: Pick<PiSdkModule, "SessionManager">,
+  input: Pick<AgentRunInput, "cwd">,
+  config: Pick<PiSdkAgentProviderConfig, "sessionPersistence" | "sessionDir" | "sessionFile" | "sessionId">
+): any {
+  const mode = config.sessionPersistence ??
+    (config.sessionFile || config.sessionDir || config.sessionId ? "continue-recent-any-cwd" : "memory");
+  const sessionDir = config.sessionDir ? path.resolve(config.sessionDir) : undefined;
+  const sessionFile = config.sessionFile ? path.resolve(config.sessionFile) : undefined;
+  if (mode === "memory") return sdk.SessionManager.inMemory(input.cwd);
+  if (sessionFile && existsSync(sessionFile)) {
+    return sdk.SessionManager.open(sessionFile, sessionDir, input.cwd);
+  }
+  if (mode === "create") {
+    return sdk.SessionManager.create(input.cwd, sessionDir, config.sessionId ? { id: config.sessionId } : undefined);
+  }
+  if (mode === "continue-recent") {
+    return sdk.SessionManager.continueRecent(input.cwd, sessionDir);
+  }
+  const latest = sessionDir ? findMostRecentSessionFile(sessionDir) : null;
+  if (latest) return sdk.SessionManager.open(latest, sessionDir, input.cwd);
+  return sdk.SessionManager.create(input.cwd, sessionDir, config.sessionId ? { id: config.sessionId } : undefined);
+}
+
+function findMostRecentSessionFile(sessionDir: string): string | null {
+  try {
+    return readdirSync(sessionDir)
+      .filter((entry) => entry.endsWith(".jsonl"))
+      .map((entry) => {
+        const filePath = path.join(sessionDir, entry);
+        return { filePath, mtimeMs: statSync(filePath).mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.filePath ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readPiSessionInfo(sessionManager: any) {
+  return {
+    persisted: Boolean(sessionManager?.isPersisted?.()),
+    id: typeof sessionManager?.getSessionId === "function" ? sessionManager.getSessionId() : undefined,
+    file: typeof sessionManager?.getSessionFile === "function" ? sessionManager.getSessionFile() : undefined,
+    dir: typeof sessionManager?.getSessionDir === "function" ? sessionManager.getSessionDir() : undefined
+  };
 }
 
 async function loadPiSdk(): Promise<PiSdkModule> {

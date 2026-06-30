@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { PiSdkAgentAdapter } from "../../../src/agents/pi-sdk-agent.js";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { createPiSdkSessionManager, PiSdkAgentAdapter } from "../../../src/agents/pi-sdk-agent.js";
 
 function runInput(overrides: any = {}) {
   return {
@@ -63,4 +66,61 @@ describe("PiSdkAgentAdapter", () => {
       text: "hello from sdk"
     });
   });
+
+  it("uses an in-memory Pi session by default", () => {
+    const SessionManager = fakeSessionManager();
+
+    createPiSdkSessionManager({ SessionManager }, runInput(), {});
+
+    expect(SessionManager.inMemory).toHaveBeenCalledWith(process.cwd());
+    expect(SessionManager.create).not.toHaveBeenCalled();
+    expect(SessionManager.open).not.toHaveBeenCalled();
+  });
+
+  it("continues the newest session in a custom sessionDir without cwd filtering when requested", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openflow-pi-session-"));
+    const sessionDir = join(root, "sessions");
+    await mkdir(sessionDir, { recursive: true });
+    const older = join(sessionDir, "2026-01-01_old.jsonl");
+    const newer = join(sessionDir, "2026-01-02_new.jsonl");
+    await writeFile(older, JSON.stringify({ type: "session", id: "old", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/old" }) + "\n");
+    await writeFile(newer, JSON.stringify({ type: "session", id: "new", timestamp: "2026-01-02T00:00:00.000Z", cwd: "/different-cwd" }) + "\n");
+    const now = new Date();
+    await import("node:fs/promises").then((fs) => fs.utimes(older, now, new Date(now.getTime() - 10_000)));
+    await import("node:fs/promises").then((fs) => fs.utimes(newer, now, now));
+    const SessionManager = fakeSessionManager();
+
+    createPiSdkSessionManager(
+      { SessionManager },
+      runInput({ cwd: "/current-run-workspace" }),
+      { sessionPersistence: "continue-recent-any-cwd", sessionDir },
+    );
+
+    expect(SessionManager.open).toHaveBeenCalledWith(newer, sessionDir, "/current-run-workspace");
+    expect(SessionManager.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a persisted Pi session when no custom-dir session exists", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openflow-pi-session-empty-"));
+    const sessionDir = join(root, "sessions");
+    const SessionManager = fakeSessionManager();
+
+    createPiSdkSessionManager(
+      { SessionManager },
+      runInput({ cwd: "/workspace/run_1" }),
+      { sessionPersistence: "continue-recent-any-cwd", sessionDir, sessionId: "sess_xiaobai" },
+    );
+
+    expect(SessionManager.create).toHaveBeenCalledWith("/workspace/run_1", sessionDir, { id: "sess_xiaobai" });
+    expect(SessionManager.open).not.toHaveBeenCalled();
+  });
 });
+
+function fakeSessionManager() {
+  return {
+    inMemory: vi.fn(() => ({ mode: "memory" })),
+    create: vi.fn(() => ({ mode: "create" })),
+    continueRecent: vi.fn(() => ({ mode: "continue" })),
+    open: vi.fn(() => ({ mode: "open" })),
+  };
+}

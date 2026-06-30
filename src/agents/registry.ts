@@ -9,7 +9,7 @@ import {
 import { OpenCodeCliAdapter, type OpenCodeProviderConfig } from "./opencode-cli.js";
 import { AntigravityCliAdapter, type AntigravityProviderConfig } from "./antigravity-cli.js";
 import { PiCodingAgentAdapter, type PiCodingAgentProviderConfig } from "./pi-coding-agent.js";
-import { PiSdkAgentAdapter, type PiSdkAgentProviderConfig } from "./pi-sdk-agent.js";
+import { PiSdkAgentAdapter, type PiSdkAgentProviderConfig, type PiSdkAgentRuntimeOptions } from "./pi-sdk-agent.js";
 import { CursorAgentAdapter, type CursorAgentProviderConfig } from "./cursor-agent.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
@@ -43,6 +43,12 @@ export class ProviderRegistry {
 export interface RegistryDeps {
   config: ResolvedConfig;
   mockConfig?: MockProviderConfig;
+  providerRuntime?: ProviderRuntimeMap | undefined;
+}
+
+export interface ProviderRuntimeMap {
+  "pi-sdk"?: PiSdkAgentRuntimeOptions;
+  [provider: string]: unknown;
 }
 
 export function createDefaultProviderRegistry(deps: RegistryDeps): ProviderRegistry {
@@ -62,7 +68,10 @@ export function createDefaultProviderRegistry(deps: RegistryDeps): ProviderRegis
   registry.register(new OpenCodeCliAdapter(deps.config.providers["opencode"] as OpenCodeProviderConfig));
   registry.register(new AntigravityCliAdapter(deps.config.providers["antigravity"] as AntigravityProviderConfig));
   registry.register(new PiCodingAgentAdapter(deps.config.providers["pi"] as PiCodingAgentProviderConfig));
-  registry.register(new PiSdkAgentAdapter(deps.config.providers["pi-sdk"] as PiSdkAgentProviderConfig | undefined));
+  registry.register(new PiSdkAgentAdapter(
+    deps.config.providers["pi-sdk"] as PiSdkAgentProviderConfig | undefined,
+    deps.providerRuntime?.["pi-sdk"] as PiSdkAgentRuntimeOptions | undefined
+  ));
   registry.register(new CursorAgentAdapter(deps.config.providers["cursor"] as CursorAgentProviderConfig | undefined));
   
   return registry;

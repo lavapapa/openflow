@@ -73,6 +73,33 @@ describe("ProviderRegistry", () => {
     expect(cursor.name).toBe("cursor");
   });
 
+  it("passes Pi SDK custom tools through runtime options, not provider config", () => {
+    const tool = { name: "xiaobai_start_workflow", description: "start a host workflow" };
+    const dummyConfig = {
+      providers: {
+        copilot: { command: "copilot" },
+        opencode: { command: "opencode" },
+        antigravity: { command: "agy" },
+        pi: { command: "pi" },
+        "pi-sdk": { command: "pi-sdk" },
+        cursor: { command: "agent" }
+      }
+    } as unknown as ResolvedConfig;
+
+    const registry = createDefaultProviderRegistry({
+      config: dummyConfig,
+      providerRuntime: {
+        "pi-sdk": {
+          customTools: [tool],
+        },
+      },
+    });
+    const adapter = registry.get("pi-sdk") as any;
+
+    expect(adapter.config.customTools).toBeUndefined();
+    expect(adapter.runtimeOptions.customTools).toEqual([tool]);
+  });
+
   // Keep existing utility tests
   it("registers and retrieves adapters", () => {
     const registry = new ProviderRegistry();

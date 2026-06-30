@@ -19,6 +19,7 @@ import { collectSecretValues } from "../security/env.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import type { ThinkingEffort } from "../types/thinking-effort.js";
+import type { ProviderRuntimeMap } from "../agents/registry.js";
 
 export interface RunServiceInput {
   workflowTarget: string;
@@ -30,6 +31,7 @@ export interface RunServiceInput {
   model?: string | undefined;
   thinkingEffort?: ThinkingEffort | undefined;
   providers?: Record<string, Partial<ProviderConfig>> | undefined;
+  providerRuntime?: ProviderRuntimeMap | undefined;
   concurrency?: number | undefined;
   timeoutMs?: number | undefined;
   maxAgentCalls?: number | undefined;
@@ -206,7 +208,8 @@ export async function prepareWorkflowRun(input: RunServiceInput): Promise<Prepar
   const agentExecutor = new DefaultAgentExecutor({
     config: config as any,
     artifactStore,
-    eventBus
+    eventBus,
+    providerRuntime: input.providerRuntime
   });
 
   const abortController = new AbortController();
