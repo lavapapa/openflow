@@ -45,7 +45,7 @@ describe("Timeout handling (Unit)", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -73,6 +73,7 @@ describe("Timeout handling (Unit)", () => {
         prompt: "test prompt",
         timeoutMs: timeoutMs,
         cwd: process.cwd(),
+        permissions: { mode: "default" },
         signal,
         metadata: {}
       })

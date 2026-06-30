@@ -1,5 +1,8 @@
-export type ProviderName = "codex" | "gemini" | "mock" | string;
+export type ProviderName = "codex" | "gemini" | "mock" | "copilot" | "opencode" | "antigravity" | "pi" | string;
 export type ReporterMode = "pretty" | "json" | "jsonl";
+
+import type { ThinkingEffort } from "../types/thinking-effort.js";
+
 
 export interface ProviderModelArgConfig {
   flag: string;
@@ -7,29 +10,101 @@ export interface ProviderModelArgConfig {
 
 export interface ProviderConfig {
   command: string;
-  args: string[];
+  args?: string[];
   defaultModel: string | null;
   modelArg?: ProviderModelArgConfig | false;
   timeoutMs?: number;
   env?: Record<string, string>;
   responses?: Record<string, unknown>; // Used by mock provider.
   promptMode?: "stdin" | "arg";
+  promptFlag?: string;
+  modelFlag?: string;
+  sandboxFlag?: string;
+  dangerouslySkipPermissionsFlag?: string;
+  useSandboxByDefault?: boolean;
+  permissionPolicy?: string;
+  printTimeoutFlag?: string;
+  agentFlag?: string;
+  dirFlag?: string | false;
+  formatFlag?: string;
+  format?: string;
+  variantFlag?: string;
+  defaultAgent?: string;
+  defaultVariant?: string;
+  piProvider?: string;
+  providerFlag?: string;
+  executionMode?: string;
+  approvalMode?: string;
+  safeTools?: string[];
+  fullAccessTools?: string[];
+  thinking?: string;
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  apiKey?: string;
+  apiKeyEnv?: string;
+  baseUrl?: string;
+  api?: string;
+  agentDir?: string;
+  deterministicEnv?: boolean;
+  noSession?: boolean;
+  noContextFiles?: boolean;
+  noExtensions?: boolean;
+  noSkills?: boolean;
+  noPromptTemplates?: boolean;
+  noThemes?: boolean;
+  compaction?: boolean;
+  retry?: boolean;
+  tools?: string[];
+  excludeTools?: string[];
+  maxContextChars?: number;
+  defaultThinkingEffort?: ThinkingEffort;
 }
 
 export interface SecurityConfig {
   passEnv: string[];
   redactEnv: string[];
-  allowShell: false;
   allowWorkflowImports: false;
 }
 
-export interface OpenFlowConfig {
+export interface SharedAgentsConfig {
+  dir: string;
+  allowDynamicIds: false;
+  maxDefinitions: number;
+  strictPromptTemplateVariables: boolean;
+}
+
+export interface ToolsConfig {
+  dir: string;
+  concurrency: number;
+  maxDefinitions: number;
+}
+
+export interface WorkflowDiscoveryConfig {
+  include: string[];
+}
+
+export interface WorkflowConfig {
+  discovery: WorkflowDiscoveryConfig;
+  maxDepth: number;
+  maxLoopRounds: number;
+}
+
+export interface OrchestrationConfig {
+  concurrency?: number;
+}
+
+export interface OpenDynamicWorkflowConfig {
   defaultProvider: ProviderName;
   concurrency: number;
   timeoutMs: number;
+  maxAgentCalls?: number | undefined;
   defaultModel?: string | null;
   providers: Record<string, ProviderConfig>;
   security: SecurityConfig;
+  sharedAgents: SharedAgentsConfig;
+  tools: ToolsConfig;
+  workflow: WorkflowConfig;
+  orchestration?: OrchestrationConfig;
   reporting: {
     mode: ReporterMode;
     verbose: boolean;
@@ -37,7 +112,7 @@ export interface OpenFlowConfig {
   failFast?: boolean;
 }
 
-export interface ResolvedOpenFlowConfig extends OpenFlowConfig {
+export interface ResolvedOpenDynamicWorkflowConfig extends OpenDynamicWorkflowConfig {
   configPath?: string;
   cwd: string;
   outDir: string;

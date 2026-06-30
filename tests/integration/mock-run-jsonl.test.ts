@@ -21,7 +21,7 @@ async function runCli(args: string[]) {
 
   let error: unknown = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -75,9 +75,9 @@ describe("Integration - mock run jsonl mode", () => {
       }).not.toThrow();
     }
 
-    // Every event must have schemaVersion: "openflow.event.v1"
+    // Every event must have schemaVersion: "open-dynamic-workflow.event.v1"
     for (const event of parsedEvents) {
-      expect(event.schemaVersion).toBe("openflow.event.v1");
+      expect(event.schemaVersion).toBe("open-dynamic-workflow.event.v1");
     }
 
     // Sequence numbers must be strictly increasing
@@ -132,5 +132,65 @@ describe("Integration - mock run jsonl mode", () => {
     expect(types).toContain("workflow.started");
     expect(types).toContain("agent.started");
     expect(types).toContain("agent.completed");
+  });
+
+  it("JSONL event stream includes resolved permissions (AC-10)", async () => {
+    const result = await runCli([
+      "run",
+      "tests/fixtures/workflows/dangerously-full-access-valid.workflow.js",
+      "--config",
+      "tests/fixtures/config/mock.config.yaml",
+      "--out",
+      TEMP_DIR,
+      "--report",
+      "jsonl"
+    ]);
+
+    expect(result.error).toBeNull();
+
+    const stdout = result.stdout;
+    expect(stdout.trim().length).toBeGreaterThan(0);
+
+    const lines = stdout.split("\n").filter((line) => line.trim().length > 0);
+    const parsedEvents: Array<Record<string, any>> = [];
+    for (const line of lines) {
+      expect(() => {
+        parsedEvents.push(JSON.parse(line));
+      }).not.toThrow();
+    }
+
+    // Sequence numbers must be strictly increasing
+    const sequences = parsedEvents.map((e) => e.sequence as number);
+    for (let i = 1; i < sequences.length; i++) {
+      expect(sequences[i]).toBeGreaterThan(sequences[i - 1]!);
+    }
+
+    // Relevant agent lifecycle events include permissions.
+    const agentStarted = parsedEvents.find((e) => e.type === "agent.started");
+    const agentCompleted = parsedEvents.find((e) => e.type === "agent.completed");
+
+    expect(agentStarted).toBeDefined();
+    expect(agentStarted.payload.permissions).toEqual({ mode: "dangerously-full-access" });
+
+    expect(agentCompleted).toBeDefined();
+    expect(agentCompleted.payload.permissions).toEqual({ mode: "dangerously-full-access" });
+
+    // No pretty text in stdout
+    expect(stdout).not.toContain("◇");
+    expect(stdout).not.toContain("✓");
+
+    // Stdout events should match persisted events.jsonl
+    const runs = await fs.readdir(TEMP_DIR);
+    expect(runs.length).toBe(1);
+    const runDir = path.join(TEMP_DIR, runs[0]!);
+    const eventsContent = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
+    const persistedLines = eventsContent.split("\n").filter((l) => l.trim().length > 0);
+
+    expect(lines.length).toBe(persistedLines.length);
+    for (let i = 0; i < persistedLines.length; i++) {
+      const persisted = JSON.parse(persistedLines[i]!);
+      const fromStdout = JSON.parse(lines[i]!);
+      expect(fromStdout).toEqual(persisted);
+    }
   });
 });

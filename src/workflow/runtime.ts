@@ -1,9 +1,8 @@
 import * as path from "node:path";
 import * as vm from "node:vm";
-import type { ParsedWorkflow, WorkflowRunResult, WorkflowMeta } from "../types/workflow.js";
+import type { ParsedWorkflow, WorkflowRunResult, ResolvedWorkflowIdentity } from "../types/workflow.js";
 import type { ResolvedConfig, CliRunOptions } from "../types/config.js";
-import type { AgentResult } from "../types/agent.js";
-import type { SerializedError } from "../types/errors.js";
+
 import type { ArtifactStore } from "../types/artifacts.js";
 import type { AgentExecutor } from "../agents/execution-types.js";
 import type { RuntimeEventSink } from "../orchestration/scheduler.js";
@@ -11,11 +10,22 @@ import { DefaultScheduler } from "../orchestration/scheduler.js";
 import { createDsl } from "./dsl.js";
 import { createSandboxContext } from "./sandbox.js";
 import type { RuntimeState } from "./types.js";
+import { type WorkflowRegistry, createRootWorkflowRegistry } from "./registry.js";
 import { serializeError } from "../errors/serialize.js";
 import { createLinkedAbortController } from "../orchestration/cancellation.js";
-import { shouldTriggerFailFast } from "../orchestration/fail-fast.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import { loadRuntimeCallCache } from "../artifacts/call-cache.js";
+import type { SharedAgentRegistry } from "../shared-agents/registry.js";
+
+import { DefaultWorkflowInvocationManager } from "./invocation-manager.js";
+import type { WorkflowInvocationContext } from "./invocation-types.js";
+import { getActiveWorkflowInvocation } from "./invocation-types.js";
+import { cloneJsonValue, cloneJsonObject } from "./json.js";
+import { withDslExecutionScope, withToolTopLevelWindow } from "./scope.js";
+import type { ToolRegistry } from "../types/tool.js";
+import type { ToolExecutor } from "../tools/executor-types.js";
+import { RunLimitTracker } from "./run-limits.js";
 
 export interface Clock {
   now(): Date;
@@ -27,9 +37,13 @@ export interface IdGenerator {
 
 export interface RuntimeRunInput {
   parsedWorkflow: ParsedWorkflow;
+  workflowRegistry?: WorkflowRegistry;
+  workflowIdentity?: ResolvedWorkflowIdentity;
   config: ResolvedConfig;
   cli: CliRunOptions;
   signal?: AbortSignal;
+  sharedAgentRegistry?: SharedAgentRegistry;
+  toolRegistry?: ToolRegistry;
 }
 
 export interface RuntimeDependencies {
@@ -38,6 +52,8 @@ export interface RuntimeDependencies {
   artifactStore?: ArtifactStore;
   clock?: Clock;
   idGenerator?: IdGenerator;
+  sharedAgentRegistry?: SharedAgentRegistry;
+  toolExecutor?: ToolExecutor;
 }
 
 export interface RuntimeRunner {
@@ -53,20 +69,33 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
     const runId = deps.idGenerator ? deps.idGenerator.nextId("run") : crypto.randomUUID();
 
     const cwd = input.cli.cwd || input.config.cwd || process.cwd();
-    const artifactsDir = input.cli.outDir || input.config.outDir || path.resolve(cwd, ".openflow/runs", runId);
+    const artifactsDir = input.cli.outDir || input.config.outDir || path.resolve(cwd, ".open-dynamic-workflow/runs", runId);
+
+    const schedulerConcurrency = input.cli.concurrency ?? input.config.concurrency ?? 1;
 
     const scheduler = new DefaultScheduler(
       {
-        concurrency: input.cli.concurrency ?? input.config.concurrency ?? 1,
+        concurrency: schedulerConcurrency,
         failFast: !!(input.cli.failFast || input.config.failFast)
       },
       { eventSink: deps.eventSink }
     );
 
     const runtimeAbortController = createLinkedAbortController(input.signal);
+    const callCache = await loadRuntimeCallCache({
+      resume: input.cli.resume,
+      noCache: input.cli.noCache,
+      outDir: input.config.outDir
+    });
+
+    const registry = input.workflowRegistry || createRootWorkflowRegistry(input.parsedWorkflow);
+    const runLimitTracker = new RunLimitTracker({
+      maxAgentCalls: input.cli.maxAgentCalls ?? input.config.maxAgentCalls
+    });
 
     const runtime: RuntimeState = {
       artifactStore: deps.artifactStore,
+      workflowRegistry: registry,
       runId,
       parsedWorkflow: input.parsedWorkflow,
       config: input.config,
@@ -75,17 +104,37 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       cwd,
       artifactsDir,
       agentResults: [],
+      toolResults: [],
       scheduler,
       agentExecutor: deps.agentExecutor,
       eventSink: deps.eventSink,
       abortController: runtimeAbortController,
       agentCounter: 0,
+      callSequence: 0,
+      callCache,
       pipelineCounter: 0,
       pipelineSummaries: [],
+      workflowSummaries: [],
       startedAt: startTime.toISOString(),
       idGenerator: deps.idGenerator !== undefined ? deps.idGenerator : undefined,
-      failFast: input.cli.failFast
+      failFast: input.cli.failFast,
+      sharedAgentRegistry: input.sharedAgentRegistry || deps.sharedAgentRegistry,
+      schedulerConcurrency,
+      toolRegistry: input.toolRegistry,
+      toolExecutor: deps.toolExecutor,
+      toolCallIds: new Set(),
+      toolCounter: 0,
+      loopCounter: 0,
+      loopSummaries: [],
+      runLimitTracker
     };
+
+    const invocationManager = new DefaultWorkflowInvocationManager({
+      runtime,
+      registry,
+      evaluate: (ctx) => executeWorkflowModule(runtime, ctx)
+    });
+    runtime.invocationManager = invocationManager;
 
     if (deps.artifactStore && !deps.artifactStore.isRunCreated()) {
       await deps.artifactStore.createRun({
@@ -95,7 +144,7 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
         workflowSource: input.parsedWorkflow.sourceText || "",
         workflowHash: input.parsedWorkflow.sourceHash,
         resolvedConfig: input.config,
-        openflowVersion: input.parsedWorkflow.meta.version || "0.0.0",
+        openDynamicWorkflowVersion: input.parsedWorkflow.meta.version || "0.0.0",
         cwd,
         configPath: input.config.configPath
       });
@@ -114,6 +163,18 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
       }
     }
 
+    // Emit workflow.resolved if present
+    if (deps.eventSink && input.workflowIdentity) {
+      deps.eventSink.emit("workflow.resolved", {
+        requestedTarget: input.workflowIdentity.requestedTarget,
+        targetKind: input.workflowIdentity.targetKind,
+        workflowName: input.workflowIdentity.name,
+        workflowFile: input.workflowIdentity.workflowFile,
+        workflowFileRelative: input.workflowIdentity.workflowFileRelative,
+        discoverySource: input.workflowIdentity.discoverySource
+      });
+    }
+
     // Emit workflow.started
     if (deps.eventSink) {
       deps.eventSink.emit("workflow.started", {
@@ -125,16 +186,22 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
 
     try {
       if (runtimeAbortController.signal.aborted) {
-        throw new Error("Workflow cancelled before execution started.");
+        throw new OpenDynamicWorkflowError(ErrorCode.WORKFLOW_CANCELLED, String(runtimeAbortController.signal.reason || "Workflow cancelled before execution started."));
       }
 
-      const workflowResult = await executeWorkflowModule(runtime);
+      const workflowResult = await withDslExecutionScope({
+        runId: runtime.runId,
+        workflowInvocationId: runtime.runId,
+        location: "workflow-top-level",
+        toolAllowed: true,
+        topLevelWindow: false
+      }, () => invocationManager.executeRoot(
+        registry.require(input.parsedWorkflow.meta.name),
+        runtime.args
+      ));
 
       // Wait for scheduler to drain all pending tasks
       await scheduler.drain();
-
-      const finishTime = deps.clock ? deps.clock.now() : new Date();
-      const durationMs = finishTime.getTime() - startTime.getTime();
 
       // Check if scheduler is aborted
       const schedulerSnapshot = (scheduler as any).getSnapshot();
@@ -144,13 +211,20 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
         const reasonMsg = typeof abortReason === "string" ? abortReason : abortReason?.message;
 
         if (isFailFast) {
+          if (runtime.toolExecutor) {
+            runtime.toolExecutor.cancel({ name: "FailFastError", message: reasonMsg || "Fail-fast triggered", code: "FAIL_FAST" });
+            await runtime.toolExecutor.close().catch(() => {});
+          }
+          const finishTime = deps.clock ? deps.clock.now() : new Date();
+          const durationMs = finishTime.getTime() - startTime.getTime();
           // Build failed run result for fail-fast
           const result = buildFailedRunResult(runtime, new Error(reasonMsg), durationMs, finishTime.toISOString(), deps.artifactStore);
           if (deps.eventSink) {
             deps.eventSink.emit("workflow.failed", {
               status: "failed",
               durationMs,
-              error: result.error!
+              error: result.error!,
+              limitSummary: result.limitSummary
             });
           }
           if (deps.artifactStore) {
@@ -158,13 +232,20 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
           }
           return result;
         } else {
+          if (runtime.toolExecutor) {
+            runtime.toolExecutor.cancel({ name: "WorkflowCancelledError", message: reasonMsg || "Workflow cancelled", code: "USER_CANCELLED" });
+            await runtime.toolExecutor.close().catch(() => {});
+          }
+          const finishTime = deps.clock ? deps.clock.now() : new Date();
+          const durationMs = finishTime.getTime() - startTime.getTime();
           // Build cancelled run result
           const result = buildCancelledRunResult(runtime, durationMs, finishTime.toISOString(), reasonMsg, deps.artifactStore);
           if (deps.eventSink) {
             deps.eventSink.emit("workflow.cancelled", {
               status: "cancelled",
               durationMs,
-              reason: reasonMsg || "Workflow cancelled"
+              reason: reasonMsg || "Workflow cancelled",
+              limitSummary: result.limitSummary
             });
           }
           if (deps.artifactStore) {
@@ -172,94 +253,159 @@ export class DefaultRuntimeRunner implements RuntimeRunner {
           }
           return result;
         }
-        }
+      }
 
-        // Build succeeded run result
-        const result = buildSucceededRunResult(runtime, workflowResult, durationMs, finishTime.toISOString(), deps.artifactStore);
-        if (deps.eventSink) {
+      if (runtime.toolExecutor) {
+        await runtime.toolExecutor.close();
+      }
+
+      const finishTime = deps.clock ? deps.clock.now() : new Date();
+      const durationMs = finishTime.getTime() - startTime.getTime();
+
+      // Build succeeded run result
+      const result = buildSucceededRunResult(runtime, workflowResult, durationMs, finishTime.toISOString(), deps.artifactStore);
+      if (deps.eventSink) {
         deps.eventSink.emit("workflow.completed", {
           status: "succeeded",
           durationMs,
-          result: workflowResult
+          result: workflowResult,
+          limitSummary: result.limitSummary
         });
-        }
-        if (deps.artifactStore) {
+      }
+      if (deps.artifactStore) {
         await deps.artifactStore.updateManifest("succeeded");
-        }
-        return result;
-        } catch (err: any) {
-        // Scheduler drain to ensure everything settles
-        try {
-        await scheduler.drain();
-        } catch {
-        // Ignore errors during final drain
-        }
+      }
+      return result;
 
-        const finishTime = deps.clock ? deps.clock.now() : new Date();
-        const durationMs = finishTime.getTime() - startTime.getTime();
+    } catch (err: any) {
+      let abortType: "user" | "timeout" | "other" = "other";
+      if (err?.code === ErrorCode.WORKFLOW_TIMEOUT) {
+        abortType = "timeout";
+      } else if (
+        err?.code === ErrorCode.WORKFLOW_CANCELLED ||
+        err?.code === ErrorCode.USER_CANCELLED ||
+        err?.name === "AbortError" ||
+        err?.name === "WorkflowCancelledError" ||
+        (err?.name === "OpenDynamicWorkflowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED))
+      ) {
+        abortType = "user";
+      }
 
-        const isCancelled = runtimeAbortController.signal.aborted || err.name === "WorkflowCancelledError";
+      scheduler.abort({
+        type: abortType,
+        message: err.message || "Workflow error"
+      });
+      await scheduler.drain().catch(() => {});
 
-        if (isCancelled) {
+      if (runtime.toolExecutor) {
+        runtime.toolExecutor.cancel(serializeError(err));
+        await runtime.toolExecutor.close().catch(() => {});
+      }
+      const finishTime = deps.clock ? deps.clock.now() : new Date();
+      const durationMs = finishTime.getTime() - startTime.getTime();
+
+      const isCancellation = err?.code === ErrorCode.WORKFLOW_CANCELLED || 
+                             err?.code === ErrorCode.USER_CANCELLED ||
+                             err?.name === "AbortError" || 
+                             err?.name === "WorkflowCancelledError" ||
+                             (err?.name === "OpenDynamicWorkflowError" && (err?.code === ErrorCode.WORKFLOW_CANCELLED || err?.code === ErrorCode.USER_CANCELLED));
+
+      if (isCancellation) {
         const result = buildCancelledRunResult(runtime, durationMs, finishTime.toISOString(), err.message, deps.artifactStore);
         if (deps.eventSink) {
           deps.eventSink.emit("workflow.cancelled", {
             status: "cancelled",
             durationMs,
-            reason: err.message || "Workflow cancelled"
+            reason: err.message || "Workflow cancelled",
+            limitSummary: result.limitSummary
           });
         }
         if (deps.artifactStore) {
           await deps.artifactStore.updateManifest("cancelled", result.error);
         }
         return result;
-        } else {
-        const result = buildFailedRunResult(runtime, err, durationMs, finishTime.toISOString(), deps.artifactStore);
-        if (deps.eventSink) {
-          deps.eventSink.emit("workflow.failed", {
-            status: "failed",
-            durationMs,
-            error: result.error!
-          });
-        }
-        if (deps.artifactStore) {
-          await deps.artifactStore.updateManifest("failed", result.error);
-        }
-        return result;
-        }
-        }
+      }
+
+      // Build failed run result
+      const result = buildFailedRunResult(runtime, err, durationMs, finishTime.toISOString(), deps.artifactStore);
+      if (deps.eventSink) {
+        deps.eventSink.emit("workflow.failed", {
+          status: "failed",
+          durationMs,
+          error: result.error!,
+          limitSummary: result.limitSummary
+        });
+      }
+      if (deps.artifactStore) {
+        await deps.artifactStore.updateManifest("failed", result.error);
+      }
+      return result;
+    }
   }
 }
 
-export async function executeWorkflowModule(runtime: RuntimeState): Promise<unknown> {
+export async function executeWorkflowModule(runtime: RuntimeState, invocationContext?: WorkflowInvocationContext): Promise<unknown> {
   let context: vm.Context;
   try {
     context = createSandboxContext(runtime);
   } catch (err: any) {
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.SECURITY_POLICY_VIOLATION,
       `Failed to create secure sandbox context: ${err.message}`,
       { cause: err }
     );
   }
 
-  const body = runtime.parsedWorkflow.body;
+  const parsedWorkflow = invocationContext ? invocationContext.definition.parsedWorkflow : runtime.parsedWorkflow;
+  const body = parsedWorkflow.body;
   const transformedBody = body.replace(/export\s+default\s+/, "__default = ");
   const wrappedBody = `(async () => {\n${transformedBody}\n})()`;
 
   try {
-    const promise = vm.runInContext(wrappedBody, context, {
-      filename: runtime.parsedWorkflow.sourcePath,
+    const promise = withToolTopLevelWindow(parsedWorkflow.sourcePath, () => vm.runInContext(wrappedBody, context, {
+      filename: parsedWorkflow.sourcePath,
       lineOffset: -1
-    });
+    }));
 
-    await promise;
-    return (context as any).__default;
+    await withToolTopLevelWindow(parsedWorkflow.sourcePath, async () => {
+      await promise;
+    });
+    const workflowFn = (context as any).__default;
+    let result: unknown;
+    if (typeof workflowFn === "function") {
+      const dsl = createDsl(runtime);
+      const activeInvocation = getActiveWorkflowInvocation();
+      const args = activeInvocation ? activeInvocation.args : runtime.args;
+      
+      const dslContext = {
+        ...dsl,
+        args: Object.freeze(cloneJsonObject(args, "workflow args")),
+        cwd: runtime.cwd,
+        runId: runtime.runId,
+        artifactsDir: runtime.artifactsDir,
+        signal: activeInvocation?.signal || runtime.abortController.signal
+      };
+      result = await withToolTopLevelWindow(parsedWorkflow.sourcePath, () => workflowFn(dslContext));
+    } else {
+      result = workflowFn;
+    }
+
+    if (result === undefined) return undefined;
+    if (result === null) return null;
+    try {
+      return cloneJsonValue(result, "workflow result");
+    } catch (err: any) {
+      throw new OpenDynamicWorkflowError(
+        ErrorCode.WORKFLOW_RESULT_SERIALIZATION_FAILED,
+        `Failed to serialize workflow result: ${err.message}`,
+        { cause: err }
+      );
+    }
   } catch (err: any) {
-    // Check if it's already an OpenFlowError (e.g. from DSL)
+    // Check if it's already an OpenDynamicWorkflowError (e.g. from DSL)
     // We check both instanceof and the presence of the 'code' property 
     // to handle errors coming from the VM context.
-    if (err instanceof OpenFlowError || (err && typeof err === "object" && "code" in err && "name" in err && err.name === "OpenFlowError")) {
+    if (err instanceof OpenDynamicWorkflowError || (err && typeof err === "object" && "code" in err && "name" in err && err.name === "OpenDynamicWorkflowError")) {
       throw err;
     }
 
@@ -267,7 +413,7 @@ export async function executeWorkflowModule(runtime: RuntimeState): Promise<unkn
     const isSecurityViolation = err.name === "SecurityError";
 
     if (isSecurityViolation) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.SECURITY_POLICY_VIOLATION,
         `Workflow execution violated security policy: ${err.message}`,
         { cause: err }
@@ -290,18 +436,22 @@ export function buildSucceededRunResult(
   const eventsPath = runArtifacts?.eventsPath || path.join(runtime.artifactsDir, "events.jsonl");
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "succeeded",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
     pipelines: runtime.pipelineSummaries,
+    workflows: runtime.workflowSummaries,
+    tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
     artifactsDir: runtime.artifactsDir,
     reportPath,
-    eventsPath
+    eventsPath,
+    limitSummary: runtime.runLimitTracker?.summary()
   };
 
   if (workflowResult !== undefined) {
@@ -325,18 +475,22 @@ export function buildFailedRunResult(
   const serialized = serializeError(error);
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "failed",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
     pipelines: runtime.pipelineSummaries,
+    workflows: runtime.workflowSummaries,
+    tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
     artifactsDir: runtime.artifactsDir,
     reportPath,
     eventsPath,
+    limitSummary: runtime.runLimitTracker?.summary(),
     error: serialized
   };
 
@@ -361,18 +515,22 @@ export function buildCancelledRunResult(
   };
 
   const result: WorkflowRunResult = {
-    schemaVersion: "openflow.report.v1",
+    schemaVersion: "open-dynamic-workflow.report.v1",
     runId: runtime.runId,
     status: "cancelled",
     meta: runtime.parsedWorkflow.meta,
     agents: runtime.agentResults,
     pipelines: runtime.pipelineSummaries,
+    workflows: runtime.workflowSummaries,
+    tools: runtime.toolExecutor && runtime.toolExecutor.getSummaries().length > 0 ? [...runtime.toolExecutor.getSummaries()] : undefined,
+    loops: runtime.loopSummaries,
     startedAt: runtime.startedAt,
     finishedAt,
     durationMs,
     artifactsDir: runtime.artifactsDir,
     reportPath,
     eventsPath,
+    limitSummary: runtime.runLimitTracker?.summary(),
     error: errorPayload
   };
 

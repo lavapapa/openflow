@@ -7,6 +7,14 @@ import { parseWorkflow } from "../../src/workflow/parse.js";
 
 const TEMP_DIR = path.resolve("tests/temp-tc-01");
 
+async function copyFixture(filename: string): Promise<string> {
+  const src = path.resolve("tests/fixtures/workflows", filename);
+  const dest = path.join(TEMP_DIR, filename);
+  await fs.mkdir(path.dirname(dest), { recursive: true });
+  await fs.copyFile(src, dest);
+  return dest;
+}
+
 async function runCli(args: string[]) {
   const stdoutData: string[] = [];
   const stderrData: string[] = [];
@@ -29,7 +37,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -57,7 +65,7 @@ describe("Workflow Validation", () => {
   });
 
   it("Missing metadata fails validation", async () => {
-    const workflowPath = path.resolve("tests/fixtures/workflows/invalid-missing-meta.workflow.js");
+    const workflowPath = await copyFixture("invalid-missing-meta.workflow.js");
     const result = await runCli([
       "validate",
       workflowPath,
@@ -77,7 +85,7 @@ describe("Workflow Validation", () => {
   });
 
   it("Metadata not first statement fails validation", async () => {
-    const workflowPath = path.resolve("tests/fixtures/workflows/invalid-meta-not-first.js");
+    const workflowPath = await copyFixture("invalid-meta-not-first.js");
     const result = await runCli([
       "validate",
       workflowPath,
@@ -127,7 +135,7 @@ export default {};
   });
 
   it("Restricted require() fails validation", async () => {
-    const workflowPath = path.resolve("tests/fixtures/workflows/invalid-require.js");
+    const workflowPath = await copyFixture("invalid-require.js");
     const result = await runCli([
       "validate",
       workflowPath,
@@ -149,7 +157,7 @@ export default {};
 
   it("Unsupported pipeline() fails validation due to function shorthand", async () => {
     // Arrange
-    const workflowPath = path.resolve("tests/fixtures/workflows/invalid-pipeline.js");
+    const workflowPath = await copyFixture("invalid-pipeline.js");
     
     // Act
     const result = await runCli([
@@ -168,5 +176,115 @@ export default {};
     
     // Error explains that function shorthand is not supported.
     expect(result.error.message).toMatch(/stages must be named stage objects/);
+  });
+
+  it("Valid dangerously-full-access permissions passes validation", async () => {
+    const workflowPath = await copyFixture("dangerously-full-access-valid.workflow.js");
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeNull();
+  });
+
+  it("Invalid permissions mode fails validation with exit code 3", async () => {
+    const workflowPath = await copyFixture("dangerously-full-access-invalid-mode.workflow.js");
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeDefined();
+    const exitCode = exitCodeForError(result.error);
+    expect(exitCode).toBe(3);
+    expect(result.error.code).toBe("WORKFLOW_VALIDATION_ERROR");
+    expect(result.error.message).toMatch(/agent\(\) permissions\.mode must be 'dangerously-full-access'/);
+  });
+
+  it("Invalid permissions extra key fails validation with exit code 3", async () => {
+    const workflowPath = await copyFixture("dangerously-full-access-extra-key.workflow.js");
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeDefined();
+    const exitCode = exitCodeForError(result.error);
+    expect(exitCode).toBe(3);
+    expect(result.error.code).toBe("WORKFLOW_VALIDATION_ERROR");
+    expect(result.error.message).toMatch(/agent\(\) permissions contain unsupported key 'approval'/);
+  });
+
+  it("permissions: {} fails validation with exit code 3 (AC-04)", async () => {
+    const workflowContent = `export const meta = { name: "test", description: "test" };
+await agent({ prompt: "test", permissions: {} });
+export default {};
+`;
+    const workflowPath = path.join(TEMP_DIR, "perm-empty-obj.workflow.js");
+    await fs.writeFile(workflowPath, workflowContent);
+
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeDefined();
+    const exitCode = exitCodeForError(result.error);
+    expect(exitCode).toBe(3);
+    expect(result.error.code).toBe("WORKFLOW_VALIDATION_ERROR");
+    expect(result.error.message).toMatch(/agent\(\) permissions must include a 'mode' property/);
+  });
+
+  it("permissions: 'dangerously-full-access' fails validation with exit code 3 (AC-04)", async () => {
+    const workflowContent = `export const meta = { name: "test", description: "test" };
+await agent({ prompt: "test", permissions: "dangerously-full-access" });
+export default {};
+`;
+    const workflowPath = path.join(TEMP_DIR, "perm-string.workflow.js");
+    await fs.writeFile(workflowPath, workflowContent);
+
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeDefined();
+    const exitCode = exitCodeForError(result.error);
+    expect(exitCode).toBe(3);
+    expect(result.error.code).toBe("WORKFLOW_VALIDATION_ERROR");
+    expect(result.error.message).toMatch(/agent\(\) permissions must be an object literal/);
+  });
+
+  it("permissions: { mode: 123 } fails validation with exit code 3 (AC-04)", async () => {
+    const workflowContent = `export const meta = { name: "test", description: "test" };
+await agent({ prompt: "test", permissions: { mode: 123 } });
+export default {};
+`;
+    const workflowPath = path.join(TEMP_DIR, "perm-invalid-mode-type.workflow.js");
+    await fs.writeFile(workflowPath, workflowContent);
+
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeDefined();
+    const exitCode = exitCodeForError(result.error);
+    expect(exitCode).toBe(3);
+    expect(result.error.code).toBe("WORKFLOW_VALIDATION_ERROR");
+    expect(result.error.message).toMatch(/agent\(\) permissions\.mode must be a string literal/);
   });
 });

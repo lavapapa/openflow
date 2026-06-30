@@ -35,7 +35,7 @@ export class EventBus {
     const timestamp = this.nowFn().toISOString();
 
     const event: EventEnvelope<TPayload> = {
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: this.runId,
       sequence: currentSequence,
       timestamp,

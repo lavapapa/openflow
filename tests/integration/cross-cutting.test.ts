@@ -24,7 +24,7 @@ async function runCli(args: string[], env: Record<string, string> = {}) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -142,17 +142,5 @@ describe("Cross-Cutting Requirements", () => {
     expect(report.status).toBe("failed");
     const agent = report.agents.find((a: any) => a.id === "delay-agent");
     expect(agent.status).toBe("timed_out");
-  });
-
-  it("Unsupported MVP flags are rejected clearly", async () => {
-    const result = await runCli([
-      "run",
-      "tests/fixtures/workflows/mock-success.workflow.js",
-      "--allow-shell"
-    ]);
-    
-    expect(result.error).toBeDefined();
-    expect(result.error.code).toBe("CLI_USAGE_ERROR");
-    expect(result.error.message).toContain("--allow-shell is not supported");
   });
 });

@@ -25,159 +25,129 @@ function createMockStreams() {
 }
 
 describe("PrettyReporter", () => {
-  it("start() prints workflow name", () => {
+  it("orchestrates a full run correctly", () => {
     const { streams, getStdout } = createMockStreams();
     const reporter = new PrettyReporter(streams);
 
     reporter.start({
       runId: "run-1",
-      meta: { name: "my-flow", description: "" },
-      artifactsDir: "dir"
-    });
-
-    expect(getStdout()).toBe("◇ my-flow\n");
-  });
-
-  it("phase.started prints phase", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
-
-    reporter.handle({
-      type: "phase.started",
-      payload: { name: "review" }
+      meta: { name: "my-flow" },
+      workflow: { file: "flow.ts" }
     } as any);
 
-    expect(getStdout()).toBe("→ Phase: review\n");
-  });
-
-  it("agent.started prints label and provider", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
+    reporter.handle({
+      type: "workflow.invocation.started",
+      payload: { workflowInvocationId: "wf-1", workflowName: "my-flow" }
+    } as any);
 
     reporter.handle({
       type: "agent.started",
-      payload: { agentId: "agent-1", label: "my-label", provider: "mock" }
+      payload: { 
+        workflowInvocationId: "wf-1", 
+        agentRunId: "a-1", 
+        label: "My Agent", 
+        provider: "openai" 
+      }
     } as any);
-
-    expect(getStdout()).toBe("▶ my-label started [mock]\n");
-  });
-
-  it("agent.completed prints success mark", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
 
     reporter.handle({
       type: "agent.completed",
-      payload: { agentId: "agent-1", provider: "mock", durationMs: 1500 }
+      payload: { agentRunId: "a-1", durationMs: 1234 }
     } as any);
-
-    expect(getStdout()).toBe("✓ agent-1 succeeded [mock] 1.5s\n");
-  });
-
-  it("agent.failed prints failure mark and message", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
 
     reporter.handle({
-      type: "agent.failed",
-      payload: { agentId: "agent-1", provider: "mock", error: { message: "timeout" } }
+      type: "workflow.invocation.completed",
+      payload: { workflowInvocationId: "wf-1", durationMs: 2000 }
     } as any);
 
-    expect(getStdout()).toBe("✕ agent-1 failed [mock] timeout\n");
-  });
-
-  it("finish() prints artifact directory", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
+    // Assert live progress in non-verbose mode
+    expect(getStdout()).toContain("▶ My Agent  openai");
+    expect(getStdout()).toContain("✓ My Agent  openai  1.2s");
 
     reporter.finish({
-      artifactsDir: ".openflow/runs/123"
+      status: "succeeded",
+      durationMs: 2500,
+      artifactsDir: "/tmp/run",
     } as any);
 
-    expect(getStdout()).toBe("Artifacts: .openflow/runs/123\n");
+    const output = getStdout();
+    
+    // Assert exactly once for each main section
+    expect(output.split("◇ my-flow").length - 1).toBe(1);
+    expect(output.split("Execution").length - 1).toBe(1);
+    expect(output.split("Summary").length - 1).toBe(1);
+    expect(output.split("Artifacts").length - 1).toBe(1);
+
+    expect(output).toContain("file: flow.ts");
+    expect(output).toContain("✓ My Agent  openai  1.2s");
+    expect(output).toContain("status:    succeeded");
+    expect(output).toContain("duration:  2.5s");
+    expect(output).toContain("  /tmp/run");
   });
 
-  it("agent.output is hidden unless verbose is true", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams, { verbose: false });
-
-    reporter.handle({
-      type: "agent.output",
-      payload: { agentId: "agent-1", data: "some output\n" }
-    } as any);
-
-    expect(getStdout()).toBe("");
-  });
-
-  it("agent.output is shown when verbose is true", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams, { verbose: true });
-
-    reporter.handle({
-      type: "agent.output",
-      payload: { agentId: "agent-1", data: "some output\n" }
-    } as any);
-
-    expect(getStdout()).toBe("[agent-1] some output\n");
-  });
-
-  it("pipeline.started prints pipeline start details", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
-
-    reporter.handle({
-      type: "pipeline.started",
-      payload: { pipelineId: "pipeline-1", label: "my-pipeline", strategy: "stage-barrier", itemCount: 5 }
-    } as any);
-
-    expect(getStdout()).toBe("◇ Pipeline pipeline-1 (my-pipeline) started [strategy: stage-barrier, items: 5]\n");
-  });
-
-  it("pipeline.stage.started prints progress in verbose mode", () => {
+  it("verbose mode still streams verbose blocks", () => {
     const { streams, getStdout } = createMockStreams();
     const reporter = new PrettyReporter(streams, { verbose: true });
 
-    reporter.handle({
-      type: "pipeline.stage.started",
-      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", stageIndex: 0 }
+    reporter.start({
+      runId: "run-1",
+      meta: { name: "my-flow" },
     } as any);
 
-    expect(getStdout()).toBe("  → Item 2: Stage lint started\n");
-  });
-
-  it("pipeline.stage.completed prints completion in verbose mode", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams, { verbose: true });
+    expect(getStdout()).not.toContain("◇ my-flow");
 
     reporter.handle({
-      type: "pipeline.stage.completed",
-      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", durationMs: 450 }
+      type: "agent.verbose.command",
+      payload: {
+        agentId: "a-1",
+        label: "My Agent",
+        provider: "openai",
+        command: { command: "ls", args: [] },
+        prompt: "list files",
+        permissions: { mode: "default" },
+        artifacts: { dir: "d", promptPath: "p", stdoutPath: "o", stderrPath: "e" }
+      }
     } as any);
 
-    expect(getStdout()).toBe("  ✓ Item 2: Stage lint completed 450ms\n");
+    expect(getStdout()).toContain("Agent command: My Agent");
   });
 
-  it("pipeline.stage.failed prints failure", () => {
-    const { streams, getStdout } = createMockStreams();
-    const reporter = new PrettyReporter(streams);
-
-    reporter.handle({
-      type: "pipeline.stage.failed",
-      payload: { pipelineId: "pipeline-1", itemIndex: 2, stageName: "lint", error: { message: "lint failed" } }
-    } as any);
-
-    expect(getStdout()).toBe("  ✕ Item 2: Stage lint failed: lint failed\n");
-  });
-
-  it("pipeline.completed prints terminal status and artifact location", () => {
+  it("streams workflow.log events immediately with correct indentation", () => {
     const { streams, getStdout } = createMockStreams();
     const reporter = new PrettyReporter(streams);
 
-    reporter.handle({
-      type: "pipeline.completed",
-      payload: { pipelineId: "pipeline-1", status: "succeeded", durationMs: 1200, artifactPath: "pipelines/pipeline-1/pipeline.json" }
+    reporter.start({
+      runId: "run-1",
+      meta: { name: "my-flow" },
     } as any);
 
-    expect(getStdout()).toBe("✓ Pipeline pipeline-1 completed successfully 1.2s\n  Artifacts: pipelines/pipeline-1/pipeline.json\n");
+    // Root-level log (no workflowId -> depth 0)
+    reporter.handle({
+      type: "workflow.log",
+      payload: { message: "Root log" }
+    } as any);
+
+    expect(getStdout()).toContain("  • Root log\n");
+
+    // Phase-level log (needs to add workflow invocation and phase first)
+    reporter.handle({
+      type: "workflow.invocation.started",
+      payload: { workflowInvocationId: "wf-1", workflowName: "my-flow" }
+    } as any);
+
+    reporter.handle({
+      type: "phase.started",
+      payload: { workflowInvocationId: "wf-1", name: "setup" }
+    } as any);
+
+    reporter.handle({
+      type: "workflow.log",
+      payload: { workflowInvocationId: "wf-1", message: "Setup log", data: { ok: false, summary: "failed" } }
+    } as any);
+
+    expect(getStdout()).toContain("    • Setup log\n");
+    expect(getStdout()).toContain("      data:\n");
+    expect(getStdout()).toContain('"ok": false');
+    expect(getStdout()).toContain('"summary": "failed"');
   });
 });

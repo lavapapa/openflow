@@ -1,6 +1,6 @@
 export const meta = {
   name: "mock-review",
-  description: "Demonstrates openflow with the mock provider",
+  description: "Demonstrates open-dynamic-workflow with the mock provider",
   phases: ["review", "summarize"]
 };
 
@@ -30,7 +30,10 @@ const reviews = await parallel({
   billing: () => agent({
     id: "review-billing",
     provider: "mock",
-    prompt: "Review src/billing.ts for API design issues."
+    prompt: "Review src/billing.ts for API design issues.",
+    permissions: {
+      mode: "dangerously-full-access"
+    }
   })
 });
 

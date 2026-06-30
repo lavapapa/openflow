@@ -1,6 +1,6 @@
-import type { OpenFlowConfig } from "./types.js";
+import type { OpenDynamicWorkflowConfig } from "./types.js";
 
-export const DEFAULT_CONFIG: OpenFlowConfig = {
+export const DEFAULT_CONFIG: OpenDynamicWorkflowConfig = {
   defaultProvider: "mock",
   concurrency: 4,
   timeoutMs: 900_000,
@@ -23,10 +23,73 @@ export const DEFAULT_CONFIG: OpenFlowConfig = {
       args: ["--output-format", "json", "--approval-mode", "plan"],
       defaultModel: "gemini-3-flash-preview",
       promptMode: "stdin"
+    },
+    copilot: {
+      command: "copilot",
+      args: [
+        "-s",
+        "--no-ask-user",
+        "--no-auto-update",
+        "--output-format=json"
+      ],
+      defaultModel: null,
+      modelArg: { flag: "--model" },
+      promptMode: "arg",
+      promptFlag: "-p",
+      dangerouslySkipPermissionsFlag: "--yolo",
+      permissionPolicy: "restricted"
+    },
+    opencode: {
+      command: "opencode",
+      args: ["run", "--format", "json"],
+      defaultModel: null,
+      modelArg: { flag: "--model" },
+      promptMode: "arg",
+      permissionPolicy: "read-only"
+    },
+    antigravity: {
+      command: "agy",
+      args: [],
+      defaultModel: null,
+      modelArg: { flag: "--model" },
+      promptMode: "arg",
+      promptFlag: "-p",
+      sandboxFlag: "--sandbox",
+      dangerouslySkipPermissionsFlag: "--dangerously-skip-permissions",
+      useSandboxByDefault: true,
+      permissionPolicy: "sandbox"
+    },
+    pi: {
+      command: "pi",
+      executionMode: "json",
+      defaultModel: null,
+      modelArg: { flag: "--model" },
+      promptMode: "arg",
+      safeTools: ["read", "grep", "find", "ls"],
+      fullAccessTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      noSession: true,
+      noContextFiles: true,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      approvalMode: "no-approve",
+      deterministicEnv: true
+    },
+    "pi-sdk": {
+      command: "pi-sdk",
+      defaultModel: null,
+      modelArg: false,
+      safeTools: ["read", "grep", "find", "ls"],
+      fullAccessTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      deterministicEnv: true
     }
   },
   security: {
-    allowShell: false,
     allowWorkflowImports: false,
     passEnv: [],
     redactEnv: [
@@ -39,8 +102,30 @@ export const DEFAULT_CONFIG: OpenFlowConfig = {
       "PASSWORD"
     ]
   },
+  sharedAgents: {
+    dir: ".open-dynamic-workflow/agents",
+    allowDynamicIds: false,
+    maxDefinitions: 100,
+    strictPromptTemplateVariables: true
+  },
+  tools: {
+    dir: ".open-dynamic-workflow/tools",
+    concurrency: 4,
+    maxDefinitions: 100
+  },
+  workflow: {
+    discovery: {
+      include: ["workflows/**/*.ts"]
+    },
+    maxDepth: 8,
+    maxLoopRounds: 20
+  },
   reporting: {
     mode: "pretty",
     verbose: false
   }
 };
+
+export function getBuiltInProviderDefaults() {
+  return DEFAULT_CONFIG.providers;
+}

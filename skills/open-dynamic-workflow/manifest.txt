@@ -1,0 +1,13 @@
+open-dynamic-workflow/
+  SKILL.md
+  references/
+    README.md
+    api-document.md
+    cli-commands.md
+    configuration.md
+  assets/
+    basic-workflow.template.js
+    parallel-workflow.template.js
+    pipeline-workflow.template.js
+    loop-workflow.template.js
+    tool-workflow.template.js

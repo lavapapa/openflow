@@ -2,6 +2,7 @@ import type { Scheduler, ScheduledTask, ScheduleOptions, AbortReason } from "../
 import type { AgentResult, AgentTaskState } from "../types/agent.js";
 import type { WorkflowEventType } from "../types/events.js";
 import { createLinkedAbortController } from "./cancellation.js";
+import { sanitizeMetadata } from "../security/metadata.js";
 
 export interface SchedulerConfig {
   concurrency: number;
@@ -87,7 +88,9 @@ export class DefaultScheduler implements Scheduler {
         label: task.label,
         provider: task.provider || options?.provider || "mock",
         model: task.model || options?.model,
-        state: "queued"
+        state: "queued",
+        permissions: task.permissions || { mode: "default" },
+        metadata: sanitizeMetadata(task.metadata)
       });
     }
 
@@ -133,7 +136,9 @@ export class DefaultScheduler implements Scheduler {
             name: "AgentTaskSkipped",
             message: abortMsg,
             code: "TASK_SKIPPED"
-          }
+          },
+          permissions: queuedTask.task.permissions || { mode: "default" },
+          metadata: sanitizeMetadata(queuedTask.task.metadata)
         });
       }
 
@@ -179,7 +184,9 @@ export class DefaultScheduler implements Scheduler {
           provider: internalTask.task.provider || internalTask.options?.provider || "mock",
           model: internalTask.task.model || internalTask.options?.model,
           cwd: internalTask.options?.cwd || process.cwd(),
-          state: "running"
+          state: "running",
+          permissions: internalTask.task.permissions || { mode: "default" },
+          metadata: sanitizeMetadata(internalTask.task.metadata)
         });
       }
 
@@ -194,7 +201,7 @@ export class DefaultScheduler implements Scheduler {
 
           let isSuccess = true;
           let agentStatus = "succeeded";
-          let agentResult: any = result;
+          const agentResult: any = result;
 
           if (agentResult && typeof agentResult === "object" && "ok" in agentResult) {
             isSuccess = agentResult.ok;
@@ -211,7 +218,9 @@ export class DefaultScheduler implements Scheduler {
                 status: "succeeded",
                 durationMs: Date.now() - startTime,
                 exitCode: agentResult?.exitCode ?? 0,
-                artifacts: agentResult?.artifacts ?? { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" }
+                artifacts: agentResult?.artifacts ?? { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
+                permissions: internalTask.task.permissions || { mode: "default" },
+                metadata: sanitizeMetadata(internalTask.task.metadata)
               });
             }
             internalTask.resolve(result);
@@ -232,7 +241,9 @@ export class DefaultScheduler implements Scheduler {
                 durationMs,
                 exitCode,
                 artifacts,
-                error
+                error,
+                permissions: internalTask.task.permissions || { mode: "default" },
+                metadata: sanitizeMetadata(internalTask.task.metadata)
               });
             }
 
@@ -280,24 +291,27 @@ export class DefaultScheduler implements Scheduler {
             exitCode: null,
             durationMs,
             artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
-            error: errorPayload
+            error: errorPayload,
+            permissions: internalTask.task.permissions || { mode: "default" }
           };
 
           this.completed.set(internalTask.task.id, failureResult);
 
-          if (this.eventSink) {
-            const eventName = isAbort ? "agent.cancelled" : "agent.failed";
-            this.eventSink.emit(eventName, {
-              agentId: internalTask.task.id,
-              label: internalTask.task.label,
-              provider: internalTask.task.provider || internalTask.options?.provider || "mock",
-              model: internalTask.task.model || internalTask.options?.model,
-              status,
-              durationMs,
-              exitCode: null,
-              error: errorPayload
-            });
-          }
+      if (this.eventSink) {
+        const eventName = isAbort ? "agent.cancelled" : "agent.failed";
+        this.eventSink.emit(eventName, {
+          agentId: internalTask.task.id,
+          label: internalTask.task.label,
+          provider: internalTask.task.provider || internalTask.options?.provider || "mock",
+          model: internalTask.task.model || internalTask.options?.model,
+          status,
+          durationMs,
+          exitCode: null,
+          error: errorPayload,
+          permissions: internalTask.task.permissions || { mode: "default" },
+          metadata: sanitizeMetadata(internalTask.task.metadata)
+        });
+      }
 
           internalTask.resolve(failureResult as any);
 
@@ -363,7 +377,8 @@ export class DefaultScheduler implements Scheduler {
         name: status === "skipped" ? "AgentTaskSkipped" : "AgentTaskCancelled",
         message: reasonMsg || `Task was ${status}`,
         code: status === "skipped" ? "TASK_SKIPPED" : "USER_CANCELLED"
-      }
+      },
+      permissions: task.permissions || { mode: "default" }
     };
     if (task.label !== undefined) {
       res.label = task.label;

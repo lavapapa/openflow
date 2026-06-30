@@ -15,20 +15,32 @@ vi.mock("../../../src/agents/registry.js", () => {
   };
 });
 
+vi.mock("../../../src/agents/process-runner.js", () => ({
+  runProcess: vi.fn().mockResolvedValue({
+    exitCode: 0,
+    timedOut: false,
+    cancelled: false
+  })
+}));
+
 describe("Model Events, Reports, and Artifacts", () => {
-  it("verbose pretty reporter prints provider/model when model is present", () => {
-    const writeMock = vi.fn();
+  it("pretty reporter prints provider/model when model is present in final layout", () => {
+    let stdoutData = "";
+    const writeMock = vi.fn((chunk) => { stdoutData += chunk.toString(); return true; });
     const mockStdout = { write: writeMock } as any;
-    const reporter = new PrettyReporter({ stdout: mockStdout } as any, { verbose: true });
+    const reporter = new PrettyReporter({ stdout: mockStdout } as any);
+
+    reporter.start({ meta: { name: "test-run" } } as any);
 
     reporter.handle({
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 1,
       timestamp: new Date().toISOString(),
       type: "agent.started",
       payload: {
         agentId: "agent-1",
+        label: "agent-1",
         provider: "mock",
         model: "gpt-4o",
         cwd: "/root",
@@ -36,10 +48,8 @@ describe("Model Events, Reports, and Artifacts", () => {
       }
     });
 
-    expect(writeMock).toHaveBeenCalledWith(expect.stringContaining("▶ agent-1 started [mock/gpt-4o]"));
-
     reporter.handle({
-      schemaVersion: "openflow.event.v1",
+      schemaVersion: "open-dynamic-workflow.event.v1",
       runId: "run-1",
       sequence: 2,
       timestamp: new Date().toISOString(),
@@ -55,30 +65,9 @@ describe("Model Events, Reports, and Artifacts", () => {
       }
     });
 
-    expect(writeMock).toHaveBeenCalledWith(expect.stringContaining("✓ agent-1 succeeded [mock/gpt-4o]"));
-  });
+    reporter.finish({ status: "succeeded", durationMs: 123, artifactsDir: "/tmp" } as any);
 
-  it("non-verbose pretty reporter prints only provider even if model is present", () => {
-    const writeMock = vi.fn();
-    const mockStdout = { write: writeMock } as any;
-    const reporter = new PrettyReporter({ stdout: mockStdout } as any, { verbose: false });
-
-    reporter.handle({
-      schemaVersion: "openflow.event.v1",
-      runId: "run-1",
-      sequence: 1,
-      timestamp: new Date().toISOString(),
-      type: "agent.started",
-      payload: {
-        agentId: "agent-1",
-        provider: "mock",
-        model: "gpt-4o",
-        cwd: "/root",
-        state: "running"
-      }
-    });
-
-    expect(writeMock).toHaveBeenCalledWith(expect.stringContaining("▶ agent-1 started [mock]"));
+    expect(stdoutData).toContain("✓ agent-1  mock/gpt-4o  0.1s");
   });
 
   it("DefaultAgentExecutor writes metadata.json containing model and source, and returns model in results", async () => {
@@ -120,7 +109,6 @@ describe("Model Events, Reports, and Artifacts", () => {
         security: {
           passEnv: [],
           redactEnv: [],
-          allowShell: false,
           allowWorkflowImports: false
         },
         reporting: {
@@ -137,14 +125,17 @@ describe("Model Events, Reports, and Artifacts", () => {
 
     const result = await executor.execute({
       id: "agent-test-run",
-      provider: "mock",
+      provider: "codex",
       prompt: "hello",
       model: "custom-resolved-model",
+      thinkingEffort: "medium",
       timeoutMs: 10000,
       cwd: "/root",
       metadata: {
-        modelResolutionSource: "cli"
+        modelResolutionSource: "cli",
+        thinkingEffortResolutionSource: "agent"
       },
+      permissions: { mode: "default" },
       signal: new AbortController().signal
     });
 
@@ -153,8 +144,13 @@ describe("Model Events, Reports, and Artifacts", () => {
 
     const metadata = writtenFiles.get("agents/agent-test-run/metadata.json");
     expect(metadata).toEqual({
+      modelResolutionSource: "cli",
+      thinkingEffortResolutionSource: "agent",
       model: "custom-resolved-model",
-      resolutionSource: "cli"
+      resolutionSource: "cli",
+      structuredOutputTransport: undefined,
+      permissions: { mode: "default" },
+      thinkingEffort: "medium"
     });
   });
 });

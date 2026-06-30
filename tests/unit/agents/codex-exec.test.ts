@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CodexExecAdapter } from "../../../src/agents/codex-exec.js";
 import type { AgentRunInput, ProviderParseInput } from "../../../src/agents/types.js";
 
@@ -11,7 +14,8 @@ describe("CodexExecAdapter", () => {
       prompt: "generate a test",
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -33,7 +37,8 @@ describe("CodexExecAdapter", () => {
       prompt: "generate a test",
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -57,7 +62,8 @@ describe("CodexExecAdapter", () => {
       },
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -82,7 +88,8 @@ describe("CodexExecAdapter", () => {
       structuredOutput: { transport: "validate-only" },
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -105,7 +112,8 @@ describe("CodexExecAdapter", () => {
       structuredOutput: { transport: "native" },
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     await expect(adapter.buildCommand(input)).rejects.toThrow(
@@ -125,7 +133,8 @@ describe("CodexExecAdapter", () => {
       prompt: "generate a test",
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -145,7 +154,8 @@ describe("CodexExecAdapter", () => {
       model: "custom-model-v2",
       cwd: "/root",
       timeoutMs: 1000,
-      env: { PATH: "/bin" }
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
     };
 
     const cmd = await adapter.buildCommand(input);
@@ -161,7 +171,8 @@ describe("CodexExecAdapter", () => {
         prompt: "test",
         cwd: "",
         timeoutMs: 1,
-        env: {}
+        env: {},
+        permissions: { mode: "default" }
       },
       stdout: '{"text": "hello from codex", "confidence": 0.9}',
       stderr: "",
@@ -177,7 +188,7 @@ describe("CodexExecAdapter", () => {
   it("parses JSON stdout with text field containing valid JSON", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: '{"text": "{\\"value\\": \\"hello\\"}", "confidence": 0.9}',
       stderr: "",
       exitCode: 0
@@ -198,7 +209,8 @@ describe("CodexExecAdapter", () => {
         prompt: "test",
         cwd: "",
         timeoutMs: 1,
-        env: {}
+        env: {},
+        permissions: { mode: "default" }
       },
       stdout: '{"status": "ok", "items": [1, 2]}',
       stderr: "",
@@ -220,7 +232,8 @@ describe("CodexExecAdapter", () => {
         prompt: "test",
         cwd: "",
         timeoutMs: 1,
-        env: {}
+        env: {},
+        permissions: { mode: "default" }
       },
       stdout: "some raw output text",
       stderr: "",
@@ -236,7 +249,7 @@ describe("CodexExecAdapter", () => {
   it("parses a JSONL event stream and returns the final plain-text agent_message.text", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         '{"type": "item.completed", "item": {"type": "agent_message", "text": "First plain message"}}',
@@ -267,7 +280,7 @@ describe("CodexExecAdapter", () => {
   it("parses a JSONL event stream and returns the last JSON-shaped agent_message.text as both text and json", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         '{"type": "item.completed", "item": {"type": "agent_message", "text": "{\\"result\\": \\"success\\"}"}}',
@@ -286,7 +299,7 @@ describe("CodexExecAdapter", () => {
   it("ignores non-message events such as thread.started, turn.started, command_execution, and turn.completed", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         '{"type": "turn.started"}',
@@ -306,7 +319,7 @@ describe("CodexExecAdapter", () => {
   it("prefers the last JSON-shaped agent_message.text when multiple agent messages exist", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         '{"type": "item.completed", "item": {"type": "agent_message", "text": "{\\"v\\": 1}"}}',
@@ -327,7 +340,7 @@ describe("CodexExecAdapter", () => {
   it("falls back to stdout with a warning when JSONL exists but no agent_message is present", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         '{"type": "turn.completed"}'
@@ -344,7 +357,7 @@ describe("CodexExecAdapter", () => {
   it("preserves warnings when one or more JSONL lines are malformed but other lines still parse", async () => {
     const adapter = new CodexExecAdapter();
     const parseInput: ProviderParseInput = {
-      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {} },
+      input: { id: "1", provider: "codex", prompt: "test", cwd: "", timeoutMs: 1, env: {}, permissions: { mode: "default" } },
       stdout: [
         '{"type": "thread.started"}',
         'this is a malformed json line',
@@ -369,5 +382,203 @@ describe("CodexExecAdapter", () => {
     expect(health.available).toBe(false);
     expect(health.command).toBe("missing-codex-binary-xyz");
     expect(health.message).toContain("is not available");
+  });
+
+  it("health check passes a safe env with PATH but without API keys", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-codex-health-"));
+    const command = join(dir, "health-check");
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "should-not-leak";
+
+    try {
+      await writeFile(
+        command,
+        [
+          "#!/usr/bin/env node",
+          "if (!process.env.PATH) { console.error('missing PATH'); process.exit(2); }",
+          "if (process.env.OPENAI_API_KEY) { console.error('secret leaked'); process.exit(3); }",
+          "process.exit(0);",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+      await chmod(command, 0o755);
+
+      const adapter = new CodexExecAdapter({ command });
+      const health = await adapter.checkHealth();
+
+      expect(health.available).toBe(true);
+    } finally {
+      if (previousOpenAiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousOpenAiKey;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not add write-capable flags when permissions are default or omitted", async () => {
+    const adapter = new CodexExecAdapter();
+    const input: AgentRunInput = {
+      id: "run-1",
+      provider: "codex",
+      prompt: "generate a test",
+      cwd: "/root",
+      timeoutMs: 1000,
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
+    };
+
+    const cmd = await adapter.buildCommand(input);
+    expect(cmd.args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+  });
+
+  it("adds --dangerously-bypass-approvals-and-sandbox when permissions.mode is dangerously-full-access", async () => {
+    const adapter = new CodexExecAdapter();
+    const input: AgentRunInput = {
+      id: "run-1",
+      provider: "codex",
+      prompt: "generate a test",
+      cwd: "/root",
+      timeoutMs: 1000,
+      env: { PATH: "/bin" },
+      permissions: { mode: "dangerously-full-access" }
+    };
+
+    const cmd = await adapter.buildCommand(input);
+    expect(cmd.args).toContain("--dangerously-bypass-approvals-and-sandbox");
+  });
+
+  it("health check passes a safe env with PATH but without API keys", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "open-dynamic-workflow-codex-health-"));
+    const command = join(dir, "health-check");
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "should-not-leak";
+
+    try {
+      await writeFile(
+        command,
+        [
+          "#!/usr/bin/env node",
+          "if (!process.env.PATH) { console.error('missing PATH'); process.exit(2); }",
+          "if (process.env.OPENAI_API_KEY) { console.error('secret leaked'); process.exit(3); }",
+          "process.exit(0);",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+      await chmod(command, 0o755);
+
+      const adapter = new CodexExecAdapter({ command });
+      const health = await adapter.checkHealth();
+
+      expect(health.available).toBe(true);
+    } finally {
+      if (previousOpenAiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousOpenAiKey;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not add write-capable flags when permissions are default or omitted", async () => {
+    const adapter = new CodexExecAdapter();
+    const input: AgentRunInput = {
+      id: "run-1",
+      provider: "codex",
+      prompt: "generate a test",
+      cwd: "/root",
+      timeoutMs: 1000,
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" }
+    };
+
+    const cmd = await adapter.buildCommand(input);
+    expect(cmd.args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+  });
+
+  it("adds --dangerously-bypass-approvals-and-sandbox when permissions.mode is dangerously-full-access", async () => {
+    const adapter = new CodexExecAdapter();
+    const input: AgentRunInput = {
+      id: "run-1",
+      provider: "codex",
+      prompt: "generate a test",
+      cwd: "/root",
+      timeoutMs: 1000,
+      env: { PATH: "/bin" },
+      permissions: { mode: "dangerously-full-access" }
+    };
+
+    const cmd = await adapter.buildCommand(input);
+    expect(cmd.args).toContain("--dangerously-bypass-approvals-and-sandbox");
+  });
+
+  it("adds thinking effort command arguments when thinkingEffort is specified", async () => {
+    const efforts = ["minimal", "low", "medium", "high"] as const;
+    for (const effort of efforts) {
+      const adapter = new CodexExecAdapter();
+      const input: AgentRunInput = {
+        id: "run-1",
+        provider: "codex",
+        prompt: "generate a test",
+        cwd: "/root",
+        timeoutMs: 1000,
+        env: { PATH: "/bin" },
+        permissions: { mode: "default" },
+        thinkingEffort: effort
+      };
+
+      const cmd = await adapter.buildCommand(input);
+      expect(cmd.args).toContain("-c");
+      expect(cmd.args).toContain(`model_reasoning_effort="${effort}"`);
+    }
+  });
+
+  it("throws THINKING_EFFORT_VALUE_UNSUPPORTED when thinkingEffort is off or xhigh", async () => {
+    const invalidEfforts = ["off", "xhigh"] as const;
+    for (const effort of invalidEfforts) {
+      const adapter = new CodexExecAdapter();
+      const input: AgentRunInput = {
+        id: "run-1",
+        provider: "codex",
+        prompt: "generate a test",
+        cwd: "/root",
+        timeoutMs: 1000,
+        env: { PATH: "/bin" },
+        permissions: { mode: "default" },
+        thinkingEffort: effort as any
+      };
+
+      await expect(adapter.buildCommand(input)).rejects.toThrow();
+    }
+  });
+
+  it("places explicit effort after conflicting base config args", async () => {
+    const adapter = new CodexExecAdapter({
+      args: ["exec", "-c", 'model_reasoning_effort="low"']
+    });
+    const input: AgentRunInput = {
+      id: "run-1",
+      provider: "codex",
+      prompt: "generate a test",
+      cwd: "/root",
+      timeoutMs: 1000,
+      env: { PATH: "/bin" },
+      permissions: { mode: "default" },
+      thinkingEffort: "high"
+    };
+
+    const cmd = await adapter.buildCommand(input);
+    const indices: number[] = [];
+    cmd.args.forEach((val, idx) => {
+      if (val === "-c") indices.push(idx);
+    });
+    expect(indices.length).toBe(2);
+    expect(cmd.args[indices[0] + 1]).toBe('model_reasoning_effort="low"');
+    expect(cmd.args[indices[1] + 1]).toBe('model_reasoning_effort="high"');
+    expect(indices[1]).toBeGreaterThan(indices[0]);
   });
 });

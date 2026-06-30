@@ -4,6 +4,8 @@ import { createLinkedAbortController } from "../orchestration/cancellation.js";
 import { serializeError } from "../errors/serialize.js";
 import { createPipelineAgentId } from "./id.js";
 import { createDsl } from "../workflow/dsl.js";
+import { withToolForbidden } from "../workflow/scope.js";
+import { getActiveWorkflowInvocation } from "../workflow/invocation-types.js";
 import {
   withActivePipelineContext,
   ActivePipelineContext
@@ -87,7 +89,11 @@ export async function runStage(input: RunStageInput): Promise<PipelineStageResul
         return;
       }
       if (runtime.eventSink) {
-        const payload: { message: string; data?: unknown } = { message };
+        const activeInvocation = getActiveWorkflowInvocation();
+        const payload: { message: string; data?: unknown; workflowInvocationId?: string } = { message };
+        if (activeInvocation) {
+          payload.workflowInvocationId = activeInvocation.workflowInvocationId;
+        }
         const pipelineMetadata = {
           pipelineId,
           itemIndex,
@@ -149,7 +155,9 @@ export async function runStage(input: RunStageInput): Promise<PipelineStageResul
       });
 
       const executionPromise = withActivePipelineContext(activeCtx, async () => {
-        return await stage.run(item, stageContext);
+        return withToolForbidden("pipeline-stage", async () => {
+          return await stage.run(item, stageContext);
+        });
       });
 
       value = await Promise.race([executionPromise, abortPromise]);

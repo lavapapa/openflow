@@ -1,7 +1,9 @@
-export type JsonObject = Record<string, unknown>;
-export type JsonSchema = Record<string, unknown>;
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonSchema = JsonObject;
 
-export type ProviderName = "mock" | "codex" | "gemini" | string;
+export type ProviderName = "mock" | "codex" | "gemini" | "copilot" | "opencode" | "antigravity" | "pi" | string;
 
 export type ReporterMode = "pretty" | "json" | "jsonl";
 

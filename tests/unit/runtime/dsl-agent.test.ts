@@ -5,6 +5,7 @@ import type { RuntimeState } from "../../../src/workflow/types.js";
 import type { ParsedWorkflow } from "../../../src/types/workflow.js";
 import type { ResolvedConfig } from "../../../src/types/config.js";
 import type { AgentResult } from "../../../src/types/agent.js";
+import { computeAgentFingerprint } from "../../../src/artifacts/call-cache.js";
 
 // ---- Helpers ----
 
@@ -28,7 +29,8 @@ function makeSuccessResult(id: string, provider = "mock"): AgentResult {
     stderr: "",
     exitCode: 0,
     durationMs: 5,
-    artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" }
+    artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
+    permissions: { mode: "default" }
   };
 }
 
@@ -43,7 +45,8 @@ function makeFailureResult(id: string, provider = "mock"): AgentResult {
     exitCode: 1,
     durationMs: 5,
     artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
-    error: { name: "AgentFailure", message: "Agent failed", code: "PROVIDER_PROCESS_FAILED" }
+    error: { name: "AgentFailure", message: "Agent failed", code: "PROVIDER_PROCESS_FAILED" },
+    permissions: { mode: "default" }
   };
 }
 
@@ -93,10 +96,10 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     concurrency: 1,
     timeoutMs: 30000,
     providers: {},
-    security: { allowShell: false, allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+    security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
     reporting: { mode: "pretty", verbose: false },
     cwd: "/workspace",
-    outDir: "/workspace/.openflow/runs",
+    outDir: "/workspace/.open-dynamic-workflow/runs",
     cliArgs: {}
   };
 
@@ -106,7 +109,7 @@ function makeRuntimeState(overrides: Partial<RuntimeState> = {}): RuntimeState {
     config,
     args: {},
     cwd: "/workspace",
-    artifactsDir: "/workspace/.openflow/runs/run-test-1",
+    artifactsDir: "/workspace/.open-dynamic-workflow/runs/run-test-1",
     agentResults: [],
     scheduler: makeSchedulerWithResult(makeSuccessResult("agent-1")) as any,
     agentExecutor: { execute: vi.fn() },
@@ -151,6 +154,15 @@ describe("DSL: agent()", () => {
     await expect(dsl.agent({} as any)).rejects.toThrow(InvalidDslCallError);
   });
 
+  it("agent({ definition: 'x' }) does not hit direct prompt validation branch", async () => {
+    const runtime = makeRuntimeState();
+    const dsl = createDsl(runtime);
+
+    // If it hit direct validation, it would throw InvalidDslCallError("agent() requires a non-empty prompt string.")
+    // Instead it hits the shared-agent branch and throws about missing registry
+    await expect(dsl.agent({ definition: "x" })).rejects.toThrow(/Shared agent registry is not available/);
+  });
+
   it("missing input throws InvalidDslCallError", async () => {
     const runtime = makeRuntimeState();
     const dsl = createDsl(runtime);
@@ -181,10 +193,10 @@ describe("DSL: agent()", () => {
         concurrency: 1,
         timeoutMs: 30000,
         providers: {},
-        security: { allowShell: false, allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+        security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
         reporting: { mode: "pretty", verbose: false },
         cwd: "/workspace",
-        outDir: "/workspace/.openflow/runs",
+        outDir: "/workspace/.open-dynamic-workflow/runs",
         cliArgs: {}
       }
     });
@@ -218,6 +230,81 @@ describe("DSL: agent()", () => {
         structuredOutput: { transport: "prompt" }
       })
     );
+  });
+
+  it("passes provider-neutral skills, context, workspace, and handoff through to execution", async () => {
+    const agentExecutor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+    const scheduler = makeExecutingScheduler();
+    const runtime = makeRuntimeState({
+      scheduler: scheduler as any,
+      agentExecutor: agentExecutor as any
+    });
+    const dsl = createDsl(runtime);
+
+    await dsl.agent({
+      id: "agent-1",
+      prompt: "review",
+      skills: ["skills/review/SKILL.md"],
+      context: {
+        files: ["input/paper.md"],
+        handoff: ["working/upstream.md"],
+        notes: "Use upstream reviewer notes."
+      },
+      workspace: {
+        cwd: "work/session-1",
+        mode: "shared"
+      },
+      handoff: {
+        writeTo: "working/review.md",
+        instructions: "Write a concise handoff.",
+        required: true
+      }
+    });
+
+    expect(agentExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/workspace/work/session-1",
+        skills: ["skills/review/SKILL.md"],
+        context: {
+          files: ["input/paper.md"],
+          handoff: ["working/upstream.md"],
+          notes: "Use upstream reviewer notes."
+        },
+        workspace: {
+          cwd: "/workspace/work/session-1",
+          mode: "shared"
+        },
+        handoff: {
+          writeTo: "working/review.md",
+          instructions: "Write a concise handoff.",
+          required: true
+        }
+      })
+    );
+  });
+
+  it("rejects expectedOutputs because handoff is the supported soft contract", async () => {
+    const runtime = makeRuntimeState();
+    const dsl = createDsl(runtime);
+
+    await expect(
+      dsl.agent({
+        prompt: "hello",
+        expectedOutputs: ["report.md"]
+      } as any)
+    ).rejects.toThrow("expectedOutputs");
+  });
+
+  it("rejects invalid agent workspace and handoff fields", async () => {
+    const runtime = makeRuntimeState();
+    const dsl = createDsl(runtime);
+
+    await expect(dsl.agent({ prompt: "hello", workspace: { mode: "remote" } } as any))
+      .rejects.toThrow("workspace.mode");
+    await expect(dsl.agent({ prompt: "hello", workspace: { cwd: "" } } as any))
+      .rejects.toThrow("workspace.cwd");
+    await expect(dsl.agent({ prompt: "hello", handoff: { required: "yes" } } as any))
+      .rejects.toThrow("handoff.required");
   });
 
   it("uses explicit provider over config default", async () => {
@@ -256,10 +343,10 @@ describe("DSL: agent()", () => {
         concurrency: 1,
         timeoutMs: 45000,
         providers: {},
-        security: { allowShell: false, allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+        security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
         reporting: { mode: "pretty", verbose: false },
         cwd: "/workspace",
-        outDir: "/workspace/.openflow/runs",
+        outDir: "/workspace/.open-dynamic-workflow/runs",
         cliArgs: {}
       }
     });
@@ -385,5 +472,396 @@ describe("DSL: agent()", () => {
     expect(ids).toContain("agent-1");
     expect(ids).toContain("agent-2");
     expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  describe("agent() permissions validation and normalization", () => {
+    it("accepts permissions: { mode: 'dangerously-full-access' }", async () => {
+      const scheduler = makeSchedulerWithResult(makeSuccessResult("agent-1"));
+      const runtime = makeRuntimeState({ scheduler: scheduler as any });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello",
+        permissions: { mode: "dangerously-full-access" }
+      });
+
+      expect(scheduler.schedule).toHaveBeenCalledTimes(1);
+      const task = scheduler.schedule.mock.calls[0]![0];
+      expect(task.permissions).toEqual({ mode: "dangerously-full-access" });
+    });
+
+    it("normalizes omitted permissions to { mode: 'default' }", async () => {
+      const scheduler = makeSchedulerWithResult(makeSuccessResult("agent-1"));
+      const runtime = makeRuntimeState({ scheduler: scheduler as any });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({ prompt: "hello" });
+
+      expect(scheduler.schedule).toHaveBeenCalledTimes(1);
+      const task = scheduler.schedule.mock.calls[0]![0];
+      expect(task.permissions).toEqual({ mode: "default" });
+    });
+
+    it("rejects non-object permissions", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        permissions: "dangerously-full-access" as any
+      })).rejects.toThrow("agent() permissions must be an object.");
+    });
+
+    it("rejects array permissions", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        permissions: [{ mode: "dangerously-full-access" }] as any
+      })).rejects.toThrow("agent() permissions must be an object.");
+    });
+
+    it("rejects missing mode property", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        permissions: {} as any
+      })).rejects.toThrow("agent() permissions must include a 'mode' property.");
+    });
+
+    it("rejects invalid mode value", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        permissions: { mode: "yolo" } as any
+      })).rejects.toThrow("agent() permissions.mode must be 'dangerously-full-access'.");
+    });
+
+    it("rejects extra keys in permissions object", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        permissions: { mode: "dangerously-full-access", approval: "never" } as any
+      })).rejects.toThrow("agent() permissions object cannot contain extra keys.");
+    });
+
+    it("passes resolved permissions to the executor input", async () => {
+      const executor = {
+        execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1"))
+      };
+      const scheduler = makeExecutingScheduler();
+      const runtime = makeRuntimeState({
+        scheduler: scheduler as any,
+        agentExecutor: executor as any
+      });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello",
+        permissions: { mode: "dangerously-full-access" }
+      });
+
+      expect(executor.execute).toHaveBeenCalledTimes(1);
+      const execInput = executor.execute.mock.calls[0]![0];
+      expect(execInput.permissions).toEqual({ mode: "dangerously-full-access" });
+    });
+  });
+
+  describe("agent() cache integration", () => {
+    it("returns a materialized result on cache hit and emits agent.cache_hit", async () => {
+      const runRoot = "/workspace/.open-dynamic-workflow/runs/prev-run";
+      const fingerprint = computeAgentFingerprint({
+        call: { id: "call-1", prompt: "hello" },
+        provider: "mock",
+        model: undefined,
+        timeoutMs: 30000,
+        cwd: "/workspace",
+        providerConfig: undefined
+      });
+
+      const cache = {
+        readEnabled: true,
+        previousRunRoot: runRoot,
+        previousRunId: "prev-run",
+        previousEntries: new Map([[1, {
+          kind: "agent",
+          sequence: 1,
+          callId: "call-1",
+          fingerprint,
+          status: "succeeded",
+          resultPath: "agents/old/normalized-result.json",
+          agentId: "old-agent"
+        }]]),
+        prefixCacheUsable: true,
+        currentEntries: []
+      };
+
+      const artifactStore = {
+        getRunArtifacts: () => ({ rootDir: "/workspace/.open-dynamic-workflow/runs/new-run" }),
+        isRunCreated: () => true,
+        writeText: vi.fn(),
+        writeJson: vi.fn(),
+        appendJsonl: vi.fn()
+      };
+
+      const runtime = makeRuntimeState({
+        callCache: cache as any,
+        artifactStore: artifactStore as any,
+        callSequence: 0
+      });
+
+      // Mock fs read for materializeCachedAgentResult
+      vi.mock("node:fs/promises", async (importActual) => {
+        const actual = await importActual<any>();
+        return {
+          ...actual,
+          readFile: vi.fn().mockResolvedValue(JSON.stringify({ some: "result" }))
+        };
+      });
+
+      const dsl = createDsl(runtime);
+      const result = await dsl.agent({ id: "call-1", prompt: "hello" });
+
+      expect(result.ok).toBe(true);
+      expect(result.cache).toBeUndefined();
+      expect(runtime.scheduler.schedule).not.toHaveBeenCalled();
+
+      expect(artifactStore.writeJson).toHaveBeenCalledWith(
+        "agents/call-1/agent-result.json",
+        expect.objectContaining({
+          cache: expect.objectContaining({ hit: true })
+        })
+      );
+      
+      const hitEvent = runtime.eventSink.events.find(e => e.type === "agent.cache_hit");
+      expect(hitEvent).toBeDefined();
+      expect(hitEvent?.payload).toMatchObject({ agentId: result.id, callId: "call-1" });
+    });
+
+    it("falls back to scheduler on cache miss and records the call", async () => {
+      const cache = {
+        readEnabled: true,
+        previousEntries: new Map(),
+        prefixCacheUsable: true,
+        currentEntries: [],
+        writeIndex: true
+      };
+
+      const artifactStore = {
+        getRunArtifacts: () => ({ rootDir: "/workspace/.open-dynamic-workflow/runs/new-run" }),
+        isRunCreated: () => true,
+        writeText: vi.fn(),
+        writeJson: vi.fn(),
+        appendJsonl: vi.fn()
+      };
+
+      const runtime = makeRuntimeState({
+        callCache: cache as any,
+        artifactStore: artifactStore as any,
+        callSequence: 0
+      });
+
+      const dsl = createDsl(runtime);
+      await dsl.agent({ prompt: "hello" });
+
+      expect(runtime.scheduler.schedule).toHaveBeenCalledTimes(1);
+      expect(artifactStore.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
+        sequence: 1,
+        status: "succeeded"
+      }));
+    });
+
+    it("disables future cache hits after the first mismatch", async () => {
+      const cache = {
+        readEnabled: true,
+        previousEntries: new Map([[1, { sequence: 1, fingerprint: "mismatch", status: "succeeded" }]]),
+        prefixCacheUsable: true,
+        currentEntries: []
+      };
+
+      const runtime = makeRuntimeState({
+        callCache: cache as any,
+        callSequence: 0
+      });
+
+      const dsl = createDsl(runtime);
+      
+      // First call is a miss due to fingerprint mismatch
+      await dsl.agent({ prompt: "hello" });
+      expect(cache.prefixCacheUsable).toBe(false);
+
+      // Second call would have matched sequence 2 but prefix is now unusable
+      cache.previousEntries.set(2, { sequence: 2, fingerprint: "fp2", status: "succeeded" } as any);
+      // Manually compute fingerprint for comparison if needed, but here we just check prefixCacheUsable
+      
+      await dsl.agent({ prompt: "hello 2" });
+      expect(runtime.scheduler.schedule).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("agent() thinkingEffort resolution and validation", () => {
+    it("rejects invalid dynamic effort values at runtime", async () => {
+      const runtime = makeRuntimeState();
+      const dsl = createDsl(runtime);
+
+      await expect(dsl.agent({
+        prompt: "hello",
+        thinkingEffort: "ultra-high" as any
+      })).rejects.toThrow("agent() thinkingEffort must be one of");
+    });
+
+    it("verifies per-agent wins over CLI and provider default", async () => {
+      const executor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+      const scheduler = makeExecutingScheduler();
+      const runtime = makeRuntimeState({
+        scheduler: scheduler as any,
+        agentExecutor: executor as any,
+        cli: {
+          thinkingEffort: "low"
+        } as any,
+        config: {
+          defaultProvider: "mock",
+          concurrency: 1,
+          timeoutMs: 30000,
+          providers: {
+            mock: {
+              command: "mock",
+              defaultModel: null,
+              defaultThinkingEffort: "medium"
+            }
+          },
+          security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+          reporting: { mode: "pretty", verbose: false },
+          cwd: "/workspace",
+          outDir: "/workspace/.open-dynamic-workflow/runs",
+          cliArgs: {}
+        }
+      });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello",
+        thinkingEffort: "high"
+      });
+
+      expect(executor.execute).toHaveBeenCalledTimes(1);
+      const execInput = executor.execute.mock.calls[0]![0];
+      expect(execInput.thinkingEffort).toBe("high");
+      expect(execInput.metadata?.thinkingEffortResolutionSource).toBe("agent");
+    });
+
+    it("verifies CLI wins over provider default when agent effort is omitted", async () => {
+      const executor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+      const scheduler = makeExecutingScheduler();
+      const runtime = makeRuntimeState({
+        scheduler: scheduler as any,
+        agentExecutor: executor as any,
+        cli: {
+          thinkingEffort: "low"
+        } as any,
+        config: {
+          defaultProvider: "mock",
+          concurrency: 1,
+          timeoutMs: 30000,
+          providers: {
+            mock: {
+              command: "mock",
+              defaultModel: null,
+              defaultThinkingEffort: "medium"
+            }
+          },
+          security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+          reporting: { mode: "pretty", verbose: false },
+          cwd: "/workspace",
+          outDir: "/workspace/.open-dynamic-workflow/runs",
+          cliArgs: {}
+        }
+      });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello"
+      });
+
+      expect(executor.execute).toHaveBeenCalledTimes(1);
+      const execInput = executor.execute.mock.calls[0]![0];
+      expect(execInput.thinkingEffort).toBe("low");
+      expect(execInput.metadata?.thinkingEffortResolutionSource).toBe("cli");
+    });
+
+    it("verifies provider default is used when higher levels are omitted", async () => {
+      const executor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+      const scheduler = makeExecutingScheduler();
+      const runtime = makeRuntimeState({
+        scheduler: scheduler as any,
+        agentExecutor: executor as any,
+        cli: {} as any,
+        config: {
+          defaultProvider: "mock",
+          concurrency: 1,
+          timeoutMs: 30000,
+          providers: {
+            mock: {
+              command: "mock",
+              defaultModel: null,
+              defaultThinkingEffort: "medium"
+            }
+          },
+          security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+          reporting: { mode: "pretty", verbose: false },
+          cwd: "/workspace",
+          outDir: "/workspace/.open-dynamic-workflow/runs",
+          cliArgs: {}
+        }
+      });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello"
+      });
+
+      expect(executor.execute).toHaveBeenCalledTimes(1);
+      const execInput = executor.execute.mock.calls[0]![0];
+      expect(execInput.thinkingEffort).toBe("medium");
+      expect(execInput.metadata?.thinkingEffortResolutionSource).toBe("provider-default");
+    });
+
+    it("verifies omission leaves thinkingEffort undefined and source provider-cli-default", async () => {
+      const executor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+      const scheduler = makeExecutingScheduler();
+      const runtime = makeRuntimeState({
+        scheduler: scheduler as any,
+        agentExecutor: executor as any,
+        cli: {} as any,
+        config: {
+          defaultProvider: "mock",
+          concurrency: 1,
+          timeoutMs: 30000,
+          providers: {},
+          security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+          reporting: { mode: "pretty", verbose: false },
+          cwd: "/workspace",
+          outDir: "/workspace/.open-dynamic-workflow/runs",
+          cliArgs: {}
+        }
+      });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello"
+      });
+
+      expect(executor.execute).toHaveBeenCalledTimes(1);
+      const execInput = executor.execute.mock.calls[0]![0];
+      expect(execInput.thinkingEffort).toBeUndefined();
+      expect(execInput.metadata?.thinkingEffortResolutionSource).toBe("provider-cli-default");
+    });
   });
 });

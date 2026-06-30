@@ -1,4 +1,6 @@
 import type { JsonObject, ProviderName, ReporterMode } from "./common.js";
+import type { ThinkingEffort } from "./thinking-effort.js";
+
 
 export interface ProviderModelArgConfig {
   flag: string;
@@ -12,6 +14,48 @@ export interface ProviderConfig {
   timeoutMs?: number;
   env?: Record<string, string>;
   mock?: MockProviderConfig;
+  promptMode?: "stdin" | "arg";
+  promptFlag?: string;
+  modelFlag?: string;
+  sandboxFlag?: string;
+  dangerouslySkipPermissionsFlag?: string;
+  useSandboxByDefault?: boolean;
+  permissionPolicy?: string;
+  printTimeoutFlag?: string;
+  agentFlag?: string;
+  dirFlag?: string | false;
+  formatFlag?: string;
+  format?: string;
+  variantFlag?: string;
+  defaultAgent?: string;
+  defaultVariant?: string;
+  piProvider?: string;
+  providerFlag?: string;
+  executionMode?: string;
+  approvalMode?: string;
+  safeTools?: string[];
+  fullAccessTools?: string[];
+  thinking?: string;
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  apiKey?: string;
+  apiKeyEnv?: string;
+  baseUrl?: string;
+  api?: string;
+  agentDir?: string;
+  deterministicEnv?: boolean;
+  noSession?: boolean;
+  noContextFiles?: boolean;
+  noExtensions?: boolean;
+  noSkills?: boolean;
+  noPromptTemplates?: boolean;
+  noThemes?: boolean;
+  compaction?: boolean;
+  retry?: boolean;
+  tools?: string[];
+  excludeTools?: string[];
+  maxContextChars?: number;
+  defaultThinkingEffort?: ThinkingEffort | undefined;
 }
 
 export interface MockProviderConfig {
@@ -31,7 +75,6 @@ export interface MockProviderResponse {
 }
 
 export interface SecurityConfig {
-  allowShell: false;
   allowWorkflowImports: false;
   passEnv: string[];
   redactEnv: string[];
@@ -42,18 +85,43 @@ export interface ReportingConfig {
   verbose: boolean;
 }
 
-export interface OpenFlowConfig {
+export interface SharedAgentsConfig {
+  dir: string;
+  allowDynamicIds: false;
+  maxDefinitions: number;
+  strictPromptTemplateVariables: boolean;
+}
+
+export interface WorkflowDiscoveryConfig {
+  include: string[];
+}
+
+export interface WorkflowConfig {
+  discovery: WorkflowDiscoveryConfig;
+  maxDepth: number;
+  maxLoopRounds: number;
+}
+
+export interface OrchestrationConfig {
+  concurrency?: number;
+}
+
+export interface OpenDynamicWorkflowConfig {
   defaultProvider: ProviderName;
   concurrency: number;
   timeoutMs: number;
+  maxAgentCalls?: number | undefined;
   defaultModel?: string | null;
   failFast?: boolean;
   providers: Record<string, ProviderConfig>;
   security: SecurityConfig;
   reporting: ReportingConfig;
+  sharedAgents: SharedAgentsConfig;
+  workflow: WorkflowConfig;
+  orchestration?: OrchestrationConfig;
 }
 
-export interface ResolvedConfig extends OpenFlowConfig {
+export interface ResolvedConfig extends OpenDynamicWorkflowConfig {
   cwd: string;
   outDir: string;
   configPath?: string;
@@ -71,7 +139,11 @@ export interface CliRunOptions {
   report?: ReporterMode;
   concurrency?: number;
   timeoutMs?: number;
+  maxAgentCalls?: number | undefined;
+  resume?: string;
+  noCache?: boolean;
   dryRun: boolean;
   failFast: boolean;
   verbose: boolean;
+  thinkingEffort?: ThinkingEffort | undefined;
 }

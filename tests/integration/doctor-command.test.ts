@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { main } from "../../src/cli/index.js";
 
-const TEMP_DIR = path.resolve("tests/temp-tc-10");
+const TEMP_DIR = path.resolve("tests/temp-doctor-integration");
 
 async function runCli(args: string[]) {
   const stdoutData: string[] = [];
@@ -26,7 +26,7 @@ async function runCli(args: string[]) {
 
   let error: any = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -43,7 +43,7 @@ async function runCli(args: string[]) {
   };
 }
 
-describe("openflow doctor", () => {
+describe("open-dynamic-workflow doctor", () => {
   beforeEach(async () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
     await fs.mkdir(TEMP_DIR, { recursive: true });
@@ -53,69 +53,78 @@ describe("openflow doctor", () => {
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
 
-  it("Doctor reports missing Codex CLI", async () => {
-    const configPath = path.join(TEMP_DIR, "tc-10.01.config.yaml");
+  it("64. Doctor succeeds when optional built-in provider CLIs are missing and default provider is mock", async () => {
+    // Arrange
+    const configPath = path.join(TEMP_DIR, "case-64.config.yaml");
     await fs.writeFile(configPath, `
 defaultProvider: mock
 providers:
-  codex:
-    command: /path/to/bogus/codex
+  codex: { command: /bogus/codex }
+  gemini: { command: /bogus/gemini }
+  opencode: { command: /bogus/opencode }
+  antigravity: { command: /bogus/agy }
+  pi: { command: /bogus/pi }
+  copilot: { command: /bogus/copilot }
 `);
 
-    const result = await runCli([
-      "doctor",
-      "--config", configPath
-    ]);
+    // Act
+    const result = await runCli(["doctor", "--config", configPath]);
 
-    expect(result.error).toBeDefined();
-    expect(result.error.code).toBe("PROVIDER_UNAVAILABLE");
-
-    // Output contains codex: Unavailable or similar
-    expect(result.stdout).toContain("✕ codex");
-    expect(result.stdout).toMatch(/unavailable/i);
-    expect(result.stdout).toContain("Command '/path/to/bogus/codex' is not available");
+    // Assert
+    expect(result.error).toBeNull();
+    expect(result.stdout).toContain("available"); // mock
+    expect(result.stdout).toContain("✕ opencode");
+    expect(result.stdout).toContain("✕ antigravity");
+    expect(result.stdout).toContain("✕ pi");
+    expect(result.stdout).toContain("✕ copilot");
   });
 
-  it("Doctor reports missing Gemini CLI", async () => {
-    const configPath = path.join(TEMP_DIR, "tc-10.02.config.yaml");
+  it("65. Doctor fails when configured default provider is unavailable", async () => {
+    // Arrange
+    const providers = ["codex", "gemini", "opencode", "antigravity", "pi", "copilot"];
+
+    for (const provider of providers) {
+      const configPath = path.join(TEMP_DIR, `case-65-${provider}.config.yaml`);
+      await fs.writeFile(configPath, `
+defaultProvider: ${provider}
+providers:
+  codex: { command: /bogus/codex }
+  gemini: { command: /bogus/gemini }
+  opencode: { command: /bogus/opencode }
+  antigravity: { command: /bogus/agy }
+  pi: { command: /bogus/pi }
+  copilot: { command: /bogus/copilot }
+`);
+
+      // Act
+      const result = await runCli(["doctor", "--config", configPath]);
+
+      // Assert
+      expect(result.error).toBeDefined();
+      expect(result.error.code).toBe("PROVIDER_UNAVAILABLE");
+      expect(result.stdout).toContain(`✕ ${provider}`);
+    }
+  }, 15000);
+
+  it("66. Doctor still succeeds when all required providers are available", async () => {
+    // Arrange
+    const configPath = path.join(TEMP_DIR, "case-66.config.yaml");
     await fs.writeFile(configPath, `
 defaultProvider: mock
 providers:
-  gemini:
-    command: /path/to/bogus/gemini
+  opencode: { command: "true" }
+  antigravity: { command: "true" }
+  pi: { command: "true" }
+  codex: { command: /bogus/codex }
+  gemini: { command: /bogus/gemini }
+  copilot: { command: /bogus/copilot }
 `);
 
-    const result = await runCli([
-      "doctor",
-      "--config", configPath
-    ]);
+    // Act
+    const result = await runCli(["doctor", "--config", configPath]);
 
-    expect(result.error).toBeDefined();
-    expect(result.error.code).toBe("PROVIDER_UNAVAILABLE");
-
-    expect(result.stdout).toContain("✕ gemini");
-    expect(result.stdout).toMatch(/unavailable/i);
-    expect(result.stdout).toContain("Command '/path/to/bogus/gemini' is not available");
-  });
-
-  it("Doctor succeeds with mock provider only", async () => {
-    const configPath = path.join(TEMP_DIR, "tc-10.03.config.yaml");
-    await fs.writeFile(configPath, `
-defaultProvider: mock
-providers:
-  codex:
-    command: "true"
-  gemini:
-    command: "true"
-`);
-
-    const result = await runCli([
-      "doctor",
-      "--config", configPath
-    ]);
-
+    // Assert
     expect(result.error).toBeNull();
     expect(result.stdout).toContain("mock");
-    expect(result.stdout).toContain("available");
   });
 });

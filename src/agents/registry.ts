@@ -2,7 +2,16 @@ import type { AgentAdapter, ResolvedConfig, MockProviderConfig } from "./types.j
 import { MockAdapter } from "./mock-adapter.js";
 import { CodexExecAdapter } from "./codex-exec.js";
 import { GeminiCliAdapter } from "./gemini-cli.js";
-import { OpenFlowError } from "../errors/types.js";
+import {
+  GitHubCopilotCliAdapter,
+  type GitHubCopilotProviderConfig
+} from "./github-copilot-cli.js";
+import { OpenCodeCliAdapter, type OpenCodeProviderConfig } from "./opencode-cli.js";
+import { AntigravityCliAdapter, type AntigravityProviderConfig } from "./antigravity-cli.js";
+import { PiCodingAgentAdapter, type PiCodingAgentProviderConfig } from "./pi-coding-agent.js";
+import { PiSdkAgentAdapter, type PiSdkAgentProviderConfig } from "./pi-sdk-agent.js";
+import { CursorAgentAdapter, type CursorAgentProviderConfig } from "./cursor-agent.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export class ProviderRegistry {
@@ -18,7 +27,7 @@ export class ProviderRegistry {
   get(provider: string): AgentAdapter {
     const adapter = this.adapters.get(provider);
     if (!adapter) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.PROVIDER_UNAVAILABLE,
         `Unknown provider: ${provider}`
       );
@@ -47,6 +56,14 @@ export function createDefaultProviderRegistry(deps: RegistryDeps): ProviderRegis
   registry.register(new MockAdapter(mockConfig));
   registry.register(new CodexExecAdapter(deps.config.providers["codex"]));
   registry.register(new GeminiCliAdapter(deps.config.providers["gemini"]));
+  registry.register(new GitHubCopilotCliAdapter(
+    deps.config.providers["copilot"] as GitHubCopilotProviderConfig
+  ));
+  registry.register(new OpenCodeCliAdapter(deps.config.providers["opencode"] as OpenCodeProviderConfig));
+  registry.register(new AntigravityCliAdapter(deps.config.providers["antigravity"] as AntigravityProviderConfig));
+  registry.register(new PiCodingAgentAdapter(deps.config.providers["pi"] as PiCodingAgentProviderConfig));
+  registry.register(new PiSdkAgentAdapter(deps.config.providers["pi-sdk"] as PiSdkAgentProviderConfig | undefined));
+  registry.register(new CursorAgentAdapter(deps.config.providers["cursor"] as CursorAgentProviderConfig | undefined));
   
   return registry;
 }

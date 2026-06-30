@@ -10,7 +10,7 @@ export class InvalidDslCallError extends Error {
 export class RuntimeExecutionError extends Error {
   readonly code = "RUNTIME_EXECUTION_ERROR";
   constructor(message: string, options?: { cause?: unknown }) {
-    super(message);
+    super(message, options);
     this.name = "RuntimeExecutionError";
     Object.setPrototypeOf(this, new.target.prototype);
   }

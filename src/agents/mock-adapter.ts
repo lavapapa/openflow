@@ -9,7 +9,7 @@ import type {
   MockProviderResponse
 } from "./types.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export class MockAdapter implements AgentAdapter {
@@ -35,7 +35,7 @@ export class MockAdapter implements AgentAdapter {
       structuredOutput: input.structuredOutput
     });
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'Mock provider does not support structuredOutput.transport="native" yet.'
       );

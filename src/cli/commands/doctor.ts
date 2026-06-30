@@ -1,10 +1,12 @@
 import { ErrorCode } from "../../errors/codes.js";
-import { OpenFlowError } from "../../errors/types.js";
+import { OpenDynamicWorkflowError } from "../../errors/types.js";
 import { loadConfig } from "../../config/load.js";
+import { loadToolRegistry } from "../../tools/load.js";
 import type { ProviderHealthChecker, DoctorResult } from "../../doctors/public.js";
 import { createDefaultProviderRegistry } from "../../agents/registry.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getPackageVersion } from "../package-info.js";
 
 export interface DoctorCommandDeps {
   providerHealthChecker: ProviderHealthChecker;
@@ -35,7 +37,7 @@ const defaultProviderHealthChecker: ProviderHealthChecker = {
         defaultModel,
         supportsModelSelection: health.supportsModelSelection !== false
       });
-      if (!health.available) {
+      if (!health.available && adapter.name === config.defaultProvider) {
         ok = false;
       }
     }
@@ -43,11 +45,21 @@ const defaultProviderHealthChecker: ProviderHealthChecker = {
   }
 };
 
+function formatToolRegistryError(err: unknown): string {
+  if (err instanceof OpenDynamicWorkflowError) {
+    return `${err.code}: ${err.message}`;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}
+
 export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
   const rawOptions = input.rawOptions || {};
   const cwd = rawOptions.cwd ?? process.cwd();
 
-  console.log("openflow doctor\n");
+  console.log("open-dynamic-workflow doctor\n");
 
   // Node.js >= 20 check
   const nodeVersion = process.version;
@@ -58,27 +70,23 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
     console.log(`✕ Node.js version is ${nodeVersion}, expected >= 20`);
   }
 
-  // openflow package version check
-  console.log("✓ openflow 0.1.1");
+  // open-dynamic-workflow package version check
+  console.log(`✓ open-dynamic-workflow ${await getPackageVersion()}`);
 
   // current working directory is writable check
-  let isCwdWritable = false;
   try {
     await fs.access(cwd, fs.constants.W_OK);
-    isCwdWritable = true;
     console.log("✓ Current directory writable");
   } catch {
     console.log("✕ Current directory not writable");
   }
 
-  // .openflow/runs can be created or accessed check
-  const runsDir = path.resolve(cwd, ".openflow/runs");
-  let runsDirOk = false;
+  // .open-dynamic-workflow/runs can be created or accessed check
+  const runsDir = path.resolve(cwd, ".open-dynamic-workflow/runs");
   try {
     await fs.mkdir(runsDir, { recursive: true });
     await fs.access(runsDir, fs.constants.W_OK);
-    runsDirOk = true;
-    console.log(`✓ Artifact directory available: .openflow/runs`);
+    console.log(`✓ Artifact directory available: .open-dynamic-workflow/runs`);
   } catch {
     console.log("✕ Artifact directory unavailable");
   }
@@ -91,6 +99,19 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
       verbose: rawOptions.verbose !== undefined ? !!rawOptions.verbose : undefined
     }
   });
+
+  // Load tool registry
+  try {
+    const toolRegistry = await loadToolRegistry({
+      cwd: config.cwd,
+      dir: config.tools?.dir,
+      maxDefinitions: config.tools?.maxDefinitions ?? 100
+    });
+    const toolCount = toolRegistry.list().length;
+    console.log(`✓ Tool registry loaded (${toolCount} tools)`);
+  } catch (err: any) {
+    console.log(`✕ Tool registry failed to load: ${formatToolRegistryError(err)}`);
+  }
 
   const checker = input.deps?.providerHealthChecker ?? defaultProviderHealthChecker;
   const result = await checker.checkAll(config);
@@ -113,7 +134,7 @@ export async function doctorCommand(input: DoctorCommandInput): Promise<void> {
       .filter((p) => !p.ok)
       .map((p) => p.provider)
       .join(", ");
-    throw new OpenFlowError(
+    throw new OpenDynamicWorkflowError(
       ErrorCode.PROVIDER_UNAVAILABLE,
       `Provider check failed: ${failedList} is unavailable.`
     );

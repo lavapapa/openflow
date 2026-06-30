@@ -32,7 +32,7 @@ describe("FileSystemArtifactStore", () => {
     workflowSource: 'console.log("workflow source")',
     workflowHash: "hash-456",
     resolvedConfig: { defaultProvider: "mock" },
-    openflowVersion: "1.0.0",
+    openDynamicWorkflowVersion: "1.0.0",
     cwd: "/workspace"
   };
 
@@ -142,5 +142,34 @@ describe("FileSystemArtifactStore", () => {
     // Simulate crash - files should still be present on disk
     const content = await fs.readFile(path.join(artifacts.rootDir, "ok.txt"), "utf8");
     expect(content).toBe("some data");
+  });
+
+  it("getRunArtifacts() returns correct workflowInvocationDir helper", async () => {
+    const store = new FileSystemArtifactStore();
+    const artifacts = await store.createRun(defaultRunInput);
+
+    const invocationId = "wf-123";
+    const invocationDir = artifacts.workflowInvocationDir(invocationId);
+    
+    expect(invocationDir).toBe(path.join(artifacts.rootDir, "workflows", invocationId));
+  });
+
+  it("RunArtifacts contract assertions (AC2, AC8)", async () => {
+    const store = new FileSystemArtifactStore();
+    const artifacts = await store.createRun(defaultRunInput);
+
+    // Assert typed artifact paths point at expected locations (Requirement 4)
+    expect(artifacts.runInputPath).toBe(path.join(artifacts.rootDir, "run-input.json"));
+    expect(artifacts.callsPath).toBe(path.join(artifacts.rootDir, "calls.jsonl"));
+    expect(artifacts.cacheIndexPath).toBe(path.join(artifacts.rootDir, "cache-index.json"));
+
+    // Assert eager-vs-lazy cache-index.json contract
+    // Current implementation choice: eager creation with empty schema payload
+    const cacheIndexExists = await fs.access(artifacts.cacheIndexPath).then(() => true).catch(() => false);
+    expect(cacheIndexExists).toBe(true);
+    
+    const index = JSON.parse(await fs.readFile(artifacts.cacheIndexPath, "utf8"));
+    expect(index.entries).toEqual([]);
+    expect(index.schemaVersion).toBeDefined();
   });
 });

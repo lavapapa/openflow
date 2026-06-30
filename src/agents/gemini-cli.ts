@@ -8,11 +8,11 @@ import type {
   ProviderConfig
 } from "./types.js";
 import { runProcess } from "./process-runner.js";
-import { shouldRedactEnvName } from "../security/env.js";
+import { buildProviderEnv, shouldRedactEnvName } from "../security/env.js";
 import { appendModelArg } from "./model-args.js";
 import { extractJson } from "../structured/extract-json.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 
 export interface GeminiProviderConfig extends ProviderConfig {
@@ -36,7 +36,12 @@ export class GeminiCliAdapter implements AgentAdapter {
         command,
         args: ["--help"],
         cwd: process.cwd(),
-        timeoutMs: 2000
+        env: buildProviderEnv({
+          baseEnv: process.env,
+          passEnv: [],
+          explicitEnv: {}
+        }),
+        timeoutMs: 5000
       });
       return {
         provider: "gemini",
@@ -71,7 +76,7 @@ export class GeminiCliAdapter implements AgentAdapter {
     });
 
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'Gemini does not support structuredOutput.transport="native" yet.'
       );
@@ -87,7 +92,11 @@ export class GeminiCliAdapter implements AgentAdapter {
     }
 
     const baseArgs = this.config.args ?? ["--output-format", "json"];
-    args.push(...baseArgs);
+    const resolvedBaseArgs =
+      input.permissions?.mode === "dangerously-full-access"
+        ? applyFullAccessApprovalMode(baseArgs)
+        : baseArgs;
+    args.push(...resolvedBaseArgs);
 
     const model = input.model ?? this.config.defaultModel ?? undefined;
     appendModelArg(args, model, this.config.modelArg, defaultFlag);
@@ -160,6 +169,33 @@ export class GeminiCliAdapter implements AgentAdapter {
       };
     }
   }
+}
+
+/**
+ * Normalizes Gemini base args for dangerously-full-access mode.
+ * Replaces any existing `--approval-mode <value>` pair with `--approval-mode yolo`.
+ * If no approval-mode flag exists, appends `--approval-mode yolo`.
+ * Ensures the final args contain exactly one effective approval mode.
+ */
+function applyFullAccessApprovalMode(baseArgs: string[]): string[] {
+  const result: string[] = [];
+  let i = 0;
+  let replaced = false;
+  while (i < baseArgs.length) {
+    if (baseArgs[i] === "--approval-mode" && i + 1 < baseArgs.length) {
+      // Replace this pair with yolo
+      result.push("--approval-mode", "yolo");
+      i += 2;
+      replaced = true;
+    } else {
+      result.push(baseArgs[i]!);
+      i += 1;
+    }
+  }
+  if (!replaced) {
+    result.push("--approval-mode", "yolo");
+  }
+  return result;
 }
 
 function tryParseEmbeddedJson(text: string): unknown | undefined {

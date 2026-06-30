@@ -1,4 +1,4 @@
-export type OpenFlowErrorCode =
+export type OpenDynamicWorkflowErrorCode =
   | "CLI_USAGE_ERROR"
   | "CONFIG_VALIDATION_ERROR"
   | "WORKFLOW_PARSE_ERROR"
@@ -10,12 +10,24 @@ export type OpenFlowErrorCode =
   | "SECURITY_POLICY_VIOLATION"
   | "USER_CANCELLED"
   | "ARTIFACT_WRITE_FAILED"
+  | "TOOL_DEFINITION_NOT_FOUND"
+  | "TOOL_DUPLICATE_DEFINITION"
+  | "TOOL_INVALID_DEFINITION"
+  | "TOOL_INVALID_INPUT"
+  | "TOOL_INVALID_OUTPUT"
+  | "TOOL_INVALID_CONTEXT"
+  | "TOOL_EXECUTION_FAILED"
+  | "TOOL_CANCELLED"
+  | "TOOL_TIMEOUT"
+  | "TOOL_SERIALIZATION_FAILED"
+  | "TOOL_ARTIFACT_WRITE_FAILED"
+  | "RUN_LIMIT_EXCEEDED"
   | "INTERNAL_ERROR";
 
 export interface SerializedError {
   name: string;
   message: string;
-  code?: OpenFlowErrorCode | string;
+  code?: OpenDynamicWorkflowErrorCode | string;
   stack?: string;
   cause?: unknown;
 }
@@ -34,7 +46,7 @@ export const EXIT_CODES = {
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
 
-export function exitCodeForErrorCode(code: OpenFlowErrorCode): ExitCode {
+export function exitCodeForErrorCode(code: OpenDynamicWorkflowErrorCode): ExitCode {
   switch (code) {
     case "CLI_USAGE_ERROR":
     case "CONFIG_VALIDATION_ERROR":
@@ -52,7 +64,22 @@ export function exitCodeForErrorCode(code: OpenFlowErrorCode): ExitCode {
       return EXIT_CODES.TIMEOUT;
     case "PROVIDER_PROCESS_FAILED":
     case "SCHEMA_VALIDATION_FAILED":
+    case "TOOL_EXECUTION_FAILED":
+    case "TOOL_INVALID_INPUT":
+    case "TOOL_INVALID_OUTPUT":
+    case "TOOL_SERIALIZATION_FAILED":
+    case "RUN_LIMIT_EXCEEDED":
       return EXIT_CODES.WORKFLOW_FAILED;
+    case "TOOL_TIMEOUT":
+      return EXIT_CODES.TIMEOUT;
+    case "TOOL_CANCELLED":
+      return EXIT_CODES.USER_CANCELLED;
+    case "TOOL_DEFINITION_NOT_FOUND":
+    case "TOOL_DUPLICATE_DEFINITION":
+    case "TOOL_INVALID_DEFINITION":
+    case "TOOL_INVALID_CONTEXT":
+      return EXIT_CODES.WORKFLOW_PARSE_OR_VALIDATION_ERROR;
+    case "TOOL_ARTIFACT_WRITE_FAILED":
     case "ARTIFACT_WRITE_FAILED":
     case "INTERNAL_ERROR":
       return EXIT_CODES.INTERNAL_ERROR;

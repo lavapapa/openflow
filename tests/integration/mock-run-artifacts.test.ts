@@ -21,7 +21,7 @@ async function runCli(args: string[]) {
 
   let error: unknown = null;
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -83,7 +83,7 @@ describe("Integration - mock run artifact layout", () => {
 
     // Validate manifest content
     const manifest = JSON.parse(await fs.readFile(path.join(runDir, "manifest.json"), "utf8"));
-    expect(manifest.schemaVersion).toBe("openflow.manifest.v1");
+    expect(manifest.schemaVersion).toBe("open-dynamic-workflow.manifest.v1");
     expect(manifest.status).toBe("succeeded");
     expect(manifest.runId).toBe(runId);
     expect(typeof manifest.createdAt).toBe("string");
@@ -96,6 +96,10 @@ describe("Integration - mock run artifact layout", () => {
     expect(await fileExists(path.join(reviewAuthDir, "stderr.log"))).toBe(true);
     expect(await fileExists(path.join(reviewAuthDir, "raw-result.json"))).toBe(true);
     expect(await fileExists(path.join(reviewAuthDir, "normalized-result.json"))).toBe(true);
+    expect(await fileExists(path.join(reviewAuthDir, "permissions.json"))).toBe(true);
+
+    const permissions = JSON.parse(await fs.readFile(path.join(reviewAuthDir, "permissions.json"), "utf8"));
+    expect(permissions).toEqual({ mode: "default" });
 
     // Verify prompt content
     const prompt = await fs.readFile(path.join(reviewAuthDir, "prompt.txt"), "utf8");
@@ -109,7 +113,7 @@ describe("Integration - mock run artifact layout", () => {
 
     // Validate report.json content
     const report = JSON.parse(await fs.readFile(path.join(runDir, "report.json"), "utf8"));
-    expect(report.schemaVersion).toBe("openflow.report.v1");
+    expect(report.schemaVersion).toBe("open-dynamic-workflow.report.v1");
     expect(report.runId).toBe(runId);
     expect(report.status).toBe("succeeded");
 
@@ -121,7 +125,7 @@ describe("Integration - mock run artifact layout", () => {
     const events = eventLines.map((l) => JSON.parse(l));
     // Verify all events have the correct schema version
     for (const event of events) {
-      expect(event.schemaVersion).toBe("openflow.event.v1");
+      expect(event.schemaVersion).toBe("open-dynamic-workflow.event.v1");
     }
     // Sort by sequence and verify monotonic increase (out-of-order appends are
     // possible with parallel agents, but all sequence numbers should be unique and > 0)
@@ -165,5 +169,11 @@ describe("Integration - mock run artifact layout", () => {
 
     const metadata = JSON.parse(await fs.readFile(path.join(reviewAuthDir, "metadata.json"), "utf8"));
     expect(metadata.structuredOutputTransport).toBe("prompt");
+
+    // review-billing uses dangerously-full-access
+    const reviewBillingDir = path.join(runDir, "agents/review-billing");
+    expect(await fileExists(path.join(reviewBillingDir, "permissions.json"))).toBe(true);
+    const billingPermissions = JSON.parse(await fs.readFile(path.join(reviewBillingDir, "permissions.json"), "utf8"));
+    expect(billingPermissions).toEqual({ mode: "dangerously-full-access" });
   });
 });

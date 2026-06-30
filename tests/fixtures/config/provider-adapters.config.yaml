@@ -12,6 +12,46 @@ providers:
         stdout: "Mock stdout for review-1"
         stderr: "Mock stderr for review-1"
         exitCode: 0
+  gemini:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-gemini-cli.mjs
+      - --output-format
+      - json
+      - --approval-mode
+      - plan
+    promptMode: stdin
+  codex:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-provider-cli.mjs
+    promptMode: stdin
+  opencode:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-provider-cli.mjs
+    format: json
+  antigravity:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-provider-cli.mjs
+    permissionPolicy: sandbox
+  pi:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-provider-cli.mjs
+    executionMode: json
+  copilot:
+    command: node
+    args:
+      - tests/fixtures/providers/fake-provider-cli.mjs
+      - --provider
+      - copilot
+    defaultModel: null
+    modelArg:
+      flag: --model
+    promptMode: arg
+    promptFlag: -p
 
 security:
   passEnv: []
@@ -22,3 +62,6 @@ security:
 reporting:
   mode: pretty
   verbose: false
+
+tools:
+  dir: tests/fixtures/non-existent-tools

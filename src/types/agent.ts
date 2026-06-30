@@ -1,6 +1,8 @@
 import type { AgentArtifacts } from "./artifacts.js";
 import type { JsonSchema, ProviderName } from "./common.js";
 import type { SerializedError } from "./errors.js";
+import type { ThinkingEffort } from "./thinking-effort.js";
+
 
 export type StructuredOutputTransport = "validate-only" | "prompt" | "native" | "auto";
 
@@ -8,7 +10,39 @@ export interface StructuredOutputConfig {
   transport?: StructuredOutputTransport | undefined;
 }
 
-export interface AgentCallInput {
+export interface AgentPermissionsInput {
+  mode: "dangerously-full-access";
+}
+
+export type AgentPermissions =
+  | { mode: "default" }
+  | { mode: "dangerously-full-access" };
+
+export type AgentWorkspaceMode = "shared" | "isolated";
+
+export interface AgentWorkspaceInput {
+  cwd?: string | undefined;
+  mode?: AgentWorkspaceMode | undefined;
+}
+
+export interface AgentWorkspace {
+  cwd: string;
+  mode: AgentWorkspaceMode;
+}
+
+export interface AgentContextInput {
+  files?: string[] | undefined;
+  handoff?: string | string[] | undefined;
+  notes?: string | undefined;
+}
+
+export interface AgentHandoffInput {
+  writeTo?: string | undefined;
+  instructions?: string | undefined;
+  required?: boolean | undefined;
+}
+
+export interface DirectAgentCallInput {
   id?: string | undefined;
   label?: string | undefined;
   provider?: ProviderName | undefined;
@@ -18,8 +52,36 @@ export interface AgentCallInput {
   structuredOutput?: StructuredOutputConfig | undefined;
   timeoutMs?: number | undefined;
   cwd?: string | undefined;
+  permissions?: AgentPermissionsInput | undefined;
   metadata?: Record<string, unknown> | undefined;
+  thinkingEffort?: ThinkingEffort | undefined;
+  skills?: string[] | undefined;
+  context?: AgentContextInput | undefined;
+  workspace?: AgentWorkspaceInput | undefined;
+  handoff?: AgentHandoffInput | undefined;
 }
+
+export interface DefinitionAgentCallInput {
+  id?: string | undefined;
+  definition: string;
+  label?: string | undefined;
+  provider?: ProviderName | undefined;
+  prompt?: string | undefined;
+  model?: string | undefined;
+  schema?: JsonSchema | undefined;
+  structuredOutput?: StructuredOutputConfig | undefined;
+  timeoutMs?: number | undefined;
+  cwd?: string | undefined;
+  permissions?: AgentPermissionsInput | undefined;
+  metadata?: Record<string, unknown> | undefined;
+  thinkingEffort?: ThinkingEffort | undefined;
+  skills?: string[] | undefined;
+  context?: AgentContextInput | undefined;
+  workspace?: AgentWorkspaceInput | undefined;
+  handoff?: AgentHandoffInput | undefined;
+}
+
+export type AgentCallInput = DirectAgentCallInput | DefinitionAgentCallInput;
 
 export type AgentTaskState =
   | "queued"
@@ -51,6 +113,9 @@ export interface AgentSuccessResult {
   exitCode: number;
   durationMs: number;
   artifacts: AgentArtifacts;
+  cache?: AgentResultCacheInfo | undefined;
+  permissions: AgentPermissions;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface AgentFailureResult {
@@ -66,6 +131,16 @@ export interface AgentFailureResult {
   durationMs: number;
   artifacts: AgentArtifacts;
   error: SerializedError;
+  cache?: AgentResultCacheInfo | undefined;
+  permissions: AgentPermissions;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface AgentResultCacheInfo {
+  hit: boolean;
+  callId?: string | undefined;
+  previousRunId?: string | undefined;
+  previousAgentId?: string | undefined;
 }
 
 export interface AgentRunInput {
@@ -79,7 +154,13 @@ export interface AgentRunInput {
   timeoutMs: number;
   cwd: string;
   env: Record<string, string>;
+  permissions: AgentPermissions;
   metadata?: Record<string, unknown> | undefined;
+  thinkingEffort?: ThinkingEffort | undefined;
+  skills?: string[] | undefined;
+  context?: AgentContextInput | undefined;
+  workspace?: AgentWorkspace | undefined;
+  handoff?: AgentHandoffInput | undefined;
 }
 
 export interface ProviderHealth {
@@ -97,7 +178,7 @@ export interface ProviderCommand {
   args: string[];
   stdin?: string | undefined;
   cwd: string;
-  env: Record<string, string>;
+  env?: Record<string, string> | undefined;
 }
 
 export interface ProviderParseInput {
@@ -108,16 +189,36 @@ export interface ProviderParseInput {
 }
 
 export interface ProviderParsedResult {
-  text?: string;
-  json?: unknown;
-  structuredJson?: unknown;
-  raw?: unknown;
-  parseWarnings?: string[];
+  text?: string | undefined;
+  json?: unknown | undefined;
+  structuredJson?: unknown | undefined;
+  raw?: unknown | undefined;
+  parseWarnings?: string[] | undefined;
+}
+
+export interface AgentExecutionContext {
+  signal: AbortSignal;
+  emitOutput(stream: "stdout" | "stderr", data: string): Promise<void>;
+}
+
+export interface ProviderSdkExecutionResult {
+  exitCode?: number | null | undefined;
+  timedOut?: boolean | undefined;
+  cancelled?: boolean | undefined;
+  stdout?: string | undefined;
+  stderr?: string | undefined;
+  parsed?: ProviderParsedResult | undefined;
 }
 
 export interface AgentAdapter {
   name: ProviderName;
+  kind?: "process" | "sdk" | undefined;
   checkHealth?(): Promise<ProviderHealth>;
   buildCommand(input: AgentRunInput): Promise<ProviderCommand>;
   parseResult(input: ProviderParseInput): Promise<ProviderParsedResult>;
+}
+
+export interface AgentSdkAdapter extends AgentAdapter {
+  kind: "sdk";
+  execute(input: AgentRunInput, context: AgentExecutionContext): Promise<ProviderSdkExecutionResult>;
 }

@@ -1,0 +1,24 @@
+defaultProvider: mock
+concurrency: 2
+timeoutMs: 30000
+
+workflow:
+  discovery:
+    include:
+      - "tests/fixtures/workflows/*.js"
+
+providers:
+  mock:
+    command: mock
+    responses:
+      default:
+        text: "mock response"
+
+security:
+  passEnv: []
+  redactEnv:
+    - OPENAI_API_KEY
+    - GEMINI_API_KEY
+    - GOOGLE_API_KEY
+    - "*_TOKEN"
+    - "*_SECRET"

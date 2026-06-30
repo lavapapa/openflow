@@ -8,11 +8,12 @@ import type {
   ProviderConfig
 } from "./types.js";
 import { runProcess } from "./process-runner.js";
-import { shouldRedactEnvName } from "../security/env.js";
+import { buildProviderEnv, shouldRedactEnvName } from "../security/env.js";
 import { appendModelArg } from "./model-args.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
-import { OpenFlowError } from "../errors/types.js";
+import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import { assertThinkingEffortSupported } from "./thinking-effort-support.js";
 
 export interface CodexProviderConfig extends ProviderConfig {
   promptMode?: "stdin" | "arg";
@@ -34,7 +35,12 @@ export class CodexExecAdapter implements AgentAdapter {
         command,
         args: ["--help"],
         cwd: process.cwd(),
-        timeoutMs: 2000
+        env: buildProviderEnv({
+          baseEnv: process.env,
+          passEnv: [],
+          explicitEnv: {}
+        }),
+        timeoutMs: 5000
       });
       return {
         provider: "codex",
@@ -61,6 +67,10 @@ export class CodexExecAdapter implements AgentAdapter {
     const command = this.config.command ?? "codex";
     const baseArgs = this.config.args ?? ["exec", "--json", "--ephemeral"];
     const args = [...baseArgs];
+
+    if (input.permissions?.mode === "dangerously-full-access") {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    }
     const structuredPrompt = resolveStructuredOutputPrompt({
       prompt: input.prompt,
       schema: input.schema,
@@ -68,7 +78,7 @@ export class CodexExecAdapter implements AgentAdapter {
     });
 
     if (structuredPrompt.nativeRequested) {
-      throw new OpenFlowError(
+      throw new OpenDynamicWorkflowError(
         ErrorCode.CLI_USAGE_ERROR,
         'Codex does not support structuredOutput.transport="native" yet.'
       );
@@ -76,6 +86,11 @@ export class CodexExecAdapter implements AgentAdapter {
 
     const model = input.model ?? this.config.defaultModel ?? undefined;
     appendModelArg(args, model, this.config.modelArg, "--model");
+
+    if (input.thinkingEffort !== undefined) {
+      assertThinkingEffortSupported("codex", input.thinkingEffort);
+      args.push("-c", `model_reasoning_effort="${input.thinkingEffort}"`);
+    }
 
     const promptMode = this.config.promptMode ?? "stdin";
     let stdin: string | undefined = undefined;
@@ -302,7 +317,9 @@ function tryParseEmbeddedJson(text: string): unknown | undefined {
         if (parsed !== null && typeof parsed === "object") {
           return parsed;
         }
-      } catch {}
+      } catch {
+        // ignore JSON parsing errors for markdown block fallback
+      }
     }
   }
   return undefined;

@@ -1,29 +1,46 @@
 {
-  "name": "@prmflow/openflow",
-  "version": "0.2.0",
+  "name": "@travisliu/open-dynamic-workflow",
+  "version": "0.4.0",
   "description": "Local-first workflow CLI for orchestrating coding-agent CLIs.",
   "type": "module",
   "private": false,
   "license": "MIT",
-  "author": "OpenFlow contributors",
+  "author": "Open Dynamic Workflow contributors",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    "./_comment": "Expose ./cli subpath for backward compatibility with @prmflow/openflow",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "default": "./dist/sdk/index.js"
+    }
+  },
   "bin": {
-    "openflow": "./dist/index.js"
+    "open-dynamic-workflow": "dist/bin/open-dynamic-workflow.js",
+    "odw": "dist/bin/open-dynamic-workflow.js"
   },
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/travisliu/openflow.git"
+    "url": "git+https://github.com/travisliu/open-dynamic-workflow.git"
   },
   "bugs": {
-    "url": "https://github.com/travisliu/openflow/issues"
+    "url": "https://github.com/travisliu/open-dynamic-workflow/issues"
   },
-  "homepage": "https://github.com/travisliu/openflow#readme",
+  "homepage": "https://github.com/travisliu/open-dynamic-workflow#readme",
   "keywords": [
     "workflow",
     "cli",
@@ -38,20 +55,25 @@
     "clean": "rm -rf dist",
     "build": "tsc",
     "postbuild": "node scripts/fix-bin-permissions.mjs",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx src/bin/open-dynamic-workflow.ts",
+    "start": "node dist/bin/open-dynamic-workflow.js",
+    "typecheck": "npm run check",
     "check": "tsc --noEmit",
-    "test": "vitest run",
+    "lint": "eslint .",
+    "test": "vitest run --reporter=dot --no-color",
     "prepack": "npm run clean && npm run build",
     "pack:local": "npm pack",
     "publish:dry-run": "npm publish --dry-run",
-    "release:check": "npm run check && npm test && npm run build && npm pack --dry-run"
+    "release:check": "npm run typecheck && npm run lint && npm test && npm run build && npm pack --dry-run"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "20",
+    "eslint": "^10.5.0",
+    "typescript-eslint": "^8.61.1",
     "vitest": "^3.1.0"
   },
   "dependencies": {
@@ -59,5 +81,8 @@
     "commander": "^15.0.0",
     "typescript": "^5.8.0",
     "yaml": "^2.9.0"
+  },
+  "optionalDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.2"
   }
 }

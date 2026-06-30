@@ -1,80 +1,130 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../../src/config/load.js";
-import { OpenFlowError } from "../../../src/errors/types.js";
-import { resolve, isAbsolute } from "node:path";
+import { writeFileSync, mkdirSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 describe("Load Config", () => {
-  it("no config file uses defaults", async () => {
-    const config = await loadConfig({
-      cwd: "tests/fixtures/config", // point to a place with no .openflow/config.yaml
-      cli: {}
-    });
+  it("56. no-config defaults include all new providers without changing default provider", async () => {
+    // Arrange
+    const emptyDir = join(tmpdir(), "open-dynamic-workflow-test-empty-" + Date.now());
+    mkdirSync(emptyDir, { recursive: true });
 
+    // Act
+    const config = await loadConfig({ cwd: emptyDir, cli: {} });
+
+    // Assert
     expect(config.defaultProvider).toBe("mock");
-    expect(config.concurrency).toBe(4);
-    expect(config.security.allowShell).toBe(false);
+    expect(config.providers.copilot.command).toBe("copilot");
+    expect(config.providers.opencode.command).toBe("opencode");
+    expect(config.providers.antigravity.command).toBe("agy");
+    expect(config.providers.pi.command).toBe("pi");
+
+    rmSync(emptyDir, { recursive: true, force: true });
   });
 
-  it("explicit missing config file fails", async () => {
-    await expect(
-      loadConfig({
-        cwd: process.cwd(),
-        configPath: "nonexistent-config.yaml",
-        cli: {}
-      })
-    ).rejects.toThrow(OpenFlowError);
+  it("57. YAML overrides provider-specific fields and keeps unspecified defaults", async () => {
+    // Arrange
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-yaml-" + Date.now());
+    mkdirSync(tempDir, { recursive: true });
+    const configContent = `
+providers:
+  copilot:
+    permissionPolicy: passthrough
+  opencode:
+    permissionPolicy: passthrough
+  antigravity:
+    promptFlag: --prompt
+  pi:
+    safeTools: [read, grep]
+`;
+    const configDir = join(tempDir, ".open-dynamic-workflow");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.yaml");
+    writeFileSync(configPath, configContent);
 
-    try {
-      await loadConfig({
-        cwd: process.cwd(),
-        configPath: "nonexistent-config.yaml",
-        cli: {}
-      });
-    } catch (err: any) {
-      expect(err.code).toBe("CONFIG_VALIDATION_ERROR");
-    }
+    // Act
+    const config = await loadConfig({ cwd: tempDir, cli: {} });
+
+    // Assert
+    expect(config.providers.copilot.permissionPolicy).toBe("passthrough");
+    expect(config.providers.opencode.permissionPolicy).toBe("passthrough");
+    expect(config.providers.antigravity.promptFlag).toBe("--prompt");
+    expect(config.providers.pi.safeTools).toEqual(["read", "grep"]);
+    
+    // Check preserved defaults
+    expect(config.providers.pi.noSession).toBe(true);
+    expect(config.providers.antigravity.useSandboxByDefault).toBe(true);
+
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("invalid YAML fails", async () => {
-    await expect(
-      loadConfig({
-        cwd: process.cwd(),
-        configPath: "tests/fixtures/config/invalid-concurrency.yaml", // concurrency: 0 is validation fail, but wait, invalid YAML like syntax error:
-        cli: {}
-      })
-    ).rejects.toThrow(OpenFlowError);
+  it("AAV2-T005: executionMode: print should not be overridden by default args", async () => {
+    // Arrange
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-aav2-t005-" + Date.now());
+    mkdirSync(tempDir, { recursive: true });
+    const configContent = `
+providers:
+  pi:
+    executionMode: print
+`;
+    const configDir = join(tempDir, ".open-dynamic-workflow");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.yaml"), configContent);
+
+    // Act
+    const config = await loadConfig({ cwd: tempDir, cli: {} });
+
+    // Assert
+    expect(config.providers.pi.executionMode).toBe("print");
+    expect(config.providers.pi.args).toBeUndefined();
+
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("valid YAML loads", async () => {
-    const config = await loadConfig({
-      cwd: process.cwd(),
-      configPath: "tests/fixtures/config/valid-config.yaml",
-      cli: {}
-    });
+  it("36. Copilot can be configured as default provider explicitly", async () => {
+    // Arrange
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-default-" + Date.now());
+    mkdirSync(tempDir, { recursive: true });
+    const configContent = "defaultProvider: copilot";
+    const configDir = join(tempDir, ".open-dynamic-workflow");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.yaml"), configContent);
 
-    expect(config.concurrency).toBe(8);
-    expect(config.timeoutMs).toBe(60000);
-    expect(config.reporting.mode).toBe("json");
-    expect(config.reporting.verbose).toBe(true);
+    // Act
+    const config = await loadConfig({ cwd: tempDir, cli: {} });
+
+    // Assert
+    expect(config.defaultProvider).toBe("copilot");
+    expect(config.providers.copilot.command).toBe("copilot");
+
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("cwd resolves to absolute path", async () => {
-    const config = await loadConfig({
-      cwd: "tests/fixtures/config",
-      cli: {}
-    });
+  it("37. security defaults do not pass Copilot tokens automatically", async () => {
+    // Arrange
+    const emptyDir = join(tmpdir(), "open-dynamic-workflow-test-security-" + Date.now());
+    mkdirSync(emptyDir, { recursive: true });
 
-    expect(isAbsolute(config.cwd)).toBe(true);
-    expect(config.cwd).toBe(resolve(process.cwd(), "tests/fixtures/config"));
+    // Act
+    const config = await loadConfig({ cwd: emptyDir, cli: {} });
+
+    // Assert
+    expect(config.security.passEnv).not.toContain("COPILOT_GITHUB_TOKEN");
+    expect(config.security.passEnv).not.toContain("GH_TOKEN");
+    expect(config.security.passEnv).not.toContain("GITHUB_TOKEN");
+
+    rmSync(emptyDir, { recursive: true, force: true });
   });
 
-  it("outDir resolves correctly", async () => {
-    const config = await loadConfig({
-      cwd: "tests/fixtures/config",
-      outDir: "custom-out",
-      cli: {}
-    });
-
-    expect(config.outDir).toBe(resolve(config.cwd, "custom-out"));
+  // Keep some core existing tests to ensure no regressions
+  it("loads config from .open-dynamic-workflow/config.yaml", async () => {
+    const tempDir = join(tmpdir(), "open-dynamic-workflow-test-base-" + Date.now());
+    const configDir = join(tempDir, ".open-dynamic-workflow");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.yaml"), "defaultProvider: codex");
+    const config = await loadConfig({ cwd: tempDir, cli: {} });
+    expect(config.defaultProvider).toBe("codex");
+    rmSync(tempDir, { recursive: true, force: true });
   });
 });

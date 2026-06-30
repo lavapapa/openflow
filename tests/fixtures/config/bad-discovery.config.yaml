@@ -1,0 +1,8 @@
+defaultProvider: mock
+concurrency: 1
+timeoutMs: 10000
+
+workflow:
+  discovery:
+    include:
+      - tests/fixtures/workflows/non-existent-directory-random/**/*.js

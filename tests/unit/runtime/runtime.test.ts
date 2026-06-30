@@ -5,12 +5,15 @@ import type { ResolvedConfig, CliRunOptions } from "../../../src/types/config.js
 import type { AgentExecutor, AgentExecutionInput } from "../../../src/agents/execution-types.js";
 import type { AgentResult } from "../../../src/types/agent.js";
 import type { RuntimeEventSink } from "../../../src/orchestration/scheduler.js";
+import { getActiveWorkflowInvocation } from "../../../src/workflow/invocation-types.js";
 
 class FakeAgentExecutor implements AgentExecutor {
   active = 0;
   maxActive = 0;
+  observedConcurrency?: number;
 
   async execute(input: AgentExecutionInput): Promise<AgentResult> {
+    this.observedConcurrency = getActiveWorkflowInvocation()?.effectiveConcurrency;
     this.active += 1;
     this.maxActive = Math.max(this.maxActive, this.active);
 
@@ -26,7 +29,8 @@ class FakeAgentExecutor implements AgentExecutor {
           exitCode: 1,
           durationMs: 5,
           artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
-          error: { name: "AgentFailure", message: "Simulated execution failure", code: "PROVIDER_PROCESS_FAILED" }
+          error: { name: "AgentFailure", message: "Simulated execution failure", code: "PROVIDER_PROCESS_FAILED" },
+          permissions: input.permissions
         };
       }
       return {
@@ -38,7 +42,8 @@ class FakeAgentExecutor implements AgentExecutor {
         stderr: "",
         exitCode: 0,
         durationMs: 5,
-        artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" }
+        artifacts: { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
+        permissions: input.permissions
       };
     } finally {
       this.active -= 1;
@@ -80,7 +85,6 @@ const defaultResolvedConfig: ResolvedConfig = {
   timeoutMs: 30000,
   providers: {},
   security: {
-    allowShell: false,
     allowWorkflowImports: false,
     passEnv: [],
     redactEnv: []
@@ -90,7 +94,7 @@ const defaultResolvedConfig: ResolvedConfig = {
     verbose: false
   },
   cwd: "/workspace",
-  outDir: "/workspace/.openflow/runs"
+  outDir: "/workspace/.open-dynamic-workflow/runs"
 };
 
 describe("DefaultRuntimeRunner", () => {
@@ -146,6 +150,43 @@ describe("DefaultRuntimeRunner", () => {
     expect((result.result as any).stdout).toContain("mock response for tell me a joke");
     expect(result.agents.length).toBe(1);
     expect(result.agents[0]!.id).toBe("agent-1");
+  });
+
+  it("fails before scheduling agents beyond maxAgentCalls", async () => {
+    const runner = new DefaultRuntimeRunner();
+    const parsedWorkflow: ParsedWorkflow = {
+      meta: { name: "agent-limit", description: "run limit" },
+      body: `
+        await agent({ id: "agent-1", prompt: "first" });
+        await agent({ id: "agent-2", prompt: "second" });
+        export default "done";
+      `,
+      sourcePath: "workflow.js",
+      sourceText: "",
+      sourceHash: "123"
+    };
+
+    const eventSink = new FakeEventSink();
+    const result = await runner.run(
+      {
+        parsedWorkflow,
+        config: { ...defaultResolvedConfig, maxAgentCalls: 1 },
+        cli: defaultCliOptions
+      },
+      { agentExecutor: new FakeAgentExecutor(), eventSink, clock: mockClock, idGenerator: mockIdGenerator }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("RUN_LIMIT_EXCEEDED");
+    expect(result.agents.map(agent => agent.id)).toEqual(["agent-1"]);
+    expect(result.limitSummary).toMatchObject({
+      limits: { maxAgentCalls: 1 },
+      agentCalls: 1,
+      exceeded: true,
+      exceededBy: "maxAgentCalls"
+    });
+    const failedEvent = eventSink.events.find(event => event.type === "workflow.failed");
+    expect(failedEvent?.payload.limitSummary?.exceededBy).toBe("maxAgentCalls");
   });
 
   it("handles parallel tasks with array input", async () => {
@@ -342,5 +383,54 @@ describe("DefaultRuntimeRunner", () => {
     expect(result.agents.length).toBe(2);
     expect(result.agents[0].status).toBe("failed");
     expect(result.agents[1].status).toBe("skipped");
+  });
+
+  it("retains resolved permissions on final agent results", async () => {
+    const runner = new DefaultRuntimeRunner();
+    const parsedWorkflow: ParsedWorkflow = {
+      meta: { name: "permissions-test", description: "permissions-test" },
+      body: `
+        const res1 = await agent({ prompt: "hello", permissions: { mode: "dangerously-full-access" } });
+        const res2 = await agent({ prompt: "world" });
+        export default [res1, res2];
+      `,
+      sourcePath: "workflow.js",
+      sourceText: "",
+      sourceHash: "123"
+    };
+
+    const result = await runner.run(
+      { parsedWorkflow, config: defaultResolvedConfig, cli: defaultCliOptions },
+      { agentExecutor: new FakeAgentExecutor(), eventSink: new FakeEventSink(), clock: mockClock, idGenerator: mockIdGenerator }
+    );
+
+    expect(result.status).toBe("succeeded");
+    expect(result.agents).toHaveLength(2);
+    expect(result.agents[0]!.permissions).toEqual({ mode: "dangerously-full-access" });
+    expect(result.agents[1]!.permissions).toEqual({ mode: "default" });
+  });
+
+  it("seeds root invocation context effectiveConcurrency with CLI/config scheduler limit", async () => {
+    const runner = new DefaultRuntimeRunner();
+    const parsedWorkflow: ParsedWorkflow = {
+      meta: { name: "concurrency-test", description: "concurrency-test" },
+      body: `
+        await agent({ prompt: "hello" });
+        export default { ok: true };
+      `,
+      sourcePath: "workflow.js",
+      sourceText: "",
+      sourceHash: "123"
+    };
+
+    const executor = new FakeAgentExecutor();
+    const cliOptions = { ...defaultCliOptions, concurrency: 5 };
+    const result = await runner.run(
+      { parsedWorkflow, config: defaultResolvedConfig, cli: cliOptions },
+      { agentExecutor: executor, eventSink: new FakeEventSink(), clock: mockClock, idGenerator: mockIdGenerator }
+    );
+
+    expect(result.status).toBe("succeeded");
+    expect(executor.observedConcurrency).toBe(5);
   });
 });

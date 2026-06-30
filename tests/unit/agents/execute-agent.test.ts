@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
-import { OpenFlowError } from "../../../src/errors/types.js";
+import { OpenDynamicWorkflowError } from "../../../src/errors/types.js";
 import { ErrorCode } from "../../../src/errors/codes.js";
 import * as registryModule from "../../../src/agents/registry.js";
 import * as path from "node:path";
@@ -43,7 +43,6 @@ describe("DefaultAgentExecutor environment and redaction", () => {
         }
       },
       security: {
-        allowShell: false,
         allowWorkflowImports: false,
         passEnv: ["PASSED_VAR_FOR_TEST"],
         redactEnv: ["*_KEY_FOR_TEST"]
@@ -61,7 +60,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -85,6 +84,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "mock-model",
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -124,7 +124,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-timeout";
     const runOutDir = path.join(TEST_OUT_DIR, runId);
-    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
     const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
 
@@ -136,6 +136,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "mock-model",
       timeoutMs: 100,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -165,7 +166,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-cancelled";
     const runOutDir = path.join(TEST_OUT_DIR, runId);
-    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
     const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
 
@@ -177,6 +178,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "mock-model",
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -208,7 +210,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-multi";
     const runOutDir = path.join(TEST_OUT_DIR, runId);
-    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
     const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
 
@@ -220,6 +222,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "mock-model",
       timeoutMs: 100,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -248,7 +251,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-logs";
     const runOutDir = path.join(TEST_OUT_DIR, runId);
-    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
     const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
 
@@ -260,6 +263,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "mock-model",
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -269,6 +273,98 @@ describe("DefaultAgentExecutor environment and redaction", () => {
 
     expect(stdoutLog).toBe("mock stdout");
     expect(stderrLog).toBe("mock stderr");
+  });
+
+  it("executes SDK adapters in-process and preserves streamed output", async () => {
+    const config: any = {
+      defaultProvider: "sdk-test",
+      providers: {
+        "sdk-test": {
+          command: "sdk-test",
+          defaultModel: "sdk-model"
+        }
+      },
+      security: {
+        allowWorkflowImports: false,
+        passEnv: [],
+        redactEnv: []
+      }
+    };
+    const sdkExecute = vi.fn(async (_input, context) => {
+      await context.emitOutput("stdout", "streamed ");
+      await context.emitOutput("stdout", "chunk");
+      return {
+        exitCode: 0,
+        parsed: {
+          text: "streamed chunk",
+          raw: { text: "streamed chunk" }
+        }
+      };
+    });
+    const sdkAdapter = {
+      name: "sdk-test",
+      kind: "sdk",
+      buildCommand: vi.fn(async (input) => ({
+        command: "<sdk:sdk-test>",
+        args: [input.id],
+        cwd: input.cwd
+      })),
+      parseResult: vi.fn(async () => ({ text: "should not parse process stdout" })),
+      execute: sdkExecute
+    };
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation(() => ({
+      get: () => sdkAdapter,
+      list: () => [sdkAdapter],
+      register: () => undefined
+    } as any));
+
+    try {
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-sdk-adapter";
+      const runOutDir = path.join(TEST_OUT_DIR, runId);
+      await store.createRun({
+        runId,
+        outDir: runOutDir,
+        workflowPath: "dummy.ts",
+        workflowSource: "",
+        workflowHash: "hash",
+        resolvedConfig: config,
+        openDynamicWorkflowVersion: "1.0.0",
+        cwd: process.cwd()
+      });
+      const events: any[] = [];
+      const eventBus = new EventBus({
+        runId,
+        artifactStore: store,
+        subscribers: [{ handle: event => events.push(event) }]
+      });
+      const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+      const result = await executor.execute({
+        id: "sdk-agent",
+        provider: "sdk-test",
+        prompt: "test prompt",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.text).toBe("streamed chunk");
+      }
+      expect(sdkExecute).toHaveBeenCalledOnce();
+      expect(sdkAdapter.parseResult).not.toHaveBeenCalled();
+      expect(events.filter(event => event.type === "agent.output").map(event => event.payload.data)).toEqual([
+        "streamed ",
+        "chunk"
+      ]);
+      const stdoutLog = await fs.readFile(path.join(runOutDir, "agents/sdk-agent/stdout.log"), "utf8");
+      expect(stdoutLog).toBe("streamed chunk");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("passes provider stdin to real process adapters", async () => {
@@ -290,7 +386,6 @@ describe("DefaultAgentExecutor environment and redaction", () => {
         }
       },
       security: {
-        allowShell: false,
         allowWorkflowImports: false,
         passEnv: [],
         redactEnv: []
@@ -300,7 +395,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
     const runId = "test-run-stdin-forwarding";
     const runOutDir = path.join(TEST_OUT_DIR, runId);
-    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openflowVersion: "1.0.0", cwd: process.cwd() });
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
     const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
     const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
 
@@ -312,6 +407,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       prompt,
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -345,7 +441,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -362,6 +458,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       structuredOutput: { transport: "native" },
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -394,7 +491,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       registry.register({
         name: "fake-validation-error-provider" as any,
         buildCommand: async () => {
-          throw new OpenFlowError(ErrorCode.CLI_USAGE_ERROR, "Validation failed in buildCommand");
+          throw new OpenDynamicWorkflowError(ErrorCode.CLI_USAGE_ERROR, "Validation failed in buildCommand");
         },
         parseResult: async () => {
           return {};
@@ -423,7 +520,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       workflowSource: "",
       workflowHash: "hash",
       resolvedConfig: config,
-      openflowVersion: "1.0.0",
+      openDynamicWorkflowVersion: "1.0.0",
       cwd: process.cwd()
     });
 
@@ -438,6 +535,7 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       model: "fake-model",
       timeoutMs: 5000,
       cwd: process.cwd(),
+      permissions: { mode: "default" },
       signal: new AbortController().signal,
       metadata: {}
     });
@@ -468,5 +566,776 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     expect(rawResultJson.ok).toBe(false);
     expect(rawResultJson.error.code).toBe("CLI_USAGE_ERROR");
     expect(rawResultJson.error.message).toBe("Validation failed in buildCommand");
+  });
+
+  it("persists permissions metadata and creates permissions.json", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "perm-agent": { text: "perm success" }
+          }
+        }
+      }
+    };
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-perm";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "perm-agent",
+      label: "Perm Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      signal: new AbortController().signal,
+      metadata: {},
+      permissions: { mode: "dangerously-full-access" }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.permissions).toEqual({ mode: "dangerously-full-access" });
+    expect(result.artifacts.permissionsPath).toBe("agents/perm-agent/permissions.json");
+
+    const agentDir = path.join(runOutDir, "agents/perm-agent");
+    const permissionsJson = JSON.parse(await fs.readFile(path.join(agentDir, "permissions.json"), "utf8"));
+    expect(permissionsJson).toEqual({ mode: "dangerously-full-access" });
+
+    const metadataJson = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+    expect(metadataJson.permissions).toEqual({ mode: "dangerously-full-access" });
+  });
+
+  it("merges permissions directly into raw result if it is a non-array object", async () => {
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "mock",
+        lookupResponse: () => ({
+          stdout: "success",
+          exitCode: 0
+        }),
+        buildCommand: async () => ({ command: "mock", args: [] }),
+        parseResult: async () => {
+          return {
+            text: "success",
+            raw: { foo: "bar" }
+          };
+        }
+      });
+      return registry;
+    });
+
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {}
+        }
+      }
+    };
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-object-raw";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "object-raw-agent",
+      label: "Object Raw Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      permissions: { mode: "dangerously-full-access" },
+      signal: new AbortController().signal,
+      metadata: {}
+    });
+
+    spy.mockRestore();
+
+    expect(result.ok).toBe(true);
+    const agentDir = path.join(runOutDir, "agents/object-raw-agent");
+    const rawResultJson = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+    expect(rawResultJson).toEqual({
+      foo: "bar",
+      permissions: { mode: "dangerously-full-access" },
+      metadata: {}
+    });
+  });
+
+  it("wraps raw result in an envelope if it is a primitive string or array", async () => {
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "mock",
+        lookupResponse: () => ({
+          stdout: "success",
+          exitCode: 0
+        }),
+        buildCommand: async () => ({ command: "mock", args: [] }),
+        parseResult: async () => {
+          return {
+            text: "success",
+            raw: "primitive string"
+          };
+        }
+      });
+      return registry;
+    });
+
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {}
+        }
+      }
+    };
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-primitive-raw";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "primitive-raw-agent",
+      label: "Primitive Raw Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      permissions: { mode: "dangerously-full-access" },
+      signal: new AbortController().signal,
+      metadata: {}
+    });
+
+    spy.mockRestore();
+
+    expect(result.ok).toBe(true);
+    const agentDir = path.join(runOutDir, "agents/primitive-raw-agent");
+    const rawResultJson = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+    expect(rawResultJson).toEqual({
+      raw: "primitive string",
+      permissions: { mode: "dangerously-full-access" },
+      metadata: {}
+    });
+  });
+
+  it("wraps raw result in an envelope if it is a primitive array", async () => {
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "mock",
+        lookupResponse: () => ({
+          stdout: "success",
+          exitCode: 0
+        }),
+        buildCommand: async () => ({ command: "mock", args: [] }),
+        parseResult: async () => {
+          return {
+            text: "success",
+            raw: ["item1", "item2"]
+          };
+        }
+      });
+      return registry;
+    });
+
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {}
+        }
+      }
+    };
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-array-raw";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "array-raw-agent",
+      label: "Array Raw Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      permissions: { mode: "dangerously-full-access" },
+      signal: new AbortController().signal,
+      metadata: {}
+    });
+
+    spy.mockRestore();
+
+    expect(result.ok).toBe(true);
+    const agentDir = path.join(runOutDir, "agents/array-raw-agent");
+    const rawResultJson = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+    expect(rawResultJson).toEqual({
+      raw: ["item1", "item2"],
+      permissions: { mode: "dangerously-full-access" },
+      metadata: {}
+    });
+  });
+
+  it("sanitizes and size-limits metadata in artifacts and results", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "metadata-agent": { text: "success" }
+          }
+        }
+      }
+    };
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-metadata-sanitization";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const longString = "a".repeat(300);
+    const result = await executor.execute({
+      id: "metadata-agent",
+      label: "Metadata Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      permissions: { mode: "default" },
+      signal: new AbortController().signal,
+      metadata: {
+        sharedAgentId: longString,
+        secret: "should-be-redacted",
+        pipelineId: "pipe-1"
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    // Verify result metadata
+    expect((result as any).metadata.sharedAgentId).toHaveLength(256 + 3);
+    expect((result as any).metadata.pipelineId).toBe("pipe-1");
+    expect((result as any).metadata).not.toHaveProperty("secret");
+
+    // Verify metadata.json artifact
+    const agentDir = path.join(runOutDir, "agents/metadata-agent");
+    const metadataJson = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+    expect(metadataJson.sharedAgentId).toHaveLength(256 + 3);
+    expect(metadataJson.pipelineId).toBe("pipe-1");
+    expect(metadataJson).not.toHaveProperty("secret");
+    expect(metadataJson.model).toBe("mock-model"); // model is added by executor after sanitization
+  });
+
+  it("persists additive agent config and emits skill/context attachment events", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "attachment-agent": { text: "success" }
+          }
+        }
+      }
+    };
+
+    const workspaceDir = path.join(TEST_OUT_DIR, "workspace-attachments");
+    await fs.mkdir(path.join(workspaceDir, "skills/review"), { recursive: true });
+    await fs.mkdir(path.join(workspaceDir, "input"), { recursive: true });
+    await fs.mkdir(path.join(workspaceDir, "working"), { recursive: true });
+    await fs.writeFile(path.join(workspaceDir, "skills/review/SKILL.md"), "# Review skill\n", "utf8");
+    await fs.writeFile(path.join(workspaceDir, "input/paper.md"), "paper", "utf8");
+    await fs.writeFile(path.join(workspaceDir, "working/upstream.md"), "upstream", "utf8");
+    await fs.writeFile(path.join(workspaceDir, "working/review.md"), "handoff", "utf8");
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-agent-attachments";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: workspaceDir });
+    const events: any[] = [];
+    const eventBus = new EventBus({
+      runId,
+      artifactStore: store,
+      subscribers: [{ handle: event => events.push(event) }]
+    });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "attachment-agent",
+      label: "Attachment Agent",
+      provider: "mock",
+      prompt: "test prompt",
+      model: "mock-model",
+      timeoutMs: 5000,
+      cwd: workspaceDir,
+      permissions: { mode: "default" },
+      signal: new AbortController().signal,
+      metadata: {},
+      skills: ["skills/review/SKILL.md"],
+      context: {
+        files: ["input/paper.md"],
+        handoff: "working/upstream.md",
+        notes: "Use upstream notes."
+      },
+      workspace: {
+        cwd: workspaceDir,
+        mode: "shared"
+      },
+      handoff: {
+        writeTo: "working/review.md",
+        instructions: "Write findings and uncertainty.",
+        required: true
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.artifacts.handoffPath).toBe("agents/attachment-agent/handoff.json");
+
+    const skillEvent = events.find(event => event.type === "agent.skill.attached");
+    expect(skillEvent?.payload).toMatchObject({
+      agentId: "attachment-agent",
+      path: "skills/review/SKILL.md"
+    });
+
+    const contextEvents = events.filter(event => event.type === "agent.context.attached");
+    expect(contextEvents.map(event => event.payload.kind)).toEqual(["file", "handoff", "notes"]);
+
+    const agentDir = path.join(runOutDir, "agents/attachment-agent");
+    const metadataJson = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+    expect(metadataJson.workspace).toEqual({ cwd: workspaceDir, mode: "shared" });
+    expect(metadataJson.skills).toEqual([{ path: "skills/review/SKILL.md" }]);
+    expect(metadataJson.context).toMatchObject({
+      files: ["input/paper.md"],
+      handoff: ["working/upstream.md"],
+      notes: { present: true, length: "Use upstream notes.".length }
+    });
+    expect(metadataJson.handoff).toMatchObject({
+      writeTo: "working/review.md",
+      required: true
+    });
+
+    const handoffJson = JSON.parse(await fs.readFile(path.join(agentDir, "handoff.json"), "utf8"));
+    expect(handoffJson).toMatchObject({
+      writeTo: "working/review.md",
+      required: true,
+      exists: true,
+      status: "verified"
+    });
+  });
+
+  it("rejects skill or context symlinks that resolve outside the agent workspace", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "symlink-agent": { text: "success" }
+          }
+        }
+      }
+    };
+
+    const workspaceDir = path.join(TEST_OUT_DIR, "workspace-symlink-attachments");
+    const outsideDir = path.join(TEST_OUT_DIR, "outside-symlink-attachments");
+    await fs.mkdir(path.join(workspaceDir, "skills"), { recursive: true });
+    await fs.mkdir(outsideDir, { recursive: true });
+    await fs.writeFile(path.join(outsideDir, "outside-skill.md"), "# Outside skill\n", "utf8");
+    await fs.symlink(path.join(outsideDir, "outside-skill.md"), path.join(workspaceDir, "skills/outside.md"));
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-symlink-attachments";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: workspaceDir });
+    const events: any[] = [];
+    const eventBus = new EventBus({
+      runId,
+      artifactStore: store,
+      subscribers: [{ handle: event => events.push(event) }]
+    });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "symlink-agent",
+      provider: "mock",
+      prompt: "test prompt",
+      timeoutMs: 5000,
+      cwd: workspaceDir,
+      permissions: { mode: "default" },
+      signal: new AbortController().signal,
+      skills: ["skills/outside.md"]
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toContain("Path escapes agent workspace");
+    expect(events.map(event => event.type)).not.toContain("agent.skill.attached");
+  });
+
+  it("emits a warning event when optional handoff output is missing", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "optional-handoff-agent": { text: "success" }
+          }
+        }
+      }
+    };
+
+    const workspaceDir = path.join(TEST_OUT_DIR, "workspace-optional-handoff");
+    await fs.mkdir(workspaceDir, { recursive: true });
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-optional-handoff";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: workspaceDir });
+    const events: any[] = [];
+    const eventBus = new EventBus({
+      runId,
+      artifactStore: store,
+      subscribers: [{ handle: event => events.push(event) }]
+    });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "optional-handoff-agent",
+      provider: "mock",
+      prompt: "test prompt",
+      timeoutMs: 5000,
+      cwd: workspaceDir,
+      permissions: { mode: "default" },
+      signal: new AbortController().signal,
+      handoff: {
+        writeTo: "missing.md",
+        required: false
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const missingEvent = events.find(event => event.type === "agent.handoff.missing");
+    expect(missingEvent?.payload).toMatchObject({
+      agentId: "optional-handoff-agent",
+      writeTo: "missing.md",
+      required: false,
+      severity: "warning"
+    });
+
+    const handoffJson = JSON.parse(await fs.readFile(path.join(runOutDir, "agents/optional-handoff-agent/handoff.json"), "utf8"));
+    expect(handoffJson).toMatchObject({
+      exists: false,
+      required: false,
+      status: "missing-warning"
+    });
+  });
+
+  it("fails a successful provider result when required handoff output is missing", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: {
+          responses: {
+            "required-handoff-agent": { text: "success" }
+          }
+        }
+      }
+    };
+
+    const workspaceDir = path.join(TEST_OUT_DIR, "workspace-required-handoff");
+    await fs.mkdir(workspaceDir, { recursive: true });
+
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-required-handoff";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: workspaceDir });
+    const events: any[] = [];
+    const eventBus = new EventBus({
+      runId,
+      artifactStore: store,
+      subscribers: [{ handle: event => events.push(event) }]
+    });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "required-handoff-agent",
+      provider: "mock",
+      prompt: "test prompt",
+      timeoutMs: 5000,
+      cwd: workspaceDir,
+      permissions: { mode: "default" },
+      signal: new AbortController().signal,
+      handoff: {
+        writeTo: "missing.md",
+        required: true
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe("failed");
+    expect(result.error.code).toBe("HANDOFF_MISSING");
+    expect(result.artifacts.handoffPath).toBe("agents/required-handoff-agent/handoff.json");
+
+    const missingEvent = events.find(event => event.type === "agent.handoff.missing");
+    expect(missingEvent?.payload).toMatchObject({
+      agentId: "required-handoff-agent",
+      writeTo: "missing.md",
+      required: true,
+      severity: "error"
+    });
+
+    const rawResult = JSON.parse(await fs.readFile(path.join(runOutDir, "agents/required-handoff-agent/raw-result.json"), "utf8"));
+    expect(rawResult.ok).toBe(false);
+    expect(rawResult.error.code).toBe("HANDOFF_MISSING");
+  });
+
+  it("verifies a resolved thinkingEffort reaches the adapter buildCommand in AgentRunInput", async () => {
+    let capturedRunInput: any = null;
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "codex",
+        checkHealth: async () => ({ provider: "codex", available: true }),
+        lookupResponse: () => ({ stdout: "success", exitCode: 0 }),
+        buildCommand: async (input) => {
+          capturedRunInput = input;
+          return { command: "node", args: ["-e", "process.exit(0)"] };
+        },
+        parseResult: async () => ({ text: "success" })
+      });
+      return registry;
+    });
+
+    try {
+      const config: any = {
+        defaultProvider: "codex",
+        providers: { codex: {} }
+      };
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-thinking-effort-runinput";
+      const runOutDir = path.join(TEST_OUT_DIR, runId);
+      await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+      const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+      const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+      const result = await executor.execute({
+        id: "thinking-agent",
+        label: "Thinking Agent",
+        provider: "codex",
+        prompt: "test prompt",
+        model: "mock-model",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal,
+        thinkingEffort: "high"
+      });
+
+      expect(result.ok).toBe(true);
+      expect(capturedRunInput).not.toBeNull();
+      expect(capturedRunInput.thinkingEffort).toBe("high");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("verifies unsupported provider effort fails before process execution and returns THINKING_EFFORT_NOT_SUPPORTED", async () => {
+    let buildCommandCalled = 0;
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "unsupported-prov",
+        checkHealth: async () => ({ provider: "unsupported-prov" as any, available: true }),
+        lookupResponse: () => ({ stdout: "success", exitCode: 0 }),
+        buildCommand: async () => {
+          buildCommandCalled++;
+          return { command: "unsupported-prov", args: [] };
+        },
+        parseResult: async () => ({ text: "success" })
+      });
+      return registry;
+    });
+
+    try {
+      const config: any = {
+        defaultProvider: "unsupported-prov",
+        providers: { "unsupported-prov": {} }
+      };
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-unsupported-provider-effort";
+      const runOutDir = path.join(TEST_OUT_DIR, runId);
+      await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+      const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+      const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+      const result = await executor.execute({
+        id: "unsupported-agent",
+        label: "Unsupported Agent",
+        provider: "unsupported-prov" as any,
+        prompt: "test prompt",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal,
+        thinkingEffort: "high"
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("failed");
+      expect(result.error.code).toBe(ErrorCode.THINKING_EFFORT_NOT_SUPPORTED);
+      expect(buildCommandCalled).toBe(0);
+
+      // Verify artifacts exist and are parseable
+      const agentDir = path.join(runOutDir, "agents/unsupported-agent");
+      const metadata = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+      const rawResult = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+      expect(metadata.thinkingEffort).toBe("high");
+      expect(rawResult.ok).toBe(false);
+      expect(rawResult.error.code).toBe(ErrorCode.THINKING_EFFORT_NOT_SUPPORTED);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("verifies unsupported Codex value preserves THINKING_EFFORT_VALUE_UNSUPPORTED", async () => {
+    let buildCommandCalled = 0;
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "codex",
+        checkHealth: async () => ({ provider: "codex" as any, available: true }),
+        lookupResponse: () => ({ stdout: "success", exitCode: 0 }),
+        buildCommand: async () => {
+          buildCommandCalled++;
+          return { command: "codex", args: [] };
+        },
+        parseResult: async () => ({ text: "success" })
+      });
+      return registry;
+    });
+
+    try {
+      const config: any = {
+        defaultProvider: "codex",
+        providers: { codex: {} }
+      };
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-unsupported-codex-value";
+      const runOutDir = path.join(TEST_OUT_DIR, runId);
+      await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+      const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+      const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+      const result = await executor.execute({
+        id: "unsupported-codex-agent",
+        label: "Unsupported Codex Agent",
+        provider: "codex",
+        prompt: "test prompt",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal,
+        thinkingEffort: "xhigh" // Codex does not support xhigh
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("failed");
+      expect(result.error.code).toBe(ErrorCode.THINKING_EFFORT_VALUE_UNSUPPORTED);
+      expect(buildCommandCalled).toBe(0);
+
+      // Verify artifacts exist and are parseable
+      const agentDir = path.join(runOutDir, "agents/unsupported-codex-agent");
+      const metadata = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+      const rawResult = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+      expect(metadata.thinkingEffort).toBe("xhigh");
+      expect(rawResult.ok).toBe(false);
+      expect(rawResult.error.code).toBe(ErrorCode.THINKING_EFFORT_VALUE_UNSUPPORTED);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("verifies resolved effort and explicit opencodeVariant metadata fails with THINKING_EFFORT_CONFLICT", async () => {
+    let buildCommandCalled = 0;
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
+      const registry = new registryModule.ProviderRegistry();
+      registry.register({
+        name: "opencode",
+        checkHealth: async () => ({ provider: "opencode" as any, available: true }),
+        lookupResponse: () => ({ stdout: "success", exitCode: 0 }),
+        buildCommand: async (input) => {
+          buildCommandCalled++;
+          const explicitVariant = input.metadata?.opencodeVariant;
+          if (input.thinkingEffort !== undefined && explicitVariant !== undefined) {
+            throw new OpenDynamicWorkflowError(
+              ErrorCode.THINKING_EFFORT_CONFLICT,
+              "OpenCode received both thinkingEffort and metadata.opencodeVariant. Use thinkingEffort or opencodeVariant, not both."
+            );
+          }
+          return { command: "opencode", args: [] };
+        },
+        parseResult: async () => ({ text: "success" })
+      });
+      return registry;
+    });
+
+    try {
+      const config: any = {
+        defaultProvider: "opencode",
+        providers: { opencode: {} }
+      };
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-opencode-conflict";
+      const runOutDir = path.join(TEST_OUT_DIR, runId);
+      await store.createRun({ runId, outDir: runOutDir, workflowPath: "dummy.ts", workflowSource: "", workflowHash: "hash", resolvedConfig: config, openDynamicWorkflowVersion: "1.0.0", cwd: process.cwd() });
+      const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+      const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+      const result = await executor.execute({
+        id: "opencode-conflict-agent",
+        label: "OpenCode Conflict Agent",
+        provider: "opencode",
+        prompt: "test prompt",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal,
+        thinkingEffort: "low",
+        metadata: { opencodeVariant: "high" }
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("failed");
+      expect(result.error.code).toBe(ErrorCode.THINKING_EFFORT_CONFLICT);
+      expect(buildCommandCalled).toBe(1);
+
+      // Verify artifacts exist and are parseable
+      const agentDir = path.join(runOutDir, "agents/opencode-conflict-agent");
+      const metadata = JSON.parse(await fs.readFile(path.join(agentDir, "metadata.json"), "utf8"));
+      const rawResult = JSON.parse(await fs.readFile(path.join(agentDir, "raw-result.json"), "utf8"));
+      expect(metadata.thinkingEffort).toBe("low");
+      expect(rawResult.ok).toBe(false);
+      expect(rawResult.error.code).toBe(ErrorCode.THINKING_EFFORT_CONFLICT);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -4,7 +4,13 @@ export interface CreateManifestInput {
   runId: string;
   workflowPath: string;
   workflowHash: string;
-  openflowVersion: string;
+  workflow?: {
+    name: string;
+    file: string;
+    requestedTarget: string;
+    targetKind: "workflow-name" | "workflow-file";
+  } | undefined;
+  openDynamicWorkflowVersion: string;
   cwd: string;
   configPath?: string | undefined;
   now?: Date;
@@ -13,14 +19,15 @@ export interface CreateManifestInput {
 export function createInitialManifest(input: CreateManifestInput): RunManifest {
   const timestamp = (input.now || new Date()).toISOString();
   return {
-    schemaVersion: "openflow.manifest.v1",
+    schemaVersion: "open-dynamic-workflow.manifest.v1",
     runId: input.runId,
     status: "running",
     createdAt: timestamp,
     updatedAt: timestamp,
     workflowPath: input.workflowPath,
     workflowHash: input.workflowHash,
-    openflowVersion: input.openflowVersion,
+    workflow: input.workflow,
+    openDynamicWorkflowVersion: input.openDynamicWorkflowVersion,
     cwd: input.cwd,
     configPath: input.configPath
   };

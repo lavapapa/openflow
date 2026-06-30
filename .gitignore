@@ -1,8 +1,11 @@
 node_modules/
 dist/
-.openflow/
+/.open-dynamic-workflow/
+/workflows/
 coverage/
 *.log
 .DS_Store
 .antigravitycli/
-docs/
+GEMINI.md
+plans/
+openflow/node_modules/

@@ -28,7 +28,7 @@ async function runCli(args: string[]) {
   let error: any = null;
 
   try {
-    await main(["node", "openflow", ...args]);
+    await main(["node", "open-dynamic-workflow", ...args]);
   } catch (err) {
     error = err;
   } finally {
@@ -57,9 +57,12 @@ describe("Valid metadata passes validation", () => {
 
   it("CLI exits with code 0 and shows success message, creating no artifacts", async () => {
     const workflowPath = path.resolve("tests/fixtures/workflows/valid-basic.workflow.js");
+    const destPath = path.join(TEMP_DIR, "valid-basic.workflow.js");
+    await fs.copyFile(workflowPath, destPath);
+
     const result = await runCli([
       "validate",
-      workflowPath,
+      destPath,
       "--cwd",
       TEMP_DIR
     ]);
@@ -72,9 +75,9 @@ describe("Valid metadata passes validation", () => {
     expect(result.stdout).toContain("valid-basic");
     expect(result.stdout.toLowerCase()).toContain("valid");
 
-    // Ensure no .openflow directory is created in TEMP_DIR
-    const openflowDir = path.join(TEMP_DIR, ".openflow");
-    const exists = await fs.stat(openflowDir).then(() => true).catch(() => false);
+    // Ensure no .open-dynamic-workflow directory is created in TEMP_DIR
+    const openDynamicWorkflowDir = path.join(TEMP_DIR, ".open-dynamic-workflow");
+    const exists = await fs.stat(openDynamicWorkflowDir).then(() => true).catch(() => false);
     expect(exists).toBe(false);
   });
 });

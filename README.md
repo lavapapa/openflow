@@ -1,507 +1,294 @@
-# OpenFlow CLI
+<p align="center">
+  <img src="images/cover.png" alt="Open Dynamic Workflow Cover" width="600" />
+</p>
 
-OpenFlow is a local-first command-line workflow runner for orchestrating coding-agent CLIs such as `codex exec` and `gemini -p`.
+<h1 align="center">Open Dynamic Workflow</h1>
 
-It lets engineers define constrained JavaScript-like workflows, run agent tasks sequentially or in parallel, capture structured results, and persist durable run artifacts for local debugging and CI automation.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@travisliu/open-dynamic-workflow">
+    <img src="https://img.shields.io/npm/v/@travisliu/open-dynamic-workflow?logo=npm" alt="npm version" />
+  </a>
+  <a href="https://github.com/travisliu/open-dynamic-workflow/stargazers">
+    <img src="https://img.shields.io/github/stars/travisliu/open-dynamic-workflow?logo=github" alt="GitHub stars" />
+  </a>
+</p>
 
-![OpenFlow](images/demo.png)
+<p align="center">&nbsp;</p>
 
----
+Rename Notice: Renamed from `@prmflow/openflow` (binary: `openflow`) to `@travisliu/open-dynamic-workflow`
 
-## Why OpenFlow?
+Open Dynamic Workflow is a local-first workflow runner for orchestrating external coding-agent CLIs such as Codex, Gemini, Copilot, OpenCode, Antigravity, Pi, Cursor, and a deterministic mock provider.
 
-Modern coding agents are useful from the terminal, but larger engineering tasks often need more than one prompt or one agent run. OpenFlow provides a small orchestration layer around external coding-agent CLIs so you can:
+Natural-language prompts are flexible, but they are not always reliable for repeated engineering work. Open Dynamic Workflow turns repeatable agent tasks into workflow scripts, so execution is explicit, version-controlled, validated, and easier to reproduce.
 
-- Split large engineering tasks into repeatable workflow files.
-- Run multiple agent reviews in parallel.
-- Use different providers for different tasks.
-- Validate structured JSON output with JSON Schema.
-- Capture prompts, stdout, stderr, normalized results, reports, and events.
-- Use pretty terminal output locally or JSON/JSONL output in CI.
-- Keep provider-specific details out of workflow logic.
+A workflow script defines which agents run, how they are coordinated, what outputs are expected, and how failures are handled. This gives teams more stable execution than ad-hoc prompting, while making workflows easier to review, debug, reuse, and maintain.
 
-OpenFlow does **not** implement its own coding agent. It coordinates external provider CLIs.
+## Start with an AI-generated workflow
 
----
+To get started quickly, you can describe the workflow you want in natural language to an AI coding assistant to generate the workflow script. Once generated, use the CLI to validate and run it:
 
-## Features
+Prompt with skill:
+`/open-dynamic-workflow Run a workflow that uses Codex to review correctness and security, uses Gemini to review tests and operations, then uses Gemini to summarize the result.`
 
-OpenFlow supports:
+![Dynamic Workflow DEMO](images/demo.png)
 
-- `openflow run <workflow-file>`
-- `openflow validate <workflow-file>`
-- `openflow doctor`
-- Constrained workflow metadata parsing
-- Workflow DSL functions:
-  - `agent()`
-  - `parallel()`
-  - `pipeline()`
-  - `phase()`
-  - `log()`
-- Provider adapters:
-  - `mock`
-  - `codex`
-  - `gemini`
-- Global concurrency limits
-- Timeout handling
-- Fail-fast mode
-- JSON Schema validation for structured agent output
-- Pretty, JSON, and JSONL reporters
-- Durable artifact directories under `.openflow/runs/<runId>`
-- Deterministic exit codes
+## Supported coding agents
 
-Future roadmap features include plugin providers, retries, worktree/container isolation, resumable runs, approval gates, automatic patch application, and static HTML reports.
+Open Dynamic Workflow orchestrates external coding-agent CLIs through provider adapters. It does not implement its own coding agent.
 
----
+| Provider      | CLI                    |
+| ------------- | ---------------------- |
+| `mock`        | built-in mock provider |
+| `codex`       | Codex CLI              |
+| `gemini`      | Gemini CLI             |
+| `copilot`     | GitHub Copilot CLI     |
+| `opencode`    | OpenCode CLI           |
+| `antigravity` | Antigravity CLI        |
+| `pi`          | Pi Coding Agent        |
+| `cursor`      | Cursor Agent CLI       |
 
-## Requirements
-
-OpenFlow is designed for Node.js-based projects and local or CI environments.
-
-Recommended baseline:
-
-- Node.js 20+
-- npm, pnpm, or yarn
-- Git, when running inside a repository
-- Optional provider CLIs:
-  - Codex CLI for the `codex` provider
-  - Gemini CLI for the `gemini` provider
-
-The `mock` provider is intended for tests, examples, and CI workflows that should not require real provider credentials.
-
----
-
-## Installation & Usage
-
-### Usage with npx
-
-Run without installing globally:
-
-```bash
-npx @prmflow/openflow --help
-npx @prmflow/openflow doctor
-npx @prmflow/openflow validate workflows/review.ts
-npx @prmflow/openflow run workflows/review.ts
-```
-
-### Global installation
-
-```bash
-npm install -g @prmflow/openflow
-openflow --help
-openflow doctor
-```
-
-### Local development
-
-```bash
-npm install
-npm run build
-npx . --help
-npx . run workflows/review.ts
-```
-
-### Local package smoke test
-
-```bash
-npm pack
-npx ./prmflow-openflow-0.2.0.tgz --help
-npx ./prmflow-openflow-0.2.0.tgz doctor
-```
-
----
-
-## Quick Start
-
-Create a workflow file:
+The default provider can be configured during initialization or later in `.open-dynamic-workflow/config.yaml`. Individual workflow steps can still choose a specific provider:
 
 ```ts
-// workflows/review.ts
-export const meta = {
-  name: "parallel-review",
-  description: "Review changed files with multiple coding-agent CLIs",
-  phases: ["review", "summarize"]
-};
-
-phase("review");
-
-const reviews = await parallel({
-  codex: () => agent({
-    id: "codex-review",
-    provider: "codex",
-    prompt: "Review the changed files for correctness issues."
-  }),
-  gemini: () => agent({
-    id: "gemini-review",
-    provider: "gemini",
-    prompt: "Review the changed files for API design issues."
-  })
-});
-
-phase("summarize");
-
-const summary = await agent({
-  id: "summary",
+const review = await agent({
+  id: "security-review",
   provider: "codex",
-  prompt: `Summarize these reviews:\n${JSON.stringify(reviews, null, 2)}`
-});
-
-export default {
-  reviews,
-  summary
-};
-```
-
-Run it:
-
-```bash
-openflow run workflows/review.ts
-```
-
-Validate it without invoking providers:
-
-```bash
-openflow validate workflows/review.ts
-```
-
-Run a dry run:
-
-```bash
-openflow run workflows/review.ts --dry-run
-```
-
----
-
-## Using the Mock Provider
-
-The mock provider is useful for local examples, tests, and CI jobs that should not call external model providers.
-
-```ts
-// workflows/mock-review.ts
-export const meta = {
-  name: "mock-review",
-  description: "Example workflow using the mock provider"
-};
-
-phase("review");
-
-const result = await agent({
-  id: "mock-review",
-  provider: "mock",
-  prompt: "Review the changed files."
-});
-
-export default result;
-```
-
-Run:
-
-```bash
-openflow run workflows/mock-review.ts --provider mock
-```
-
----
-
-## CLI Commands
-
-### `openflow run`
-
-Runs a workflow file.
-
-```bash
-openflow run <workflow-file> [options]
-```
-
-Common options:
-
-```bash
---provider <codex|gemini|mock>
---arg key=value
---config <path>
---cwd <path>
---out <path>
---report <pretty|json|jsonl>
---concurrency <number>
---timeout-ms <number>
---dry-run
---fail-fast
---verbose
-```
-
-Examples:
-
-```bash
-openflow run workflows/review.ts
-openflow run workflows/review.ts --provider codex
-openflow run workflows/review.ts --concurrency 2
-openflow run workflows/review.ts --timeout-ms 600000
-openflow run workflows/review.ts --report json
-openflow run workflows/review.ts --report jsonl
-openflow run workflows/review.ts --fail-fast
-```
-
-### `openflow validate`
-
-Validates workflow metadata, syntax, and restricted behavior.
-
-```bash
-openflow validate <workflow-file>
-```
-
-Example:
-
-```bash
-openflow validate workflows/review.ts
-```
-
-Validation checks include:
-
-- `meta` is the first top-level statement.
-- `meta.name` and `meta.description` are present.
-- Metadata is statically analyzable.
-- Unsupported imports and restricted APIs are rejected.
-- `pipeline()` stage configuration and structure are verified.
-
-### `openflow doctor`
-
-Checks local environment readiness.
-
-```bash
-openflow doctor
-```
-
-Typical checks:
-
-- Config file can be loaded.
-- Provider CLIs are present when configured.
-- `codex` is available for Codex workflows.
-- `gemini` is available for Gemini workflows.
-- Required provider commands can be executed.
-- Secret-like environment values are not printed.
-
----
-
-## Workflow Metadata
-
-Every workflow must begin with a static metadata export.
-
-```ts
-export const meta = {
-  name: "workflow-name",
-  description: "Human-readable workflow description",
-  phases: ["scan", "review", "summarize"]
-};
-```
-
-Rules:
-
-- `meta` must be the first top-level statement.
-- `meta.name` is required.
-- `meta.description` is required.
-- `meta.phases` is optional.
-- Dynamic expressions are rejected.
-
-Valid:
-
-```ts
-export const meta = {
-  name: "review",
-  description: "Review changed files"
-};
-```
-
-Invalid:
-
-```ts
-const name = "review";
-
-export const meta = {
-  name,
-  description: "Review changed files"
-};
-```
-
----
-
-## Workflow DSL
-
-OpenFlow workflows run in a constrained runtime. The runtime exposes a clean, expressive DSL.
-
-### `agent(input)`
-
-Runs a provider-backed agent task.
-
-```ts
-const result = await agent({
-  id: "review-auth",
-  provider: "codex",
-  prompt: "Review src/auth.ts for correctness and security issues."
+  prompt: "Review this change for security risks."
 });
 ```
 
-Supported input:
+## Install and initialize
 
-```ts
-type AgentCallInput = {
-  id?: string;
-  label?: string;
-  provider?: "codex" | "gemini" | "mock" | string;
-  prompt: string;
-  model?: string;
-  schema?: JsonSchema;
-  timeoutMs?: number;
-  cwd?: string;
-  metadata?: Record<string, unknown>;
-};
+Run Open Dynamic Workflow directly with `npx` (you can also use the shorthand `odw` alias if installed locally):
+
+```bash
+npx @travisliu/open-dynamic-workflow --help
 ```
 
-### `parallel(tasks)`
+Initialize Open Dynamic Workflow in your project:
 
-Runs independent tasks under the configured global concurrency limit.
-
-Object form:
-
-```ts
-const reviews = await parallel({
-  auth: () => agent({
-    id: "review-auth",
-    prompt: "Review src/auth.ts"
-  }),
-  billing: () => agent({
-    id: "review-billing",
-    prompt: "Review src/billing.ts"
-  })
-});
+```bash
+npx @travisliu/open-dynamic-workflow init
 ```
 
-Array form:
+This sets up the local Open Dynamic Workflow project structure, such as `.open-dynamic-workflow/config.yaml`, example workflow files, and default provider configuration.
 
-```ts
-const files = ["src/auth.ts", "src/billing.ts"];
+Check your environment:
 
-const reviews = await parallel(
-  files.map(file => () => agent({
-    id: `review:${file}`,
-    prompt: `Review ${file}`
-  }))
-);
+```bash
+npx @travisliu/open-dynamic-workflow doctor
 ```
 
-### `phase(name)`
+List discoverable workflows, shared agents, and tools:
 
-Marks the current workflow phase.
-
-```ts
-phase("review");
+```bash
+npx @travisliu/open-dynamic-workflow list
 ```
 
-### `log(message, data?)`
+Validate a workflow before running providers:
 
-Adds a workflow log event.
-
-```ts
-log("Starting review", { files: 2 });
+```bash
+npx @travisliu/open-dynamic-workflow validate workflows/parallel-pr-review.ts
 ```
 
-### `pipeline(items, stages, options?)`
+Run the workflow with local pretty output:
 
-Processes an array of input items through a sequence of stage objects sequentially or concurrently depending on the strategy.
-
-```ts
-const pipelineResults = await pipeline(
-  ["src/auth.ts", "src/billing.ts"],
-  [
-    {
-      name: "lint",
-      run: async (file, ctx) => {
-        ctx.log(`Linting ${file}`);
-        const res = await ctx.agent({
-          id: ctx.agentId("lint"),
-          prompt: `Find lint errors in ${file}`
-        });
-        return { file, result: res.text };
-      }
-    }
-  ],
-  {
-    strategy: "item-streaming", // or "stage-barrier"
-    concurrency: 2,
-    preserveOrder: true
-  }
-);
+```bash
+npx @travisliu/open-dynamic-workflow run parallel-pr-review --report pretty
 ```
 
-Supported options:
-- `strategy`: `"item-streaming"` (processes each item completely through all stages concurrently) or `"stage-barrier"` (processes all items through stage 1 before starting stage 2). Default is `"item-streaming"`.
-- `concurrency`: Global max concurrent items/stages processing.
-- `stageConcurrency`: Object mapping stage name to specific concurrency value.
-- `preserveOrder`: Boolean to keep the output in the same order as items. Default is `true`.
-- `failFast`: Boolean to stop processing on first item/stage failure.
+## Basic Usage
 
-The `PipelineStageContext` (`ctx`) object passed to each stage contains:
-- `pipelineId` and `runId` (strings)
-- `itemIndex` and `stageIndex` (numbers)
-- `stageName` (string)
-- `agent(input)`: Run an agent call with guaranteed scoped context.
-- `log(message, data?)`: Log pipeline-specific messages.
-- `agentId(suffix?)`: Helper to generate a unique agent ID.
-- `signal`: AbortSignal for the stage.
-- `sleep(ms)`: Utility to pause execution within the stage.
+The fastest way to create an Open Dynamic Workflow workflow is to ask the `open-dynamic-workflow` skill to generate one from a task description.
 
----
+Use this prompt shape:
 
-## Structured Output
-
-Agent calls can request structured output by providing a JSON Schema. `schema` is the validation contract; `structuredOutput.transport` controls how that schema reaches the provider.
-
-```ts
-const result = await agent({
-  id: "review-auth",
-  provider: "codex",
-  prompt: "Return review findings as JSON.",
-  schema: {
-    type: "object",
-    properties: {
-      file: { type: "string" },
-      findings: {
-        type: "array",
-        items: {
-          type: "string"
-        }
-      }
-    },
-    required: ["file", "findings"]
-  },
-  structuredOutput: {
-    transport: "auto"
-  }
-});
+```text
+/open-dynamic-workflow Create an Open Dynamic Workflow workflow that <does the task>. Use <providers>. Include commands to validate and run it.
 ```
 
-Transport options:
+The skill will choose the right workflow pattern, generate a valid workflow file, and include run instructions.
 
-- `auto`: use prompt injection for current providers and keep local validation enabled.
-- `prompt`: always inject the schema into the prompt before invoking the provider.
-- `validate-only`: do not inject the schema into the prompt; only validate the returned output locally.
-- `native`: reserved for future provider-native structured output support. Current adapters reject it.
+| Pattern          | Use when                                                                |
+| ---------------- | ----------------------------------------------------------------------- |
+| Single agent     | One agent can complete the task.                                        |
+| Parallel review  | Multiple independent reviews can run at the same time.                  |
+| Pipeline         | Many items need to pass through the same ordered stages.                |
+| Fan-out / fan-in | Multiple branches run first, then a final agent summarizes the results. |
+| Loop             | Repeated, stateful execution runs until a terminal condition is met.    |
 
-When a schema is provided, OpenFlow attempts to normalize provider output in this order:
+### Demo 1: Single Agent Workflow
 
-1. Provider-specific structured JSON, when the adapter can identify it.
-2. Provider JSON output, when available.
-3. First valid JSON object or block extracted from stdout.
-4. Schema validation failure if no valid JSON is available.
+Use this when one agent can complete the task.
 
-A validation failure is returned as a failed agent result and persisted as an artifact.
+```text
+/open-dynamic-workflow Create a workflow named single-review that uses Codex to review the current project for correctness, security, and maintainability issues. Include structured output for findings and commands to validate and run it.
+```
 
----
+Expected result:
+
+* A workflow that calls `agent()` once.
+* A clear `review` phase.
+* A structured findings schema.
+* Commands such as `openflow validate workflows/single-review.ts` and `openflow run workflows/single-review.ts`.
+
+### Demo 2: Parallel Review Workflow
+
+Use this when several independent perspectives should run at the same time.
+
+```text
+/open-dynamic-workflow Create a workflow that runs three independent reviews in parallel: Codex reviews correctness, Codex reviews security, and Gemini reviews tests. Then return all review results. Include commands to validate, run locally, and run with the mock provider for CI.
+```
+
+Expected result:
+
+* A workflow that uses `parallel()`.
+* Independent review branches.
+* Stable agent IDs such as `correctness-review`, `security-review`, and `test-review`.
+* CLI examples for local and CI usage.
+
+### Demo 3: Pipeline Workflow
+
+Use this when multiple items need the same ordered stages.
+
+```text
+/open-dynamic-workflow Create a pipeline workflow that reviews these files: src/auth.ts, src/billing.ts, and src/api.ts. Each file should go through analyze, plan, and review-plan stages. Use Codex for code analysis and plan review, Gemini for remediation planning, item-streaming strategy, concurrency 3, and failFast false. Include validation and run commands.
+```
+
+Expected result:
+
+* A workflow that uses `pipeline()`.
+* Named stages such as `analyze`, `plan`, and `review-plan`.
+* `ctx.agent()` inside pipeline stages.
+* Pipeline options such as `strategy`, `concurrency`, and `failFast`.
+
+### Demo 4: Fan-Out / Fan-In Workflow
+
+Use this when multiple branches should run first, then a final agent should summarize the results.
+
+```text
+/open-dynamic-workflow Create a workflow that uses Codex to review correctness and security, uses Gemini to review tests and operations, then uses Gemini to summarize the results, deduplicate findings, and recommend next steps. Include commands to validate and run it.
+```
+
+Expected result:
+
+* A workflow that uses `parallel()` for the fan-out step.
+* A final `agent()` call for the fan-in summary.
+* Separate `review` and `summarize` phases.
+* A final exported result containing both raw reviews and summary.
+
+## Advanced Usage
+
+For more complex orchestration patterns, Open Dynamic Workflow supports tool execution, child workflows, and goal-oriented loops.
+
+### Demo 5: Tool-Assisted Workflow
+
+Use this when the workflow should load or compute local data through a registered tool before asking an agent to analyze it.
+
+```text
+/open-dynamic-workflow Create a workflow that uses a registered read-json tool to load input.json, then uses Codex to analyze the loaded data for anomalies and correctness issues. Keep tool usage at the workflow top level. Include validation and run commands.
+```
+
+Expected result:
+
+* A workflow that calls `tool()` before agent analysis.
+* A provider-backed `agent()` call that receives the loaded tool output.
+* No `tool()` calls inside `parallel()` or `pipeline()` stages.
+
+### Demo 6: Child Workflow Composition
+
+Use this when a larger workflow should reuse smaller workflow files.
+
+```text
+/open-dynamic-workflow Create a parent workflow that invokes a child workflow named security-review for src/auth.ts and src/billing.ts, collects child results with failureMode settled, then uses Gemini to summarize the results. Include the child workflow, the parent workflow, and commands to validate and run both.
+```
+
+Expected result:
+
+* A reusable child workflow.
+* A parent workflow that calls `workflow()`.
+* JSON-safe `args` passed to the child workflow.
+* A final summary step in the parent workflow.
+
+### Demo 7: Goal-Oriented Loop Workflow
+
+Use this when a repeated, stateful callback should run until a specific goal or condition is satisfied (e.g., review-fix-verify loops).
+
+```text
+/open-dynamic-workflow Create a workflow that runs a goal-oriented loop to review and fix code in src/auth.ts. In each round, use Codex to review remaining issues, Gemini to generate a fix plan, and Codex to verify the plan. Loop up to 5 times or stop when the plan is accepted. Include commands to validate and run it.
+```
+
+Expected result:
+
+* A workflow that uses `loop()`.
+* A round callback returning `{ done: true, nextState }` when the verification succeeds.
+* Loop options including `maxRounds` (required, e.g., 5).
+* The loop result containing the final state directly, or a settled success/failure envelope.
+* Commands such as `npx @travisliu/open-dynamic-workflow validate workflows/loop-review.ts` and `npx @travisliu/open-dynamic-workflow run workflows/loop-review.ts`.
+
+### Prompting Tips
+
+* Name the workflow you want.
+* Describe the input files, documents, or targets.
+* Say which providers to use, such as Codex for correctness/security and Gemini for tests/summarization.
+* Say whether failures should stop the workflow or be collected.
+* Ask for validation and run commands.
+* Ask for structured output when downstream steps need machine-readable results.
+
+## open-dynamic-workflow Skills
+
+For AI/coding agents developing workflows in this repository, a pre-configured skill is located at [skills/open-dynamic-workflow/](skills/open-dynamic-workflow/).
+
+This directory contains:
+- [SKILL.md](skills/open-dynamic-workflow/SKILL.md): Instructions and guidelines for AI agents to write, validate, and troubleshoot Open Dynamic Workflow workflows.
+- Reference documentation under [references/](skills/open-dynamic-workflow/references/):
+  - [api-document.md](skills/open-dynamic-workflow/references/api-document.md): Complete guide on workflow syntax, DSL primitives (`agent`, `parallel`, `pipeline`), structured outputs, and exit codes.
+  - [cli-commands.md](skills/open-dynamic-workflow/references/cli-commands.md): Detailed usage details for the `run`, `validate`, and `doctor` commands.
+  - [configuration.md](skills/open-dynamic-workflow/references/configuration.md): Schema structure, precedence rules, and model customization guidelines for `.openflow/config.yaml`.
+- Reusable templates under `assets/` for building new workflows.
+
+## Artifacts
+
+Every run creates a local artifact directory.
+
+```text
+.openflow/runs/<runId>/
+  manifest.json
+  workflow.input.ts
+  config.resolved.json
+  run-input.json
+  calls.jsonl
+  cache-index.json
+  events.jsonl
+  report.json
+  agents/
+    <agentId>/
+      prompt.txt
+      stdout.log
+      stderr.log
+      raw-result.json
+      normalized-result.json
+      schema.json
+      validation-error.json
+      permissions.json
+      metadata.json
+  workflows/
+    <workflowInvocationId>/
+      input.json
+      result.json
+      error.json
+      summary.json
+```
+
+Artifacts are always enabled so failed or partial runs remain debuggable.
+
 
 ## Configuration
 
-By default, OpenFlow loads:
+By default, Open Dynamic Workflow loads:
 
 ```text
-.openflow/config.yaml
+.open-dynamic-workflow/config.yaml
 ```
 
 Example:
@@ -510,6 +297,7 @@ Example:
 defaultProvider: codex
 concurrency: 4
 timeoutMs: 900000
+maxAgentCalls: 20
 
 providers:
   codex:
@@ -526,12 +314,6 @@ providers:
       - --output-format
       - json
     defaultModel: gemini-3-flash-preview
-
-  mock:
-    command: mock
-    responses:
-      default:
-        text: "mock response"
 
 security:
   passEnv: []
@@ -553,332 +335,23 @@ Configuration precedence:
 
 `--provider` sets the default provider. It does not override an explicit provider inside an `agent()` call.
 
----
+`maxAgentCalls` limits how many live provider agent calls a run may start. Resume cache hits do not count as new live calls. The CLI flag `--max-agent-calls` overrides the config value for that run.
 
-## Model Selection
+#### Safety & System Context:
 
-Model selection can be configured globally, per provider, on the command line, or explicitly within workflows.
-
-### Precedence Rules
-
-When resolving which model to use for an agent task, OpenFlow applies the following precedence (from strongest to weakest):
-
-1. **Per-agent model**: Defined explicitly in the workflow script: `agent({ model: "model-name" })`.
-2. **CLI override**: Provided via the `--model` (or `-m`) option: `openflow run workflow.ts --model model-name`.
-3. **Provider-specific default model**: Configured in `.openflow/config.yaml` under `providers.<provider>.defaultModel`.
-4. **Global default model**: Configured in `.openflow/config.yaml` under `defaultModel`.
-5. **Provider default**: If no model is configured, the provider's CLI decides.
-
-### Provider Flag Customization (`modelArg`)
-
-By default, the `codex` provider CLI uses `--model <model>` and the `gemini` provider CLI uses `-m <model>`. You can customize this flag or disable model selection entirely for any provider in `.openflow/config.yaml`:
-
-```yaml
-defaultModel: gemini-3-flash-preview # Global default model
-
-providers:
-  codex:
-    command: codex
-    modelArg:
-      flag: --custom-model-flag # Custom flag instead of default --model
-      
-  gemini:
-    command: gemini
-    modelArg: false # Disable model selection (errors if a model is requested)
-```
-
----
-
-## Reports
-
-OpenFlow supports three report modes.
-
-### Pretty
-
-Default local terminal output:
-
-```bash
-openflow run workflows/review.ts --report pretty
-```
-
-Example output:
-
-```text
-◇ parallel-review
-  Phase: review
-
-  ✓ codex-review       codex    18.3s
-  ✕ gemini-review      gemini   failed
-
-Artifacts:
-  .openflow/runs/20260602-abc123
-```
-
-### JSON
-
-Prints only the final workflow report JSON object to stdout.
-
-```bash
-openflow run workflows/review.ts --report json
-```
-
-### JSONL
-
-Streams ordered execution events to stdout.
-
-```bash
-openflow run workflows/review.ts --report jsonl
-```
-
-JSONL is intended for CI jobs, dashboards, and tools that want to consume live workflow events.
-
----
-
-## Artifacts
-
-Every run creates a local artifact directory.
-
-```text
-.openflow/runs/<runId>/
-  manifest.json
-  workflow.input.ts
-  config.resolved.json
-  events.jsonl
-  report.json
-  agents/
-    <agentId>/
-      prompt.txt
-      stdout.log
-      stderr.log
-      raw-result.json
-      normalized-result.json
-      schema.json
-      validation-error.json
-```
-
-Artifacts are always enabled so failed or partial runs remain debuggable.
-
----
-
-## Exit Codes
-
-| Code | Meaning |
-|---:|---|
-| 0 | Success |
-| 1 | Workflow failed |
-| 2 | Invalid CLI usage |
-| 3 | Workflow parse or validation error |
-| 4 | Provider unavailable |
-| 5 | Security policy violation |
-| 6 | User cancelled |
-| 7 | Timeout |
-| 8 | Internal error |
-
----
-
-## Safety Model
-
-OpenFlow is safe by default, but should not be described as a complete security sandbox.
-
-Default security behavior:
-
-- Workflow shell execution is unavailable.
-- Arbitrary workflow imports are unavailable.
-- Environment variables are not passed unless allowlisted.
-- Secret-like values are redacted from terminal output, events, reports, and persisted logs where feasible.
-- Provider prompts and outputs are stored as artifacts.
-- Patches are never applied automatically.
-- Provider CLIs may still access files, network, and credentials according to their own behavior and permissions.
+- **No Scoped Sandbox:** The `dangerously-full-access` mode is **not** a sandbox or a scoped-write system. It grants full permission mapping to the underlying provider CLI, bypassing safety boundaries in that provider context.
+- **Provider Support Behavior:**
+  - `codex`: Maps `dangerously-full-access` to the Codex write-capable flag (`--dangerously-bypass-approvals-and-sandbox`).
+  - `gemini`: Supports `dangerously-full-access`. By default, Gemini runs in read-only `--approval-mode plan`. Specifying `dangerously-full-access` switches Gemini to `--approval-mode yolo`, enabling write-capable execution. This is the explicit opt-in; Gemini's own trust and sandbox rules still apply.
+  - `copilot`: Default mode does not add broad allow-all or yolo flags. `dangerously-full-access` maps to `--yolo`.
+  - `opencode`: Maps `dangerously-full-access` to `--dangerously-skip-permissions` and skips read-only environment injection.
+  - `antigravity`: Maps `dangerously-full-access` to `--dangerously-skip-permissions`.
+  - `pi`: Switches from read-only tools to configured `fullAccessTools`. It does not imply automatic approval.
+  - `cursor`: Runs with `--mode ask` by default. Specifying `dangerously-full-access` maps to the configured dangerous flag, default `--force`.
+  - `mock`: Accepts `dangerously-full-access` without changing its deterministic mock behavior (useful for dry runs and testing).
+  - Workflows that omit the `permissions` field default to `{ mode: "default" }` (which does not pass any write-enabling flags to the provider).
 
 Be careful before sharing `.openflow/runs/<runId>` artifacts, because they may contain prompts, source snippets, stdout, stderr, and model outputs.
-
----
-
-## CI Usage
-
-Example GitHub Actions-style command:
-
-```bash
-openflow validate workflows/review.ts
-openflow run workflows/review.ts \
-  --provider mock \
-  --report json \
-  --concurrency 2 \
-  --timeout-ms 600000
-```
-
-For streaming logs:
-
-```bash
-openflow run workflows/review.ts --report jsonl
-```
-
-For deterministic CI tests, prefer the `mock` provider.
-
----
-
-## Troubleshooting
-
-### Provider CLI is missing
-
-Run:
-
-```bash
-openflow doctor
-```
-
-If `codex` or `gemini` is missing, install the relevant provider CLI and ensure it is available in `PATH`.
-
-### Workflow validation fails
-
-Run:
-
-```bash
-openflow validate workflows/review.ts
-```
-
-Check that:
-
-- `export const meta = ...` is the first top-level statement.
-- Metadata values are literals.
-- The workflow does not use `require()`, arbitrary imports, filesystem APIs, process APIs, shell commands, or unsupported DSL functions.
-
-### JSON report contains failed agents
-
-Inspect the run artifacts:
-
-```bash
-cat .openflow/runs/<runId>/report.json
-cat .openflow/runs/<runId>/agents/<agentId>/stderr.log
-cat .openflow/runs/<runId>/agents/<agentId>/validation-error.json
-```
-
-### Agent output failed schema validation
-
-Check:
-
-```bash
-.openflow/runs/<runId>/agents/<agentId>/raw-result.json
-.openflow/runs/<runId>/agents/<agentId>/validation-error.json
-```
-
-Then update the prompt, schema, or provider output format.
-
----
-
-## Example Workflows
-
-### Parallel Code Review
-
-```ts
-export const meta = {
-  name: "parallel-code-review",
-  description: "Review files in parallel",
-  phases: ["review"]
-};
-
-const files = ["src/auth.ts", "src/billing.ts"];
-
-phase("review");
-
-const reviews = await parallel(
-  files.map(file => () => agent({
-    id: `review:${file}`,
-    provider: "codex",
-    prompt: `Review ${file} for correctness and maintainability issues.`,
-    schema: {
-      type: "object",
-      properties: {
-        file: { type: "string" },
-        findings: {
-          type: "array",
-          items: { type: "string" }
-        }
-      },
-      required: ["file", "findings"]
-    }
-  }))
-);
-
-export default {
-  reviews
-};
-```
-
-### Test Failure Triage
-
-```ts
-export const meta = {
-  name: "test-failure-triage",
-  description: "Analyze failing tests and propose next steps"
-};
-
-phase("triage");
-
-const result = await agent({
-  id: "triage",
-  provider: "codex",
-  prompt: "Inspect the failing tests and propose the smallest safe fix."
-});
-
-export default result;
-```
-
----
-
-## Development
-
-Suggested local development commands:
-
-```bash
-npm install
-npm run build
-npm test
-npm run lint
-```
-
-Recommended test coverage:
-
-- Config loading and precedence
-- Metadata parsing
-- Workflow validation restrictions
-- Event sequencing
-- Artifact generation
-- Scheduler concurrency behavior
-- Process timeout behavior
-- Schema validation success and failure
-- Provider command construction
-- Mock provider integration workflows
-
----
-
-## Agent Skills
-
-For AI/coding agents developing workflows in this repository, a pre-configured skill is located at [skills/openflow-workflow-writer/](file:///root/projects/execflow/skills/openflow-workflow-writer/). 
-
-This directory contains:
-- [SKILL.md](file:///root/projects/execflow/skills/openflow-workflow-writer/SKILL.md): Instructions and guidelines for AI agents to write, validate, and troubleshoot OpenFlow workflows.
-- Reference documentation under [references/](file:///root/projects/execflow/skills/openflow-workflow-writer/references/):
-  - [api-document.md](file:///root/projects/execflow/skills/openflow-workflow-writer/references/api-document.md): Complete guide on workflow syntax, DSL primitives (`agent`, `parallel`, `pipeline`), structured outputs, and exit codes.
-  - [cli-commands.md](file:///root/projects/execflow/skills/openflow-workflow-writer/references/cli-commands.md): Detailed usage details for the `run`, `validate`, and `doctor` commands.
-  - [configuration.md](file:///root/projects/execflow/skills/openflow-workflow-writer/references/configuration.md): Schema structure, precedence rules, and model customization guidelines for `.openflow/config.yaml`.
-- Reusable templates under `assets/` for building new workflows.
-
----
-
-## Design Principles
-
-OpenFlow follows these boundaries:
-
-1. Workflow DSL does not know provider-specific details.
-2. Runtime does not spawn processes directly.
-3. Provider adapters do not own workflow failure policy.
-4. Process execution is provider-agnostic.
-5. Structured output validation is local and provider-independent.
-6. Reporters consume events but do not control execution.
-7. Artifact storage is central to observability and debugging.
-
----
 
 ## License
 
