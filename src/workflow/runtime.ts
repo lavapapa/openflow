@@ -12,6 +12,7 @@ import { createSandboxContext } from "./sandbox.js";
 import type { RuntimeState } from "./types.js";
 import { type WorkflowRegistry, createRootWorkflowRegistry } from "./registry.js";
 import { serializeError } from "../errors/serialize.js";
+import { summarizeAgentUsage } from "../usage.js";
 import { createLinkedAbortController } from "../orchestration/cancellation.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
@@ -453,6 +454,10 @@ export function buildSucceededRunResult(
     eventsPath,
     limitSummary: runtime.runLimitTracker?.summary()
   };
+  const usageSummary = summarizeAgentUsage(runtime.agentResults);
+  if (usageSummary) {
+    result.usageSummary = usageSummary;
+  }
 
   if (workflowResult !== undefined) {
     result.result = workflowResult;
@@ -491,6 +496,7 @@ export function buildFailedRunResult(
     reportPath,
     eventsPath,
     limitSummary: runtime.runLimitTracker?.summary(),
+    usageSummary: summarizeAgentUsage(runtime.agentResults),
     error: serialized
   };
 
@@ -531,6 +537,7 @@ export function buildCancelledRunResult(
     reportPath,
     eventsPath,
     limitSummary: runtime.runLimitTracker?.summary(),
+    usageSummary: summarizeAgentUsage(runtime.agentResults),
     error: errorPayload
   };
 

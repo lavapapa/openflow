@@ -1,4 +1,4 @@
-import type { AgentCallInput, AgentResult } from "./agent.js";
+import type { AgentCallInput, AgentResult, AgentUsageSummary } from "./agent.js";
 import type { JsonObject, JsonValue, WorkflowStatus } from "./common.js";
 import type { SerializedError } from "./errors.js";
 import type { PipelineStage, PipelineOptions, PipelineResult, PipelineSummary } from "../pipeline/types.js";
@@ -167,5 +167,6 @@ export interface WorkflowRunResult {
   reportPath: string;
   eventsPath: string;
   limitSummary?: WorkflowRunLimitSummary | undefined;
+  usageSummary?: AgentUsageSummary | undefined;
   error?: SerializedError | undefined;
 }

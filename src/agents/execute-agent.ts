@@ -666,6 +666,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
       durationMs,
       artifacts: agentArtifacts,
       permissions: resolvedPerms,
+      usage: parseResult.usage,
       metadata: sanitizedMetadata
     };
 

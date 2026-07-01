@@ -99,6 +99,18 @@ export type AgentResultStatus = "succeeded" | "failed" | "timed_out" | "cancelle
 
 export type AgentResult = AgentSuccessResult | AgentFailureResult;
 
+export interface AgentUsage {
+  inputTokens?: number | undefined;
+  cachedInputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  reasoningOutputTokens?: number | undefined;
+  totalTokens?: number | undefined;
+}
+
+export interface AgentUsageSummary extends AgentUsage {
+  agentCount: number;
+}
+
 export interface AgentSuccessResult {
   ok: true;
   status: "succeeded";
@@ -115,6 +127,7 @@ export interface AgentSuccessResult {
   artifacts: AgentArtifacts;
   cache?: AgentResultCacheInfo | undefined;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown> | undefined;
 }
 
@@ -133,6 +146,7 @@ export interface AgentFailureResult {
   error: SerializedError;
   cache?: AgentResultCacheInfo | undefined;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown> | undefined;
 }
 
@@ -193,6 +207,7 @@ export interface ProviderParsedResult {
   json?: unknown | undefined;
   structuredJson?: unknown | undefined;
   raw?: unknown | undefined;
+  usage?: AgentUsage | undefined;
   parseWarnings?: string[] | undefined;
 }
 

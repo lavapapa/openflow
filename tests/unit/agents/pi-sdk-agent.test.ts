@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createPiSdkSessionManager, PiSdkAgentAdapter } from "../../../src/agents/pi-sdk-agent.js";
+import {
+  createPiSdkSessionManager,
+  PiSdkAgentAdapter,
+  usageFromPiSessionStatsDelta,
+} from "../../../src/agents/pi-sdk-agent.js";
 
 function runInput(overrides: any = {}) {
   return {
@@ -65,6 +69,26 @@ describe("PiSdkAgentAdapter", () => {
     })).resolves.toMatchObject({
       text: "hello from sdk"
     });
+  });
+
+  it("normalizes real Pi SDK session usage as a per-call delta", () => {
+    expect(
+      usageFromPiSessionStatsDelta(
+        { tokens: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1, total: 126 } },
+        { tokens: { input: 160, output: 45, cacheRead: 8, cacheWrite: 3, total: 216 } },
+      ),
+    ).toEqual({
+      inputTokens: 60,
+      cachedInputTokens: 5,
+      outputTokens: 25,
+      totalTokens: 90,
+    });
+    expect(
+      usageFromPiSessionStatsDelta(
+        { tokens: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1, total: 126 } },
+        { tokens: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1, total: 126 } },
+      ),
+    ).toBeUndefined();
   });
 
   it("uses an in-memory Pi session by default", () => {

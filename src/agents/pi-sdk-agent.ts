@@ -4,6 +4,7 @@ import type {
   AgentExecutionContext,
   AgentRunInput,
   AgentSdkAdapter,
+  AgentUsage,
   ProviderCommand,
   ProviderHealth,
   ProviderParseInput,
@@ -48,6 +49,16 @@ interface PiSdkModule {
   ModelRegistry: any;
   SessionManager: any;
   SettingsManager: any;
+}
+
+interface PiSessionStats {
+  tokens?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    total?: number;
+  };
 }
 
 export class PiSdkAgentAdapter implements AgentSdkAdapter {
@@ -190,6 +201,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       customTools: this.runtimeOptions.customTools
     });
 
+    const beforeStats = readPiSessionStats(session);
     let streamedText = "";
     const pendingOutput: Array<Promise<void>> = [];
     const unsubscribe = session.subscribe((event: unknown) => {
@@ -215,15 +227,18 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
           `Pi SDK returned an empty response for ${piProvider}/${modelId}`
         );
       }
+      const usage = usageFromPiSessionStatsDelta(beforeStats, readPiSessionStats(session));
       return {
         exitCode: 0,
         parsed: {
           text,
+          usage,
           raw: {
             text,
             provider: piProvider,
             model: modelId,
-            piSession: readPiSessionInfo(sessionManager)
+            piSession: readPiSessionInfo(sessionManager),
+            ...(usage ? { usage } : {})
           }
         }
       };
@@ -240,6 +255,49 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       raw: { text: input.stdout }
     };
   }
+}
+
+function readPiSessionStats(session: { getSessionStats?: () => PiSessionStats }): PiSessionStats | undefined {
+  try {
+    return typeof session.getSessionStats === "function" ? session.getSessionStats() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function usageFromPiSessionStatsDelta(
+  before: PiSessionStats | undefined,
+  after: PiSessionStats | undefined
+): AgentUsage | undefined {
+  if (!before?.tokens || !after?.tokens) return undefined;
+  const inputTokens = positiveDelta(after.tokens.input, before.tokens.input);
+  const outputTokens = positiveDelta(after.tokens.output, before.tokens.output);
+  const cachedInputTokens = positiveDelta(after.tokens.cacheRead, before.tokens.cacheRead);
+  const cacheWriteTokens = positiveDelta(after.tokens.cacheWrite, before.tokens.cacheWrite);
+  const normalized: AgentUsage = {};
+  if (inputTokens !== undefined) normalized.inputTokens = inputTokens;
+  if (cachedInputTokens !== undefined || cacheWriteTokens !== undefined) {
+    normalized.cachedInputTokens = (cachedInputTokens ?? 0) + (cacheWriteTokens ?? 0);
+  }
+  if (outputTokens !== undefined) normalized.outputTokens = outputTokens;
+  if (
+    normalized.inputTokens === undefined &&
+    normalized.cachedInputTokens === undefined &&
+    normalized.outputTokens === undefined
+  ) {
+    return undefined;
+  }
+  normalized.totalTokens =
+    (normalized.inputTokens ?? 0) +
+    (normalized.cachedInputTokens ?? 0) +
+    (normalized.outputTokens ?? 0);
+  return normalized;
+}
+
+function positiveDelta(after: number | undefined, before: number | undefined): number | undefined {
+  if (typeof after !== "number" || typeof before !== "number") return undefined;
+  const delta = after - before;
+  return delta > 0 ? delta : undefined;
 }
 
 export function createPiSdkSessionManager(
