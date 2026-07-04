@@ -164,6 +164,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       agentDir,
       settingsManager,
       additionalSkillPaths: input.skills ?? [],
+      noSkills: this.config.noSkills !== false,
       noExtensions: this.config.noExtensions !== false,
       noThemes: this.config.noThemes !== false,
       noPromptTemplates: this.config.noPromptTemplates !== false,

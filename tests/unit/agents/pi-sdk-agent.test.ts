@@ -1,12 +1,75 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createPiSdkSessionManager,
   PiSdkAgentAdapter,
   usageFromPiSessionStatsDelta,
 } from "../../../src/agents/pi-sdk-agent.js";
+
+const piSdkMock = vi.hoisted(() => {
+  const loaderOptions: any[] = [];
+  const createAgentSession = vi.fn();
+  const registerProvider = vi.fn();
+  const sessionStats = [
+    { tokens: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, total: 12 } },
+    { tokens: { input: 20, output: 5, cacheRead: 1, cacheWrite: 0, total: 26 } },
+  ];
+  return {
+    loaderOptions,
+    createAgentSession,
+    registerProvider,
+    sessionStats,
+  };
+});
+
+vi.mock("@earendil-works/pi-coding-agent", () => ({
+  AuthStorage: {
+    create: vi.fn(() => ({
+      setRuntimeApiKey: vi.fn(),
+    })),
+  },
+  createAgentSession: piSdkMock.createAgentSession,
+  DefaultResourceLoader: class DefaultResourceLoader {
+    constructor(options: any) {
+      piSdkMock.loaderOptions.push(options);
+    }
+
+    async reload() {}
+  },
+  getAgentDir: () => "/tmp/pi-agent",
+  ModelRegistry: {
+    create: vi.fn(() => ({
+      registerProvider: piSdkMock.registerProvider,
+      find: vi.fn(() => ({ id: "deepseek-chat" })),
+      hasConfiguredAuth: vi.fn(() => true),
+    })),
+  },
+  SessionManager: {
+    inMemory: vi.fn((cwd: string) => ({ cwd, isPersisted: () => false })),
+    create: vi.fn((cwd: string, sessionDir?: string, options?: { id?: string }) => ({
+      cwd,
+      sessionDir,
+      id: options?.id,
+      isPersisted: () => Boolean(sessionDir),
+      getSessionId: () => options?.id,
+      getSessionDir: () => sessionDir,
+    })),
+    continueRecent: vi.fn((cwd: string, sessionDir?: string) => ({ cwd, sessionDir })),
+    open: vi.fn((sessionFile: string, sessionDir: string | undefined, cwd: string) => ({
+      cwd,
+      sessionFile,
+      sessionDir,
+      isPersisted: () => true,
+      getSessionFile: () => sessionFile,
+      getSessionDir: () => sessionDir,
+    })),
+  },
+  SettingsManager: {
+    inMemory: vi.fn((settings: any) => settings),
+  },
+}));
 
 function runInput(overrides: any = {}) {
   return {
@@ -23,6 +86,28 @@ function runInput(overrides: any = {}) {
 }
 
 describe("PiSdkAgentAdapter", () => {
+  beforeEach(() => {
+    piSdkMock.loaderOptions.length = 0;
+    piSdkMock.registerProvider.mockClear();
+    piSdkMock.createAgentSession.mockReset();
+    piSdkMock.sessionStats.splice(
+      0,
+      piSdkMock.sessionStats.length,
+      { tokens: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, total: 12 } },
+      { tokens: { input: 20, output: 5, cacheRead: 1, cacheWrite: 0, total: 26 } },
+    );
+    piSdkMock.createAgentSession.mockResolvedValue({
+      session: {
+        prompt: vi.fn(async () => undefined),
+        subscribe: vi.fn(() => () => undefined),
+        getLastAssistantText: vi.fn(() => "done"),
+        getSessionStats: vi.fn(() => piSdkMock.sessionStats.shift()),
+        abort: vi.fn(async () => undefined),
+        dispose: vi.fn(),
+      },
+    });
+  });
+
   it("uses a virtual SDK command for verbose metadata", async () => {
     const adapter = new PiSdkAgentAdapter({
       command: "pi-sdk",
@@ -68,6 +153,55 @@ describe("PiSdkAgentAdapter", () => {
       exitCode: 0
     })).resolves.toMatchObject({
       text: "hello from sdk"
+    });
+  });
+
+  it("passes noSkills and additional skill paths to the Pi SDK resource loader", async () => {
+    const adapter = new PiSdkAgentAdapter({
+      command: "pi-sdk",
+      defaultModel: "deepseek-chat",
+      piProvider: "deepseek",
+      apiKey: "sk-runtime",
+      baseUrl: "https://api.deepseek.com/v1",
+      noSkills: true,
+    });
+
+    await expect(adapter.execute(
+      runInput({ skills: ["input/skills/artifact-contract.md"] }),
+      executionContext(),
+    )).resolves.toMatchObject({
+      parsed: {
+        usage: {
+          inputTokens: 10,
+          cachedInputTokens: 1,
+          outputTokens: 3,
+          totalTokens: 14,
+        },
+      },
+    });
+
+    expect(piSdkMock.loaderOptions[0]).toMatchObject({
+      additionalSkillPaths: ["input/skills/artifact-contract.md"],
+      noSkills: true,
+      noExtensions: true,
+      noPromptTemplates: true,
+      noThemes: true,
+    });
+  });
+
+  it("allows hosts to opt back into default Pi skills explicitly", async () => {
+    const adapter = new PiSdkAgentAdapter({
+      command: "pi-sdk",
+      defaultModel: "deepseek-chat",
+      piProvider: "deepseek",
+      apiKey: "sk-runtime",
+      noSkills: false,
+    });
+
+    await adapter.execute(runInput(), executionContext());
+
+    expect(piSdkMock.loaderOptions[0]).toMatchObject({
+      noSkills: false,
     });
   });
 
@@ -147,4 +281,11 @@ function fakeSessionManager() {
     continueRecent: vi.fn(() => ({ mode: "continue" })),
     open: vi.fn(() => ({ mode: "open" })),
   };
+}
+
+function executionContext() {
+  return {
+    signal: new AbortController().signal,
+    emitOutput: vi.fn(async () => undefined),
+  } as any;
 }
