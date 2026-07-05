@@ -225,6 +225,62 @@ describe("PiSdkAgentAdapter", () => {
     ).toBeUndefined();
   });
 
+  it("normalizes alternate Pi SDK usage shapes without losing token categories", () => {
+    expect(
+      usageFromPiSessionStatsDelta(
+        {
+          usage: {
+            promptTokens: 100,
+            completionTokens: 20,
+            cachedInputTokens: 5,
+            reasoningOutputTokens: 3,
+            totalTokens: 128,
+          },
+        },
+        {
+          usage: {
+            promptTokens: 140,
+            completionTokens: 35,
+            cachedInputTokens: 8,
+            reasoningOutputTokens: 4,
+            totalTokens: 187,
+          },
+        },
+      ),
+    ).toEqual({
+      inputTokens: 40,
+      cachedInputTokens: 3,
+      outputTokens: 15,
+      reasoningOutputTokens: 1,
+      totalTokens: 59,
+    });
+  });
+
+  it("preserves Pi SDK reported total token delta when it differs from component math", () => {
+    expect(
+      usageFromPiSessionStatsDelta(
+        { tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 } },
+        { tokens: { input: 20, output: 9, cacheRead: 1, cacheWrite: 0, total: 35 } },
+      ),
+    ).toEqual({
+      inputTokens: 10,
+      cachedInputTokens: 1,
+      outputTokens: 4,
+      totalTokens: 20,
+    });
+  });
+
+  it("reports total-only Pi SDK stats as total-only instead of inventing categories", () => {
+    expect(
+      usageFromPiSessionStatsDelta(
+        { tokens: { total: 100 } },
+        { tokens: { total: 140 } },
+      ),
+    ).toEqual({
+      totalTokens: 40,
+    });
+  });
+
   it("uses an in-memory Pi session by default", () => {
     const SessionManager = fakeSessionManager();
 

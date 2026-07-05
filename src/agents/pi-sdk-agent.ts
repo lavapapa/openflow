@@ -58,6 +58,21 @@ interface PiSessionStats {
     cacheRead?: number;
     cacheWrite?: number;
     total?: number;
+    totalTokens?: number;
+  };
+  usage?: {
+    input?: number;
+    inputTokens?: number;
+    promptTokens?: number;
+    output?: number;
+    outputTokens?: number;
+    completionTokens?: number;
+    cacheRead?: number;
+    cachedInputTokens?: number;
+    cacheWrite?: number;
+    reasoningOutputTokens?: number;
+    total?: number;
+    totalTokens?: number;
   };
 }
 
@@ -270,29 +285,76 @@ export function usageFromPiSessionStatsDelta(
   before: PiSessionStats | undefined,
   after: PiSessionStats | undefined
 ): AgentUsage | undefined {
-  if (!before?.tokens || !after?.tokens) return undefined;
-  const inputTokens = positiveDelta(after.tokens.input, before.tokens.input);
-  const outputTokens = positiveDelta(after.tokens.output, before.tokens.output);
-  const cachedInputTokens = positiveDelta(after.tokens.cacheRead, before.tokens.cacheRead);
-  const cacheWriteTokens = positiveDelta(after.tokens.cacheWrite, before.tokens.cacheWrite);
+  const beforeUsage = readPiUsageCounters(before);
+  const afterUsage = readPiUsageCounters(after);
+  if (!beforeUsage || !afterUsage) return undefined;
+  const inputTokens = positiveDelta(afterUsage.inputTokens, beforeUsage.inputTokens);
+  const outputTokens = positiveDelta(afterUsage.outputTokens, beforeUsage.outputTokens);
+  const cachedInputTokens = positiveDelta(afterUsage.cachedInputTokens, beforeUsage.cachedInputTokens);
+  const cacheWriteTokens = positiveDelta(afterUsage.cacheWriteTokens, beforeUsage.cacheWriteTokens);
+  const reasoningOutputTokens = positiveDelta(afterUsage.reasoningOutputTokens, beforeUsage.reasoningOutputTokens);
+  const totalTokens = positiveDelta(afterUsage.totalTokens, beforeUsage.totalTokens);
   const normalized: AgentUsage = {};
   if (inputTokens !== undefined) normalized.inputTokens = inputTokens;
   if (cachedInputTokens !== undefined || cacheWriteTokens !== undefined) {
     normalized.cachedInputTokens = (cachedInputTokens ?? 0) + (cacheWriteTokens ?? 0);
   }
   if (outputTokens !== undefined) normalized.outputTokens = outputTokens;
+  if (reasoningOutputTokens !== undefined) normalized.reasoningOutputTokens = reasoningOutputTokens;
   if (
     normalized.inputTokens === undefined &&
     normalized.cachedInputTokens === undefined &&
-    normalized.outputTokens === undefined
+    normalized.outputTokens === undefined &&
+    normalized.reasoningOutputTokens === undefined &&
+    totalTokens === undefined
   ) {
     return undefined;
   }
-  normalized.totalTokens =
+  normalized.totalTokens = totalTokens ??
     (normalized.inputTokens ?? 0) +
     (normalized.cachedInputTokens ?? 0) +
-    (normalized.outputTokens ?? 0);
+    (normalized.outputTokens ?? 0) +
+    (normalized.reasoningOutputTokens ?? 0);
   return normalized;
+}
+
+function readPiUsageCounters(stats: PiSessionStats | undefined): {
+  inputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  outputTokens?: number;
+  reasoningOutputTokens?: number;
+  totalTokens?: number;
+} | undefined {
+  if (!stats) return undefined;
+  const tokens = stats.tokens;
+  const usage = stats.usage;
+  if (!tokens && !usage) return undefined;
+  const counters: {
+    inputTokens?: number;
+    cachedInputTokens?: number;
+    cacheWriteTokens?: number;
+    outputTokens?: number;
+    reasoningOutputTokens?: number;
+    totalTokens?: number;
+  } = {};
+  assignNumber(counters, "inputTokens", firstNumber(tokens?.input, usage?.inputTokens, usage?.promptTokens, usage?.input));
+  assignNumber(counters, "cachedInputTokens", firstNumber(tokens?.cacheRead, usage?.cacheRead, usage?.cachedInputTokens));
+  assignNumber(counters, "cacheWriteTokens", firstNumber(tokens?.cacheWrite, usage?.cacheWrite));
+  assignNumber(counters, "outputTokens", firstNumber(tokens?.output, usage?.outputTokens, usage?.completionTokens, usage?.output));
+  assignNumber(counters, "reasoningOutputTokens", firstNumber(usage?.reasoningOutputTokens));
+  assignNumber(counters, "totalTokens", firstNumber(tokens?.totalTokens, tokens?.total, usage?.totalTokens, usage?.total));
+  return Object.keys(counters).length > 0 ? counters : undefined;
+}
+
+function firstNumber(...values: Array<number | undefined>): number | undefined {
+  return values.find((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+function assignNumber<T extends Record<string, number | undefined>>(target: T, key: keyof T, value: number | undefined): void {
+  if (value !== undefined) {
+    target[key] = value as T[keyof T];
+  }
 }
 
 function positiveDelta(after: number | undefined, before: number | undefined): number | undefined {
