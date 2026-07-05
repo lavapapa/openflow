@@ -451,7 +451,8 @@ export function createDsl(runtime: RuntimeState) {
         callId,
         previousRunId: runtime.callCache.previousRunId,
         previousAgentId: cachedEntry.agentId,
-        artifacts: artifactResult.artifacts
+        artifacts: artifactResult.artifacts,
+        ...(artifactResult.usage ? { usage: artifactResult.usage } : {})
       });
       await recordAgentCall({
         store: runtime.artifactStore,

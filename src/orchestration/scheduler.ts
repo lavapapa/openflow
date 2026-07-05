@@ -220,6 +220,7 @@ export class DefaultScheduler implements Scheduler {
                 exitCode: agentResult?.exitCode ?? 0,
                 artifacts: agentResult?.artifacts ?? { dir: "", promptPath: "", stdoutPath: "", stderrPath: "" },
                 permissions: internalTask.task.permissions || { mode: "default" },
+                ...agentUsagePayload(agentResult),
                 metadata: sanitizeMetadata(internalTask.task.metadata)
               });
             }
@@ -243,6 +244,7 @@ export class DefaultScheduler implements Scheduler {
                 artifacts,
                 error,
                 permissions: internalTask.task.permissions || { mode: "default" },
+                ...agentUsagePayload(agentResult),
                 metadata: sanitizeMetadata(internalTask.task.metadata)
               });
             }
@@ -385,4 +387,10 @@ export class DefaultScheduler implements Scheduler {
     }
     return res;
   }
+}
+
+function agentUsagePayload(result: any): { usage?: AgentResult["usage"] } {
+  return result && typeof result === "object" && result.usage !== undefined
+    ? { usage: result.usage }
+    : {};
 }

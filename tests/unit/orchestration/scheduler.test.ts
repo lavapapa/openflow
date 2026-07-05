@@ -149,4 +149,39 @@ describe("DefaultScheduler", () => {
     expect(completedEvent).toBeDefined();
     expect(completedEvent?.payload.permissions).toEqual({ mode: "dangerously-full-access" });
   });
+
+  it("emits normalized usage on terminal agent events", async () => {
+    const events: Array<{ type: string; payload: any }> = [];
+    const scheduler = new DefaultScheduler({ concurrency: 1 }, {
+      eventSink: {
+        emit: (type: string, payload: any) => {
+          events.push({ type, payload });
+        }
+      }
+    });
+
+    await scheduler.schedule({
+      id: "usage-agent",
+      run: async () => ({
+        ok: true,
+        status: "succeeded",
+        id: "usage-agent",
+        provider: "pi-sdk",
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+        durationMs: 1,
+        artifacts: {},
+        permissions: { mode: "default" },
+        usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+      } as AgentResult)
+    });
+
+    const completedEvent = events.find((event) => event.type === "agent.completed");
+    expect(completedEvent?.payload.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      totalTokens: 14,
+    });
+  });
 });

@@ -1,6 +1,6 @@
 import type { AgentArtifacts } from "../types/artifacts.js";
 import type { SerializedError } from "../types/errors.js";
-import type { AgentPermissions } from "../types/agent.js";
+import type { AgentPermissions, AgentUsage } from "../types/agent.js";
 import type { WorkflowRunLimitSummary } from "../types/workflow.js";
 import type { ThinkingEffort } from "../types/thinking-effort.js";
 
@@ -180,6 +180,7 @@ export interface AgentCompletedPayload {
   exitCode: number;
   artifacts: AgentArtifacts;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown>;
 }
 
@@ -193,6 +194,7 @@ export interface AgentCacheHitPayload {
   previousRunId?: string;
   previousAgentId: string;
   artifacts: AgentArtifacts;
+  usage?: AgentUsage | undefined;
 }
 
 export interface AgentFailedPayload {
@@ -206,6 +208,7 @@ export interface AgentFailedPayload {
   error: SerializedError;
   artifacts: AgentArtifacts;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown>;
 }
 
@@ -219,6 +222,7 @@ export interface AgentTimedOutPayload {
   error: SerializedError;
   artifacts: AgentArtifacts;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown>;
 }
 
@@ -232,6 +236,7 @@ export interface AgentCancelledPayload {
   error?: SerializedError;
   artifacts?: AgentArtifacts;
   permissions: AgentPermissions;
+  usage?: AgentUsage | undefined;
   metadata?: Record<string, unknown>;
 }
 

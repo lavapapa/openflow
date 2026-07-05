@@ -109,6 +109,10 @@ export interface AgentUsage {
 
 export interface AgentUsageSummary extends AgentUsage {
   agentCount: number;
+  totalAgentCount?: number | undefined;
+  splitUsageAgentCount?: number | undefined;
+  totalOnlyUsageAgentCount?: number | undefined;
+  missingUsageAgentCount?: number | undefined;
 }
 
 export interface AgentSuccessResult {
