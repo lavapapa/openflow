@@ -81,7 +81,7 @@ type AgentCallInput = DirectAgentCallInput | DefinitionAgentCallInput;
 type DirectAgentCallInput = {
   id?: string;
   label?: string;
-  provider?: "codex" | "gemini" | "copilot" | "mock" | "opencode" | "antigravity" | "pi" | "cursor" | string;
+  provider?: "codex" | "gemini" | "copilot" | "mock" | "opencode" | "antigravity" | "pi" | "pi-sdk" | "cursor" | string;
   prompt: string;
   model?: string;
   schema?: JsonSchema;
@@ -90,7 +90,7 @@ type DirectAgentCallInput = {
   };
   timeoutMs?: number;
   cwd?: string;
-  permissions?: { mode: "dangerously-full-access" };
+  permissions?: { mode: "dangerously-full-access" | "workspace-full-access" };
   metadata?: Record<string, unknown>;
   thinkingEffort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 };
@@ -99,7 +99,7 @@ type DefinitionAgentCallInput = {
   id?: string;
   definition: string;
   label?: string;
-  provider?: "codex" | "gemini" | "copilot" | "mock" | "opencode" | "antigravity" | "pi" | "cursor" | string;
+  provider?: "codex" | "gemini" | "copilot" | "mock" | "opencode" | "antigravity" | "pi" | "pi-sdk" | "cursor" | string;
   prompt?: string;
   model?: string;
   schema?: JsonSchema;
@@ -108,7 +108,7 @@ type DefinitionAgentCallInput = {
   };
   timeoutMs?: number;
   cwd?: string;
-  permissions?: { mode: "dangerously-full-access" };
+  permissions?: { mode: "dangerously-full-access" | "workspace-full-access" };
   metadata?: Record<string, unknown>;
   thinkingEffort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   [key: string]: any; // Custom variables required by the shared agent
@@ -121,7 +121,7 @@ type DefinitionAgentCallInput = {
 | ----------------- | -------: | ------------------------------------------------------------------------------ |
 | `id`              |       No | Stable identifier for the agent call and artifacts.                            |
 | `label`           |       No | Human-readable label for output.                                               |
-| `provider`        |       No | Provider to use: `mock`, `codex`, `gemini`, `copilot`, `opencode`, `antigravity`, `pi`, or `cursor`. |
+| `provider`        |       No | Provider to use: `mock`, `codex`, `gemini`, `copilot`, `opencode`, `antigravity`, `pi`, `pi-sdk`, or `cursor`. |
 | `prompt`          |      Yes | Prompt sent to the provider.                                                   |
 | `model`           |       No | Model override for this call.                                                  |
 | `schema`          |       No | JSON Schema used to validate structured output.                                |
@@ -190,11 +190,12 @@ The `permissions` field controls the approval and sandbox mode passed to the pro
 
 When omitted, Open Dynamic Workflow uses `{ mode: "default" }` and providers run with their configured approval behaviour (e.g., `--approval-mode plan` for Gemini).
 
-Only one mode is currently supported:
+Two explicit modes are supported:
 
 | Mode | Behaviour |
 | ---- | --------- |
 | `"dangerously-full-access"` | Runs the provider without approval prompts or sandbox restrictions. Use only when the workflow explicitly requires fully autonomous execution. |
+| `"workspace-full-access"` | Runs Pi SDK coding tools autonomously inside the effective cwd. Filesystem tools reject absolute paths, parent traversal, and symlink escapes; bash is OS-sandboxed with network disabled. Only `pi-sdk` supports this mode. |
 
 Per-provider effect:
 
@@ -206,9 +207,16 @@ Per-provider effect:
 | `opencode`| Appends `--dangerously-skip-permissions` and skips read-only config injection. |
 | `antigravity`| Appends `--dangerously-skip-permissions`. |
 | `pi`      | Switches from `safeTools` to `fullAccessTools`. |
+| `pi-sdk`  | Uses scoped filesystem and bash tools for `workspace-full-access`; missing `sandbox-exec`/`bwrap` fails closed. |
 | `mock`   | Field is accepted and recorded but has no effect on mock execution. |
 
 > **Security note:** `dangerously-full-access` allows the agent to read, write, and execute without confirmation prompts. Only use it when the task explicitly requires autonomous multi-step execution and the risk is understood and documented.
+
+`workspace-full-access` is intentionally narrower. It is not accepted by CLI
+providers or `mock`. macOS uses `/usr/bin/sandbox-exec`; Linux deployments must
+install `bwrap`. HOME, TMP, and XDG directories are redirected into the agent
+workspace, sensitive host environment variables are not forwarded, and shell
+network access is denied by default.
 
 #### Example with permissions
 
@@ -220,6 +228,17 @@ const result = await agent({
   // Use only when autonomous multi-step execution is intentional.
   permissions: { mode: "dangerously-full-access" },
   prompt: "Refactor src/auth.ts to use the new token interface. Apply changes directly."
+});
+```
+
+For workspace-confined autonomous execution:
+
+```ts
+const result = await agent({
+  id: "artifact-task",
+  provider: "pi-sdk",
+  permissions: { mode: "workspace-full-access" },
+  prompt: "Create the requested deliverables in the assigned workspace."
 });
 ```
 
@@ -1123,7 +1142,7 @@ Bad: using an unsupported `permissions.mode` value.
 const result = await agent({
   id: "task",
   prompt: "Do something.",
-  permissions: { mode: "read-only" }  // ❌ Only "dangerously-full-access" is supported.
+  permissions: { mode: "read-only" }  // ❌ Use one of the two explicit modes.
 });
 ```
 
@@ -1132,8 +1151,9 @@ Good:
 ```ts
 const result = await agent({
   id: "task",
+  provider: "pi-sdk",
   prompt: "Do something.",
-  permissions: { mode: "dangerously-full-access" }  // ✅ Only valid mode.
+  permissions: { mode: "workspace-full-access" }  // ✅ Scoped autonomous mode.
 });
 ```
 

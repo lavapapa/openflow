@@ -37,6 +37,10 @@ describe("Pretty Format Helpers", () => {
       expect(formatPermission("dangerously-full-access")).toBe("⚠ full-access");
     });
 
+    it("formats workspace-full-access", () => {
+      expect(formatPermission("workspace-full-access")).toBe("workspace-only");
+    });
+
     it("leaves other modes unchanged", () => {
       expect(formatPermission("read-only")).toBe("read-only");
     });

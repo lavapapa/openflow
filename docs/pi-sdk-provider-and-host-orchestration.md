@@ -221,7 +221,7 @@ createOpenFlow({
   workspace: { cwd },
   providerRuntime: {
     "pi-sdk": {
-      customTools: [hostDefinedTool]
+      customToolsFactory: ({ cwd }) => [createHostWorkflowTool({ cwd })]
     }
   }
 });
@@ -231,6 +231,41 @@ This keeps OpenFlow generic while allowing a host application to inject a tool
 such as `xiaobai_start_workflow`. The tool implementation remains in the host
 composition root and calls the host Run Control Plane directly. The workflow
 script still sees only generic `agent()` calls.
+
+`customTools` remains available for cwd-independent tools. A host tool may not
+replace `read`, `bash`, `edit`, `write`, `grep`, `find`, or `ls` when an agent
+uses `workspace-full-access`; those names are reserved for the scoped boundary.
+
+### Workspace-scoped Pi tools
+
+For an autonomous Xiaobai task, use the Pi SDK provider with the scoped mode:
+
+```ts
+const result = await agent({
+  provider: "pi-sdk",
+  prompt: "Complete the task in the assigned run workspace.",
+  permissions: { mode: "workspace-full-access" }
+});
+```
+
+OpenFlow automatically creates the seven standard Pi coding tools for the
+effective cwd. Host products that construct their own Pi session can reuse the
+same public factory:
+
+```ts
+import { createWorkspaceScopedPiToolFactory } from "@travisliu/open-dynamic-workflow/sdk";
+
+const scopedToolsFor = createWorkspaceScopedPiToolFactory();
+const customTools = await scopedToolsFor({ cwd: runWorkspace });
+```
+
+Filesystem calls reject absolute paths and parent traversal before Pi resolves
+them, then verify `realpath` containment before each read or mutation. A new
+path is accepted only when its nearest existing parent resolves inside the
+workspace. Bash uses `sandbox-exec` on macOS and `bwrap` on Linux, clears the
+environment except basic locale/terminal values, redirects HOME/TMP/XDG into
+the workspace, and does not grant network access. Unsupported platforms or a
+missing sandbox runtime fail closed.
 
 ### `handoff`
 

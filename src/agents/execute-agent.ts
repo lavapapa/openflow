@@ -223,6 +223,12 @@ export class DefaultAgentExecutor implements AgentExecutor {
     let sdkParsedResult: ProviderParsedResult | undefined;
     try {
       await this.emitAndValidateAgentAttachments(input);
+      if (resolvedPerms.mode === "workspace-full-access" && input.provider !== "pi-sdk") {
+        throw new OpenDynamicWorkflowError(
+          ErrorCode.UNSUPPORTED_CAPABILITY,
+          `Provider '${input.provider}' does not support permissions.mode='workspace-full-access'. Use provider 'pi-sdk'.`
+        );
+      }
       assertThinkingEffortSupported(input.provider, input.thinkingEffort);
       commandInput = await adapter.buildCommand(runInput);
 

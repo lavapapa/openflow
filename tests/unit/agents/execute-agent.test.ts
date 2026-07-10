@@ -612,6 +612,52 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     expect(metadataJson.permissions).toEqual({ mode: "dangerously-full-access" });
   });
 
+  it("rejects workspace-full-access before running a non-pi-sdk provider", async () => {
+    const config: any = {
+      defaultProvider: "mock",
+      providers: {
+        mock: { responses: { "scoped-agent": { text: "must not run" } } }
+      }
+    };
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-workspace-permission";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({
+      runId,
+      outDir: runOutDir,
+      workflowPath: "dummy.ts",
+      workflowSource: "",
+      workflowHash: "hash",
+      resolvedConfig: config,
+      openDynamicWorkflowVersion: "1.0.0",
+      cwd: process.cwd()
+    });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "scoped-agent",
+      provider: "mock",
+      prompt: "test prompt",
+      timeoutMs: 5000,
+      cwd: process.cwd(),
+      signal: new AbortController().signal,
+      permissions: { mode: "workspace-full-access" }
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: ErrorCode.UNSUPPORTED_CAPABILITY,
+        message: "Provider 'mock' does not support permissions.mode='workspace-full-access'. Use provider 'pi-sdk'."
+      }
+    });
+    const rawResult = JSON.parse(
+      await fs.readFile(path.join(runOutDir, "agents/scoped-agent/raw-result.json"), "utf8")
+    );
+    expect(rawResult.error.code).toBe(ErrorCode.UNSUPPORTED_CAPABILITY);
+  });
+
   it("merges permissions directly into raw result if it is a non-array object", async () => {
     const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation((deps) => {
       const registry = new registryModule.ProviderRegistry();

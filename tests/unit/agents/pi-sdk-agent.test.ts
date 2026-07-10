@@ -10,17 +10,30 @@ import {
 
 const piSdkMock = vi.hoisted(() => {
   const loaderOptions: any[] = [];
+  const toolOptions: any[] = [];
   const createAgentSession = vi.fn();
   const registerProvider = vi.fn();
+  const createTool = (name: string) => vi.fn((cwd: string, options: unknown) => {
+    toolOptions.push({ name, cwd, options });
+    return { name, execute: vi.fn(async () => undefined) };
+  });
   const sessionStats = [
     { tokens: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, total: 12 } },
     { tokens: { input: 20, output: 5, cacheRead: 1, cacheWrite: 0, total: 26 } },
   ];
   return {
     loaderOptions,
+    toolOptions,
     createAgentSession,
     registerProvider,
     sessionStats,
+    createReadTool: createTool("read"),
+    createBashTool: createTool("bash"),
+    createEditTool: createTool("edit"),
+    createWriteTool: createTool("write"),
+    createGrepTool: createTool("grep"),
+    createFindTool: createTool("find"),
+    createLsTool: createTool("ls"),
   };
 });
 
@@ -69,6 +82,13 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   SettingsManager: {
     inMemory: vi.fn((settings: any) => settings),
   },
+  createReadTool: piSdkMock.createReadTool,
+  createBashTool: piSdkMock.createBashTool,
+  createEditTool: piSdkMock.createEditTool,
+  createWriteTool: piSdkMock.createWriteTool,
+  createGrepTool: piSdkMock.createGrepTool,
+  createFindTool: piSdkMock.createFindTool,
+  createLsTool: piSdkMock.createLsTool,
 }));
 
 function runInput(overrides: any = {}) {
@@ -88,6 +108,7 @@ function runInput(overrides: any = {}) {
 describe("PiSdkAgentAdapter", () => {
   beforeEach(() => {
     piSdkMock.loaderOptions.length = 0;
+    piSdkMock.toolOptions.length = 0;
     piSdkMock.registerProvider.mockClear();
     piSdkMock.createAgentSession.mockReset();
     piSdkMock.sessionStats.splice(
@@ -203,6 +224,71 @@ describe("PiSdkAgentAdapter", () => {
     expect(piSdkMock.loaderOptions[0]).toMatchObject({
       noSkills: false,
     });
+  });
+
+  it("installs workspace-scoped built-ins and per-cwd host tools for workspace-full-access", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openflow-scoped-pi-"));
+    const runWorkflowTool = { name: "run_workflow", execute: vi.fn(async () => undefined) };
+    const customToolsFactory = vi.fn(async ({ cwd }: { cwd: string }) => {
+      expect(cwd).toBe(root);
+      return [runWorkflowTool];
+    });
+    const adapter = new PiSdkAgentAdapter(
+      {
+        command: "pi-sdk",
+        defaultModel: "deepseek-chat",
+        piProvider: "deepseek",
+        apiKey: "sk-runtime",
+      },
+      {
+        customToolsFactory,
+        workspaceSandbox: {
+          platform: "linux",
+          sandboxRuntime: process.execPath,
+        },
+      },
+    );
+
+    await adapter.execute(
+      runInput({ cwd: root, permissions: { mode: "workspace-full-access" } }),
+      executionContext(),
+    );
+
+    const sessionOptions = piSdkMock.createAgentSession.mock.calls[0]![0];
+    expect(sessionOptions.tools).toEqual(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+    expect(sessionOptions.customTools.map((tool: { name: string }) => tool.name)).toEqual([
+      "run_workflow",
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "grep",
+      "find",
+      "ls",
+    ]);
+    expect(piSdkMock.toolOptions.map((entry) => entry.cwd)).toEqual(Array(7).fill(root));
+    expect(customToolsFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not allow a host custom tool to override a scoped built-in", async () => {
+    const root = await mkdtemp(join(tmpdir(), "openflow-scoped-pi-conflict-"));
+    const adapter = new PiSdkAgentAdapter(
+      {
+        command: "pi-sdk",
+        defaultModel: "deepseek-chat",
+        piProvider: "deepseek",
+        apiKey: "sk-runtime",
+      },
+      {
+        customTools: [{ name: "read", execute: vi.fn(async () => undefined) }],
+        workspaceSandbox: { platform: "linux", sandboxRuntime: process.execPath },
+      },
+    );
+
+    await expect(adapter.execute(
+      runInput({ cwd: root, permissions: { mode: "workspace-full-access" } }),
+      executionContext(),
+    )).rejects.toMatchObject({ code: "SECURITY_POLICY_VIOLATION" });
   });
 
   it("normalizes real Pi SDK session usage as a per-call delta", () => {

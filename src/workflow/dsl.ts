@@ -324,8 +324,11 @@ export function createDsl(runtime: RuntimeState) {
       if (!("mode" in input.permissions)) {
         throw new InvalidDslCallError("agent() permissions must include a 'mode' property.");
       }
-      if ((input.permissions as any).mode !== "dangerously-full-access") {
-        throw new InvalidDslCallError("agent() permissions.mode must be 'dangerously-full-access'.");
+      const mode = (input.permissions as any).mode;
+      if (mode !== "dangerously-full-access" && mode !== "workspace-full-access") {
+        throw new InvalidDslCallError(
+          "agent() permissions.mode must be 'dangerously-full-access' or 'workspace-full-access'."
+        );
       }
       const extraKeys = Object.keys(input.permissions).filter(k => k !== "mode");
       if (extraKeys.length > 0) {
@@ -343,7 +346,7 @@ export function createDsl(runtime: RuntimeState) {
 
 
     const resolvedPermissions: AgentPermissions = input.permissions
-      ? { mode: "dangerously-full-access" }
+      ? { mode: input.permissions.mode }
       : { mode: "default" };
 
     const originMetadata = activeInvocation ? {

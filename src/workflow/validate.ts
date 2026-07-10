@@ -1029,8 +1029,16 @@ export function validateWorkflow(
             }
             if (!hasMode && !hasDynamicProp) {
               report(init, `${callPrefix} permissions must include a 'mode' property.`);
-            } else if (hasMode && modeValue !== undefined && modeValue !== "dangerously-full-access") {
-              report(init, `${callPrefix} permissions.mode must be 'dangerously-full-access'.`);
+            } else if (
+              hasMode &&
+              modeValue !== undefined &&
+              modeValue !== "dangerously-full-access" &&
+              modeValue !== "workspace-full-access"
+            ) {
+              report(
+                init,
+                `${callPrefix} permissions.mode must be 'dangerously-full-access' or 'workspace-full-access'.`
+              );
             }
           } else if (
             ts.isStringLiteral(init) ||

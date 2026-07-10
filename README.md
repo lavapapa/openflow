@@ -339,7 +339,8 @@ Configuration precedence:
 
 #### Safety & System Context:
 
-- **No Scoped Sandbox:** The `dangerously-full-access` mode is **not** a sandbox or a scoped-write system. It grants full permission mapping to the underlying provider CLI, bypassing safety boundaries in that provider context.
+- **Unscoped full access:** `dangerously-full-access` is **not** a sandbox. It maps broad permissions to the selected provider.
+- **Workspace-scoped execution:** `workspace-full-access` is available only with the in-process `pi-sdk` provider. Pi's seven coding tools are replaced with cwd-bound variants: filesystem tools reject absolute paths, `..`, and symlink escapes; bash runs through `sandbox-exec` on macOS or `bwrap` on Linux with network disabled and a scrubbed environment. A missing sandbox runtime fails closed.
 - **Provider Support Behavior:**
   - `codex`: Maps `dangerously-full-access` to the Codex write-capable flag (`--dangerously-bypass-approvals-and-sandbox`).
   - `gemini`: Supports `dangerously-full-access`. By default, Gemini runs in read-only `--approval-mode plan`. Specifying `dangerously-full-access` switches Gemini to `--approval-mode yolo`, enabling write-capable execution. This is the explicit opt-in; Gemini's own trust and sandbox rules still apply.
@@ -347,9 +348,12 @@ Configuration precedence:
   - `opencode`: Maps `dangerously-full-access` to `--dangerously-skip-permissions` and skips read-only environment injection.
   - `antigravity`: Maps `dangerously-full-access` to `--dangerously-skip-permissions`.
   - `pi`: Switches from read-only tools to configured `fullAccessTools`. It does not imply automatic approval.
+  - `pi-sdk`: Supports both modes. `workspace-full-access` preserves autonomous read/write/command execution while confining agent tools to the effective workspace cwd.
   - `cursor`: Runs with `--mode ask` by default. Specifying `dangerously-full-access` maps to the configured dangerous flag, default `--force`.
   - `mock`: Accepts `dangerously-full-access` without changing its deterministic mock behavior (useful for dry runs and testing).
   - Workflows that omit the `permissions` field default to `{ mode: "default" }` (which does not pass any write-enabling flags to the provider).
+
+Linux deployments that use `workspace-full-access` must install `bwrap`; macOS uses `/usr/bin/sandbox-exec`. Treat this as a deployment readiness requirement rather than falling back to unconfined execution.
 
 Be careful before sharing `.openflow/runs/<runId>` artifacts, because they may contain prompts, source snippets, stdout, stderr, and model outputs.
 

@@ -190,6 +190,18 @@ export default {};
     expect(result.error).toBeNull();
   });
 
+  it("Valid workspace-full-access permissions passes validation", async () => {
+    const workflowPath = await copyFixture("workspace-full-access-valid.workflow.js");
+    const result = await runCli([
+      "validate",
+      workflowPath,
+      "--cwd",
+      TEMP_DIR
+    ]);
+
+    expect(result.error).toBeNull();
+  });
+
   it("Invalid permissions mode fails validation with exit code 3", async () => {
     const workflowPath = await copyFixture("dangerously-full-access-invalid-mode.workflow.js");
     const result = await runCli([

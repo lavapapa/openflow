@@ -11,12 +11,13 @@ export interface StructuredOutputConfig {
 }
 
 export interface AgentPermissionsInput {
-  mode: "dangerously-full-access";
+  mode: "dangerously-full-access" | "workspace-full-access";
 }
 
 export type AgentPermissions =
   | { mode: "default" }
-  | { mode: "dangerously-full-access" };
+  | { mode: "dangerously-full-access" }
+  | { mode: "workspace-full-access" };
 
 export type AgentWorkspaceMode = "shared" | "isolated";
 

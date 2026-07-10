@@ -16,6 +16,12 @@ import { resolveStructuredOutputPrompt } from "../structured/structured-output.j
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import type { ThinkingEffort } from "../types/thinking-effort.js";
+import {
+  assertNoScopedToolOverrides,
+  createWorkspaceScopedPiTools,
+  type WorkspaceScopedPiTool,
+  type WorkspaceScopedPiToolFactoryDefaults
+} from "../security/workspace-scoped-pi-tools.js";
 
 type PiSdkApi = "openai-completions" | "openai-responses" | "anthropic-messages" | "google-generative-ai";
 
@@ -38,8 +44,19 @@ export interface PiSdkAgentProviderConfig extends ProviderConfig {
 }
 
 export interface PiSdkAgentRuntimeOptions {
-  customTools?: any[];
+  customTools?: WorkspaceScopedPiTool[];
+  customToolsFactory?: PiSdkCustomToolsFactory;
+  workspaceSandbox?: WorkspaceScopedPiToolFactoryDefaults;
 }
+
+export interface PiSdkCustomToolsFactoryContext {
+  cwd: string;
+  input: AgentRunInput;
+}
+
+export type PiSdkCustomToolsFactory = (
+  context: PiSdkCustomToolsFactoryContext
+) => WorkspaceScopedPiTool[] | Promise<WorkspaceScopedPiTool[]>;
 
 interface PiSdkModule {
   AuthStorage: any;
@@ -202,6 +219,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
     await loader.reload();
 
     const sessionManager = createPiSdkSessionManager(sdk, input, this.config);
+    const customTools = await resolveCustomTools(input, this.runtimeOptions);
     const { session } = await sdk.createAgentSession({
       cwd: input.cwd,
       agentDir,
@@ -214,7 +232,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       sessionManager,
       tools: resolveTools(input, this.config),
       excludeTools: this.config.excludeTools,
-      customTools: this.runtimeOptions.customTools
+      customTools
     });
 
     const beforeStats = readPiSessionStats(session);
@@ -499,10 +517,33 @@ function normalizeThinkingLevel(value: string | undefined): ThinkingEffort {
 
 function resolveTools(input: AgentRunInput, config: PiSdkAgentProviderConfig): string[] {
   if (config.tools?.length) return config.tools;
-  if (input.permissions.mode === "dangerously-full-access") {
+  if (
+    input.permissions.mode === "dangerously-full-access" ||
+    input.permissions.mode === "workspace-full-access"
+  ) {
     return config.fullAccessTools ?? ["read", "bash", "edit", "write", "grep", "find", "ls"];
   }
   return config.safeTools ?? ["read", "grep", "find", "ls"];
+}
+
+async function resolveCustomTools(
+  input: AgentRunInput,
+  runtimeOptions: PiSdkAgentRuntimeOptions
+): Promise<WorkspaceScopedPiTool[] | undefined> {
+  const factoryTools = runtimeOptions.customToolsFactory
+    ? await runtimeOptions.customToolsFactory({ cwd: input.cwd, input })
+    : [];
+  const hostTools = [...(runtimeOptions.customTools ?? []), ...factoryTools];
+  if (input.permissions.mode !== "workspace-full-access") {
+    return hostTools.length > 0 ? hostTools : undefined;
+  }
+
+  assertNoScopedToolOverrides(hostTools);
+  const scopedTools = await createWorkspaceScopedPiTools({
+    ...runtimeOptions.workspaceSandbox,
+    cwd: input.cwd
+  });
+  return [...hostTools, ...scopedTools];
 }
 
 function buildPiSdkPrompt(input: AgentRunInput): string {

@@ -490,6 +490,21 @@ describe("DSL: agent()", () => {
       expect(task.permissions).toEqual({ mode: "dangerously-full-access" });
     });
 
+    it("accepts and preserves permissions: { mode: 'workspace-full-access' }", async () => {
+      const scheduler = makeSchedulerWithResult(makeSuccessResult("agent-1"));
+      const runtime = makeRuntimeState({ scheduler: scheduler as any });
+      const dsl = createDsl(runtime);
+
+      await dsl.agent({
+        prompt: "hello",
+        permissions: { mode: "workspace-full-access" }
+      });
+
+      expect(scheduler.schedule.mock.calls[0]![0].permissions).toEqual({
+        mode: "workspace-full-access"
+      });
+    });
+
     it("normalizes omitted permissions to { mode: 'default' }", async () => {
       const scheduler = makeSchedulerWithResult(makeSuccessResult("agent-1"));
       const runtime = makeRuntimeState({ scheduler: scheduler as any });
@@ -539,7 +554,9 @@ describe("DSL: agent()", () => {
       await expect(dsl.agent({
         prompt: "hello",
         permissions: { mode: "yolo" } as any
-      })).rejects.toThrow("agent() permissions.mode must be 'dangerously-full-access'.");
+      })).rejects.toThrow(
+        "agent() permissions.mode must be 'dangerously-full-access' or 'workspace-full-access'."
+      );
     });
 
     it("rejects extra keys in permissions object", async () => {

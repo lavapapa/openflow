@@ -9,6 +9,25 @@ import type { WorkflowRunResult } from "../types/workflow.js";
 import { defaultRunsDir } from "../artifacts/run-store.js";
 import { prepareWorkflowRun, readRunJson } from "../runtime/run-service.js";
 
+export {
+  createWorkspaceSandboxBashOperations,
+  createWorkspaceScopedPiToolFactory,
+  createWorkspaceScopedPiTools
+} from "../security/workspace-scoped-pi-tools.js";
+export type {
+  WorkspaceScopedPiTool,
+  WorkspaceScopedPiToolFactory,
+  WorkspaceScopedPiToolFactoryContext,
+  WorkspaceScopedPiToolFactoryDefaults,
+  WorkspaceScopedPiToolsOptions
+} from "../security/workspace-scoped-pi-tools.js";
+export type {
+  PiSdkAgentRuntimeOptions,
+  PiSdkCustomToolsFactory,
+  PiSdkCustomToolsFactoryContext
+} from "../agents/pi-sdk-agent.js";
+export type { ProviderRuntimeMap } from "../agents/registry.js";
+
 export type OpenFlowEvent = EventEnvelope;
 
 export interface OpenFlowClientOptions {

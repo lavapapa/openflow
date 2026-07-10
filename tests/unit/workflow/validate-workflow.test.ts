@@ -162,12 +162,21 @@ describe("Validate Workflow Restrictions", () => {
     expect(issues).toHaveLength(0);
   });
 
+  it("accepts agent() with workspace-scoped permissions literal", () => {
+    const parsed = createParsed(`
+      await agent({ prompt: "hello", permissions: { mode: "workspace-full-access" } });
+    `);
+    expect(validateWorkflow(parsed, options)).toHaveLength(0);
+  });
+
   it("flags agent() with invalid mode in permissions literal", () => {
     const parsed = createParsed(`
       await agent({ prompt: "hello", permissions: { mode: "yolo" } });
     `);
     const issues = validateWorkflow(parsed, options);
-    expect(issues.some(i => i.message.includes("agent() permissions.mode must be 'dangerously-full-access'"))).toBe(true);
+    expect(issues.some(i => i.message.includes(
+      "agent() permissions.mode must be 'dangerously-full-access' or 'workspace-full-access'"
+    ))).toBe(true);
   });
 
   it("flags agent() with missing mode in permissions literal", () => {

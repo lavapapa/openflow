@@ -81,6 +81,7 @@ When using this skill:
 
 7. Set `permissions` only when the workflow requires autonomous execution.
    - Omit `permissions` for most workflows. Providers run with their configured approval behaviour by default.
+   - Prefer `permissions: { mode: "workspace-full-access" }` with `provider: "pi-sdk"` when autonomous work must remain inside the effective cwd. Linux requires `bwrap`; macOS uses `sandbox-exec`.
    - Use `permissions: { mode: "dangerously-full-access" }` only when the agent must apply changes, write files, or execute commands without approval prompts.
    - Document the reason in a workflow comment when using `dangerously-full-access`.
    - Note the concrete per-provider effect: `codex` appends `--dangerously-bypass-approvals-and-sandbox`; `gemini` switches to `--approval-mode yolo`; `cursor` maps to the configured dangerous flag, default `--force`; `mock` records the field but has no runtime effect.
@@ -127,7 +128,7 @@ When using this skill:
 - Do not write unbounded loops. Use `loop()` with explicit, required `maxRounds`; the global ceiling is configured by `workflow.maxLoopRounds` (default 20).
 - Do not assume automatic patch application, automatic commits, automatic merge, approval gates, DAG pipelines, retries, worktree isolation, container isolation, distributed execution, or resumable runs are available unless explicitly implemented.
 - Do not log secrets, tokens, credentials, full private source dumps, or unnecessary raw provider output.
-- Only set `permissions: { mode: "dangerously-full-access" }` when the workflow explicitly requires autonomous execution without approval prompts. Document the reason in a workflow comment adjacent to the agent call.
+- Prefer `workspace-full-access` with `pi-sdk` for cwd-confined autonomous work. Use `dangerously-full-access` only when unscoped provider access is explicitly required, and document the reason.
 - Prefer explicit, reusable workflow files over vague prompts.
 - Prefer validation and dry-run commands before real provider execution.
 - Keep workflow scripts provider-agnostic except for intentional provider selection in `agent()` calls.
@@ -445,7 +446,7 @@ Before returning a final Open Dynamic Workflow workflow, confirm:
 - Provider choices are intentional and explainable.
 - Structured output schemas are valid JSON Schema objects.
 - Structured output uses a supported transport: `auto`, `prompt`, or `validate-only`.
-- `permissions: { mode: "dangerously-full-access" }` is only present where autonomous execution is explicitly intended, and a comment in the workflow explains why.
+- Permission mode matches the required boundary: `workspace-full-access` with `pi-sdk` for cwd-confined work, or documented `dangerously-full-access` when unscoped access is intentional.
 - CLI commands include validation before execution.
 - Config assumptions are stated clearly.
 - No unsupported APIs or out-of-scope capabilities are used.

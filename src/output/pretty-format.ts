@@ -55,11 +55,15 @@ export function getStatusMarker(status: PrettyStatus): string {
 /**
  * Formats a permission label.
  * "dangerously-full-access" -> "⚠ full-access"
+ * "workspace-full-access" -> "workspace-only"
  */
 export function formatPermission(mode?: string): string {
   if (!mode) return "";
   if (mode === "dangerously-full-access") {
     return "⚠ full-access";
+  }
+  if (mode === "workspace-full-access") {
+    return "workspace-only";
   }
   return mode;
 }
