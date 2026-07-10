@@ -356,6 +356,51 @@ describe("PiSdkAgentAdapter", () => {
     expect(order).toEqual(["before:1", "provider", "after:1", "before:2", "provider"]);
   });
 
+  it("propagates a lifecycle guard failure even when Pi swallows the stream error", async () => {
+    const budgetError = new Error("DAILY_TOKEN_BUDGET_EXCEEDED");
+    const providerStream = vi.fn(async () => ({}));
+    const beforeLlmCall = vi.fn(async () => {
+      throw budgetError;
+    });
+    const agent = {
+      streamFn: providerStream,
+    };
+    piSdkMock.createAgentSession.mockResolvedValueOnce({
+      session: {
+        agent,
+        prompt: vi.fn(async () => {
+          try {
+            await agent.streamFn();
+          } catch {
+            // Pi may turn provider/stream failures into session state instead of rejecting prompt().
+          }
+        }),
+        subscribe: vi.fn(() => () => undefined),
+        getLastAssistantText: vi.fn(() => ""),
+        getSessionStats: vi.fn(() => undefined),
+        abort: vi.fn(async () => undefined),
+        dispose: vi.fn(),
+      },
+    });
+    const adapter = new PiSdkAgentAdapter(
+      {
+        command: "pi-sdk",
+        defaultModel: "deepseek-chat",
+        piProvider: "deepseek",
+        apiKey: "sk-runtime",
+      },
+      {
+        llmCallLifecycle: {
+          beforeLlmCall,
+        },
+      },
+    );
+
+    await expect(adapter.execute(runInput(), executionContext())).rejects.toBe(budgetError);
+    expect(beforeLlmCall).toHaveBeenCalledTimes(1);
+    expect(providerStream).not.toHaveBeenCalled();
+  });
+
   it("normalizes real Pi SDK session usage as a per-call delta", () => {
     expect(
       usageFromPiSessionStatsDelta(

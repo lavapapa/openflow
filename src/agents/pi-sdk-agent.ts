@@ -259,19 +259,25 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
     let callIndex = 0;
     let activeCallIndex = 0;
     let lastAfterLlmCall = Promise.resolve();
+    let llmLifecycleError: unknown = null;
     if (llmLifecycle?.beforeLlmCall) {
       const streamFn = session.agent.streamFn;
       session.agent.streamFn = async (...args: unknown[]) => {
         await lastAfterLlmCall;
         activeCallIndex = ++callIndex;
-        await llmLifecycle.beforeLlmCall?.({
-          cwd: input.cwd,
-          input,
-          provider: piProvider,
-          model: modelId,
-          piSessionId: readPiSessionInfo(sessionManager).id,
-          callIndex: activeCallIndex
-        });
+        try {
+          await llmLifecycle.beforeLlmCall?.({
+            cwd: input.cwd,
+            input,
+            provider: piProvider,
+            model: modelId,
+            piSessionId: readPiSessionInfo(sessionManager).id,
+            callIndex: activeCallIndex
+          });
+        } catch (error) {
+          llmLifecycleError = error;
+          throw error;
+        }
         return streamFn(...args);
       };
     }
@@ -338,6 +344,8 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
           }
         }
       };
+    } catch (error) {
+      throw llmLifecycleError ?? error;
     } finally {
       await lastAfterLlmCall;
       context.signal.removeEventListener("abort", abortSession);
