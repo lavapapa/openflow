@@ -19,7 +19,7 @@ describe("thinking-effort-support", () => {
       expect(err).toBeInstanceOf(OpenDynamicWorkflowError);
       expect(err.code).toBe(ErrorCode.THINKING_EFFORT_NOT_SUPPORTED);
       expect(err.message).toContain("Provider 'gemini' does not support thinkingEffort");
-      expect(err.message).toContain("Supported providers: codex, pi, opencode");
+      expect(err.message).toContain("Supported providers: codex, pi, pi-sdk, opencode");
     }
   });
 

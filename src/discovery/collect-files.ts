@@ -25,6 +25,7 @@ export async function collectCandidateFiles(input: {
   const diagnostics: ListDiagnostic[] = [];
 
   const absoluteCwd = resolve(cwd);
+  const realCwd = await fs.realpath(absoluteCwd).catch(() => absoluteCwd);
   const supportedExtensions = [".ts", ".js", ".mjs", ".cjs"];
   const seenPaths = new Set<string>();
 
@@ -67,7 +68,7 @@ export async function collectCandidateFiles(input: {
                 let targetPath = p;
                 if (linkStats.isSymbolicLink()) {
                   targetPath = await fs.realpath(p);
-                  const relativeToCwd = relative(absoluteCwd, targetPath);
+                  const relativeToCwd = relative(realCwd, targetPath);
 
                   // Security check: do not follow symlinks outside cwd
                   if (relativeToCwd.startsWith("..") || isAbsolute(relativeToCwd)) {
@@ -153,7 +154,7 @@ export async function collectCandidateFiles(input: {
             let targetPath = absolutePath;
             if (linkStats.isSymbolicLink()) {
               targetPath = await fs.realpath(absolutePath);
-              const relativeToCwd = relative(absoluteCwd, targetPath);
+              const relativeToCwd = relative(realCwd, targetPath);
 
               // Security check: do not follow symlinks outside cwd
               if (relativeToCwd.startsWith("..") || isAbsolute(relativeToCwd)) {

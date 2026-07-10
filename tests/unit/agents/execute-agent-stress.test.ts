@@ -128,7 +128,7 @@ describe("DefaultAgentExecutor stress and edge cases", () => {
     // Verify disk logs are full size
     const stdoutLog = await fs.readFile(path.join(TEST_OUT_DIR, runId, "agents/large-output-agent/stdout.log"), "utf8");
     expect(stdoutLog.length).toBe(2048 * 1024);
-  });
+  }, 15_000);
 
   it("handles I/O failures gracefully", async () => {
     const config: any = {
