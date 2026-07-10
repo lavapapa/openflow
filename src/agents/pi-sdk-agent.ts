@@ -47,6 +47,26 @@ export interface PiSdkAgentRuntimeOptions {
   customTools?: WorkspaceScopedPiTool[];
   customToolsFactory?: PiSdkCustomToolsFactory;
   workspaceSandbox?: WorkspaceScopedPiToolFactoryDefaults;
+  llmCallLifecycle?: PiSdkLlmCallLifecycle;
+}
+
+export interface PiSdkLlmCallContext {
+  cwd: string;
+  input: AgentRunInput;
+  provider: string;
+  model: string;
+  piSessionId?: string;
+  callIndex: number;
+}
+
+export interface PiSdkLlmCallResult extends PiSdkLlmCallContext {
+  message: unknown;
+  piMessageEntryId?: string;
+}
+
+export interface PiSdkLlmCallLifecycle {
+  beforeLlmCall?(context: PiSdkLlmCallContext): void | Promise<void>;
+  afterLlmCall?(result: PiSdkLlmCallResult): void | Promise<void>;
 }
 
 export interface PiSdkCustomToolsFactoryContext {
@@ -235,10 +255,52 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       customTools
     });
 
+    const llmLifecycle = this.runtimeOptions.llmCallLifecycle;
+    let callIndex = 0;
+    let activeCallIndex = 0;
+    let lastAfterLlmCall = Promise.resolve();
+    if (llmLifecycle?.beforeLlmCall) {
+      const streamFn = session.agent.streamFn;
+      session.agent.streamFn = async (...args: unknown[]) => {
+        await lastAfterLlmCall;
+        activeCallIndex = ++callIndex;
+        await llmLifecycle.beforeLlmCall?.({
+          cwd: input.cwd,
+          input,
+          provider: piProvider,
+          model: modelId,
+          piSessionId: readPiSessionInfo(sessionManager).id,
+          callIndex: activeCallIndex
+        });
+        return streamFn(...args);
+      };
+    }
+
     const beforeStats = readPiSessionStats(session);
     let streamedText = "";
     const pendingOutput: Array<Promise<void>> = [];
     const unsubscribe = session.subscribe((event: unknown) => {
+      const assistantMessage = assistantMessageFromEndEvent(event);
+      if (assistantMessage && llmLifecycle?.afterLlmCall) {
+        const settledCallIndex = activeCallIndex || ++callIndex;
+        lastAfterLlmCall = lastAfterLlmCall.then(async () => {
+          const piMessageEntryId = await waitForPersistedAssistantEntryId(
+            () => sessionManager.getEntries?.() ?? [],
+            assistantMessage
+          );
+          const piSessionId = readPiSessionInfo(sessionManager).id;
+          await llmLifecycle.afterLlmCall?.({
+            cwd: input.cwd,
+            input,
+            provider: piProvider,
+            model: modelId,
+            ...(piSessionId ? { piSessionId } : {}),
+            ...(piMessageEntryId ? { piMessageEntryId } : {}),
+            callIndex: settledCallIndex,
+            message: assistantMessage
+          });
+        });
+      }
       const delta = extractAssistantTextDelta(event);
       if (!delta) return;
       streamedText += delta;
@@ -253,7 +315,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       throwIfAborted(context.signal);
       await session.prompt(buildPiSdkPrompt(input), { expandPromptTemplates: false });
       throwIfAborted(context.signal);
-      await Promise.all(pendingOutput);
+      await Promise.all([Promise.all(pendingOutput), lastAfterLlmCall]);
       const text = session.getLastAssistantText?.()?.trim() || streamedText.trim();
       if (!text) {
         throw new OpenDynamicWorkflowError(
@@ -277,6 +339,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
         }
       };
     } finally {
+      await lastAfterLlmCall;
       context.signal.removeEventListener("abort", abortSession);
       unsubscribe();
       session.dispose();
@@ -289,6 +352,42 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
       raw: { text: input.stdout }
     };
   }
+}
+
+function assistantMessageFromEndEvent(event: unknown): unknown | null {
+  if (!event || typeof event !== "object") return null;
+  const typed = event as { type?: unknown; message?: unknown };
+  if (typed.type !== "message_end" || !typed.message || typeof typed.message !== "object") return null;
+  return (typed.message as { role?: unknown }).role === "assistant" ? typed.message : null;
+}
+
+async function waitForPersistedAssistantEntryId(
+  getEntries: () => unknown[],
+  message: unknown
+): Promise<string | null> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (const entry of [...getEntries()].reverse()) {
+      if (!entry || typeof entry !== "object") continue;
+      const typed = entry as { id?: unknown; type?: unknown; message?: unknown };
+      if (typed.type !== "message" || !typed.message || typeof typed.message !== "object") continue;
+      if ((typed.message as { role?: unknown }).role !== "assistant") continue;
+      if (typed.message === message || assistantMessageIdentityMatches(typed.message, message)) {
+        return typeof typed.id === "string" ? typed.id : null;
+      }
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  }
+  return null;
+}
+
+function assistantMessageIdentityMatches(candidate: unknown, expected: unknown): boolean {
+  if (!candidate || typeof candidate !== "object" || !expected || typeof expected !== "object") return false;
+  const left = candidate as { responseId?: unknown; timestamp?: unknown; stopReason?: unknown };
+  const right = expected as { responseId?: unknown; timestamp?: unknown; stopReason?: unknown };
+  if (typeof left.responseId === "string" && typeof right.responseId === "string") {
+    return left.responseId === right.responseId;
+  }
+  return left.timestamp === right.timestamp && left.stopReason === right.stopReason;
 }
 
 function readPiSessionStats(session: { getSessionStats?: () => PiSessionStats }): PiSessionStats | undefined {

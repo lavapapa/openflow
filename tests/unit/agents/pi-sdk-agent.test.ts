@@ -60,7 +60,12 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
     })),
   },
   SessionManager: {
-    inMemory: vi.fn((cwd: string) => ({ cwd, isPersisted: () => false })),
+    inMemory: vi.fn((cwd: string) => ({
+      cwd,
+      isPersisted: () => false,
+      getSessionId: () => "pi_test_session",
+      getEntries: () => [],
+    })),
     create: vi.fn((cwd: string, sessionDir?: string, options?: { id?: string }) => ({
       cwd,
       sessionDir,
@@ -289,6 +294,66 @@ describe("PiSdkAgentAdapter", () => {
       runInput({ cwd: root, permissions: { mode: "workspace-full-access" } }),
       executionContext(),
     )).rejects.toMatchObject({ code: "SECURITY_POLICY_VIOLATION" });
+  });
+
+  it("awaits per-call lifecycle accounting before Pi starts the next physical LLM call", async () => {
+    const order: string[] = [];
+    const listeners: Array<(event: unknown) => void> = [];
+    const agent = {
+      streamFn: vi.fn(async () => {
+        order.push("provider");
+        return {};
+      }),
+    };
+    piSdkMock.createAgentSession.mockResolvedValueOnce({
+      session: {
+        agent,
+        prompt: vi.fn(async () => {
+          await agent.streamFn();
+          listeners.forEach((listener) => listener({
+            type: "message_end",
+            message: {
+              role: "assistant",
+              content: [],
+              usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12 },
+              stopReason: "toolUse",
+              timestamp: 1,
+            },
+          }));
+          await agent.streamFn();
+        }),
+        subscribe: vi.fn((listener: (event: unknown) => void) => {
+          listeners.push(listener);
+          return () => undefined;
+        }),
+        getLastAssistantText: vi.fn(() => "done"),
+        getSessionStats: vi.fn(() => piSdkMock.sessionStats.shift()),
+        abort: vi.fn(async () => undefined),
+        dispose: vi.fn(),
+      },
+    });
+    const adapter = new PiSdkAgentAdapter(
+      {
+        command: "pi-sdk",
+        defaultModel: "deepseek-chat",
+        piProvider: "deepseek",
+        apiKey: "sk-runtime",
+      },
+      {
+        llmCallLifecycle: {
+          beforeLlmCall: async ({ callIndex }) => {
+            order.push(`before:${callIndex}`);
+          },
+          afterLlmCall: async ({ callIndex }) => {
+            order.push(`after:${callIndex}`);
+          },
+        },
+      },
+    );
+
+    await adapter.execute(runInput(), executionContext());
+
+    expect(order).toEqual(["before:1", "provider", "after:1", "before:2", "provider"]);
   });
 
   it("normalizes real Pi SDK session usage as a per-call delta", () => {
