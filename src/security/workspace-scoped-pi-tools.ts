@@ -3,13 +3,16 @@ import { constants, existsSync } from "node:fs";
 import {
   access,
   lstat,
+  mkdtemp,
   mkdir,
   readFile,
   readdir,
   realpath,
+  rm,
   stat,
   writeFile
 } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import type {
   BashOperations,
@@ -27,6 +30,8 @@ import { OpenDynamicWorkflowError } from "../errors/types.js";
 const SCOPED_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
 const SANDBOX_STATE_DIR = ".openflow-sandbox";
 
+export type WorkspaceSandboxBackend = "native" | "fence";
+
 export interface WorkspaceScopedPiTool {
   name: string;
   execute: (...args: any[]) => Promise<unknown>;
@@ -35,6 +40,7 @@ export interface WorkspaceScopedPiTool {
 export interface WorkspaceScopedPiToolsOptions {
   cwd: string;
   platform?: NodeJS.Platform | undefined;
+  sandboxBackend?: WorkspaceSandboxBackend | undefined;
   sandboxRuntime?: string | undefined;
   runtimeReadOnlyPaths?: string[] | undefined;
 }
@@ -62,6 +68,7 @@ export async function createWorkspaceScopedPiTools(
   const bashOperations = await createWorkspaceSandboxBashOperations({
     cwd: guard.root,
     platform: options.platform,
+    sandboxBackend: options.sandboxBackend,
     sandboxRuntime: options.sandboxRuntime,
     runtimeReadOnlyPaths: options.runtimeReadOnlyPaths
   });
@@ -291,8 +298,9 @@ export async function createWorkspaceSandboxBashOperations(
   if (platform !== "darwin" && platform !== "linux") {
     throw securityViolation(`workspace-full-access is not supported on platform '${platform}'.`);
   }
+  const backend = options.sandboxBackend ?? "native";
   const workspace = await realpath(path.resolve(options.cwd));
-  const runtime = await resolveSandboxRuntime(platform, options.sandboxRuntime);
+  const runtime = await resolveSandboxRuntime(platform, backend, options.sandboxRuntime);
   const runtimeReadOnlyPaths = resolveRuntimeReadOnlyPaths(platform, options.runtimeReadOnlyPaths);
 
   return {
@@ -303,6 +311,18 @@ export async function createWorkspaceSandboxBashOperations(
       }
       await prepareSandboxState(workspace);
       const sandboxEnv = buildSandboxEnvironment(workspace, platform, execution.env);
+      if (backend === "fence") {
+        return runFenceSandboxedCommand({
+          command,
+          commandCwd,
+          execution,
+          platform,
+          runtime,
+          runtimeReadOnlyPaths,
+          sandboxEnv,
+          workspace
+        });
+      }
       const invocation = platform === "darwin"
         ? {
             command: runtime,
@@ -324,6 +344,131 @@ export async function createWorkspaceSandboxBashOperations(
       return spawnSandboxedCommand(invocation, workspace, execution);
     }
   };
+}
+
+interface FencePolicy {
+  allowPty: boolean;
+  forceNewSession?: boolean;
+  network: {
+    allowedDomains: string[];
+    deniedDomains: string[];
+    allowLocalBinding: boolean;
+    allowLocalOutbound: boolean;
+  };
+  filesystem: {
+    strictDenyRead: boolean;
+    allowRead: string[];
+    allowWrite: string[];
+    denyRead: string[];
+    denyWrite: string[];
+  };
+  devices: { mode: "minimal"; allow: string[] };
+  command: {
+    deny: string[];
+    allow: string[];
+    useDefaults: true;
+    runtimeExecPolicy?: "argv";
+  };
+  ssh: {
+    allowedHosts: string[];
+    deniedHosts: string[];
+    allowedCommands: string[];
+    deniedCommands: string[];
+    allowAllCommands: false;
+  };
+}
+
+/** Build the fail-closed Fence policy used for one workspace-scoped bash call. */
+export function buildFencePolicy(
+  workspace: string,
+  runtimeReadOnlyPaths: string[],
+  platform: "darwin" | "linux"
+): FencePolicy {
+  const allowRead = [...new Set([...runtimeReadOnlyPaths, workspace].map((entry) => path.resolve(entry)))];
+  return {
+    allowPty: false,
+    ...(platform === "linux" ? { forceNewSession: true } : {}),
+    network: {
+      allowedDomains: [],
+      deniedDomains: [],
+      allowLocalBinding: false,
+      allowLocalOutbound: false
+    },
+    filesystem: {
+      // Fence's non-strict defaults expose /etc and user runtime managers. The Agent needs neither.
+      strictDenyRead: true,
+      allowRead,
+      allowWrite: [path.resolve(workspace)],
+      denyRead: [],
+      denyWrite: []
+    },
+    devices: { mode: "minimal", allow: [] },
+    command: {
+      deny: [],
+      allow: [],
+      useDefaults: true,
+      ...(platform === "linux" ? { runtimeExecPolicy: "argv" as const } : {})
+    },
+    ssh: {
+      allowedHosts: [],
+      deniedHosts: [],
+      allowedCommands: [],
+      deniedCommands: [],
+      allowAllCommands: false
+    }
+  };
+}
+
+export function buildFenceArgs(
+  command: string,
+  policyPath: string,
+  platform: "darwin" | "linux"
+): string[] {
+  return [
+    "--settings",
+    policyPath,
+    ...(platform === "linux" ? ["--force-new-session"] : []),
+    "--",
+    "/bin/sh",
+    "-c",
+    command
+  ];
+}
+
+async function runFenceSandboxedCommand(input: {
+  command: string;
+  commandCwd: string;
+  execution: {
+    onData: (data: Buffer) => void;
+    signal?: AbortSignal | undefined;
+    timeout?: number | undefined;
+  };
+  platform: "darwin" | "linux";
+  runtime: string;
+  runtimeReadOnlyPaths: string[];
+  sandboxEnv: NodeJS.ProcessEnv;
+  workspace: string;
+}): Promise<{ exitCode: number | null }> {
+  const policyDir = await mkdtemp(path.join(tmpdir(), "openflow-fence-policy-"));
+  const policyPath = path.join(policyDir, "fence.json");
+  try {
+    await writeFile(
+      policyPath,
+      JSON.stringify(buildFencePolicy(input.workspace, input.runtimeReadOnlyPaths, input.platform)),
+      { encoding: "utf8", mode: 0o600 }
+    );
+    return await spawnSandboxedCommand(
+      {
+        command: input.runtime,
+        args: buildFenceArgs(input.command, policyPath, input.platform),
+        env: input.sandboxEnv
+      },
+      input.commandCwd,
+      input.execution
+    );
+  } finally {
+    await rm(policyDir, { force: true, recursive: true });
+  }
 }
 
 export function buildMacSandboxProfile(workspace: string, runtimeReadOnlyPaths: string[]): string {
@@ -492,13 +637,16 @@ function buildSandboxEnvironment(
 
 async function resolveSandboxRuntime(
   platform: "darwin" | "linux",
+  backend: WorkspaceSandboxBackend,
   configured: string | undefined
 ): Promise<string> {
   const candidates = configured
     ? [configured]
-    : platform === "darwin"
-      ? ["/usr/bin/sandbox-exec"]
-      : ["/usr/bin/bwrap", "/bin/bwrap", ...pathsFromEnvironment("bwrap")];
+    : backend === "fence"
+      ? [...pathsFromEnvironment("fence"), "/usr/local/bin/fence", "/opt/homebrew/bin/fence"]
+      : platform === "darwin"
+        ? ["/usr/bin/sandbox-exec"]
+        : ["/usr/bin/bwrap", "/bin/bwrap", ...pathsFromEnvironment("bwrap")];
   for (const candidate of candidates) {
     const absolute = path.resolve(candidate);
     try {
@@ -508,7 +656,11 @@ async function resolveSandboxRuntime(
       // Try the next explicit platform runtime.
     }
   }
-  const runtimeName = platform === "darwin" ? "sandbox-exec" : "bwrap";
+  const runtimeName = backend === "fence"
+    ? "fence"
+    : platform === "darwin"
+      ? "sandbox-exec"
+      : "bwrap";
   throw securityViolation(
     `workspace-full-access requires ${runtimeName}, but no executable runtime was found.`
   );

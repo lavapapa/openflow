@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  buildFenceArgs,
+  buildFencePolicy,
   buildLinuxBwrapArgs,
   buildMacSandboxProfile,
   createWorkspaceScopedPiTools,
@@ -89,6 +91,42 @@ describe("workspace-scoped Pi tools", () => {
       code: "SECURITY_POLICY_VIOLATION",
       message: expect.stringContaining("requires bwrap")
     });
+  });
+
+  it("fails closed when the configured Fence runtime is unavailable", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "openflow-workspace-fence-runtime-"));
+    await expect(createWorkspaceScopedPiTools({
+      cwd: workspace,
+      platform: "linux",
+      sandboxBackend: "fence",
+      sandboxRuntime: join(workspace, "missing-fence")
+    })).rejects.toMatchObject({
+      code: "SECURITY_POLICY_VIOLATION",
+      message: expect.stringContaining("requires fence")
+    });
+  });
+
+  it("builds a strict per-call Fence policy without host or network access", () => {
+    const workspace = "/srv/xiaobai/run-1";
+    const policy = buildFencePolicy(workspace, ["/usr", "/bin", "/lib"], "linux");
+    expect(policy.filesystem.strictDenyRead).toBe(true);
+    expect(policy.filesystem.allowRead).toEqual(["/usr", "/bin", "/lib", workspace]);
+    expect(policy.filesystem.allowWrite).toEqual([workspace]);
+    expect(policy.network.allowedDomains).toEqual([]);
+    expect(policy.network.allowLocalOutbound).toBe(false);
+    expect(policy.devices.mode).toBe("minimal");
+    expect(policy.command.runtimeExecPolicy).toBe("argv");
+    expect(policy.forceNewSession).toBe(true);
+
+    expect(buildFenceArgs("printf ok", "/host/fence.json", "linux")).toEqual([
+      "--settings",
+      "/host/fence.json",
+      "--force-new-session",
+      "--",
+      "/bin/sh",
+      "-c",
+      "printf ok"
+    ]);
   });
 
   it("builds network-isolated sandbox policies with workspace-local environment paths", () => {
