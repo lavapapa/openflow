@@ -367,6 +367,66 @@ describe("DefaultAgentExecutor environment and redaction", () => {
     }
   });
 
+  it("preserves host SDK error codes for preflight failures", async () => {
+    const config: any = {
+      defaultProvider: "sdk-test",
+      providers: { "sdk-test": { command: "sdk-test", defaultModel: "sdk-model" } },
+      security: { allowWorkflowImports: false, passEnv: [], redactEnv: [] },
+    };
+    const sdkAdapter = {
+      name: "sdk-test",
+      kind: "sdk",
+      buildCommand: vi.fn(async (input) => ({ command: "<sdk:sdk-test>", args: [], cwd: input.cwd })),
+      parseResult: vi.fn(),
+      execute: vi.fn(async () => {
+        throw Object.assign(new Error("daily limit reached"), { code: "DAILY_TOKEN_BUDGET_EXCEEDED" });
+      }),
+    };
+    const spy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation(() => ({
+      get: () => sdkAdapter,
+      list: () => [sdkAdapter],
+      register: () => undefined,
+    } as any));
+
+    try {
+      const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+      const runId = "test-run-sdk-preflight-error";
+      await store.createRun({
+        runId,
+        outDir: path.join(TEST_OUT_DIR, runId),
+        workflowPath: "dummy.ts",
+        workflowSource: "",
+        workflowHash: "hash",
+        resolvedConfig: config,
+        openDynamicWorkflowVersion: "1.0.0",
+        cwd: process.cwd(),
+      });
+      const executor = new DefaultAgentExecutor({
+        config,
+        artifactStore: store,
+        eventBus: new EventBus({ runId, artifactStore: store, subscribers: [] }),
+      });
+
+      const result = await executor.execute({
+        id: "sdk-preflight-agent",
+        provider: "sdk-test",
+        prompt: "test prompt",
+        timeoutMs: 5000,
+        cwd: process.cwd(),
+        permissions: { mode: "default" },
+        signal: new AbortController().signal,
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: "DAILY_TOKEN_BUDGET_EXCEEDED", message: "daily limit reached" },
+      });
+      expect(sdkAdapter.parseResult).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("passes provider stdin to real process adapters", async () => {
     const config: any = {
       defaultProvider: "codex",

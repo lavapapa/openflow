@@ -35,6 +35,7 @@ import { assertThinkingEffortSupported } from "./thinking-effort-support.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import type { SerializedError } from "../types/errors.js";
 
 const MAX_IN_MEMORY_LOG_SIZE = 1024 * 1024; // 1MB limit for in-memory results
 
@@ -161,6 +162,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     let exitCode: number | null = null;
     let timedOut = false;
     let cancelled = false;
+    let executionError: SerializedError | undefined;
 
     const agentArtifacts: AgentArtifacts = {
       dir: `agents/${input.id}`,
@@ -318,6 +320,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
         cancelled: sdkResult.cancelled
       };
       sdkParsedResult = sdkResult.parsed;
+      executionError = sdkResult.error;
     } else {
       executionResult = await this.executeProcess(input, runInput, commandInput, adapter, appendToLogs, { stdoutRedactor, stderrRedactor });
     }
@@ -423,7 +426,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     }
 
     if (exitCode !== null && exitCode !== 0) {
-      const errPayload = {
+      const errPayload = executionError ?? {
         name: "ProviderProcessFailed",
         message: stderrInMemory.trim() || `Process exited with code ${exitCode}`,
         code: "PROVIDER_PROCESS_FAILED"
@@ -869,6 +872,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     timedOut: boolean;
     cancelled: boolean;
     parsed?: ProviderParsedResult | undefined;
+    error?: SerializedError | undefined;
   }> {
     try {
       const result = await adapter.execute(runInput, {
@@ -898,9 +902,26 @@ export class DefaultAgentExecutor implements AgentExecutor {
       if (err?.name === "AbortError" || input.signal?.aborted) {
         return { exitCode: null, timedOut: false, cancelled: true };
       }
-      return { exitCode: 1, timedOut: false, cancelled: false };
+      return {
+        exitCode: 1,
+        timedOut: false,
+        cancelled: false,
+        error: serializeSdkExecutionError(err),
+      };
     }
   }
+}
+
+function serializeSdkExecutionError(error: unknown): SerializedError {
+  if (!error || typeof error !== "object") {
+    return { name: "ProviderProcessFailed", message: String(error), code: "PROVIDER_PROCESS_FAILED" };
+  }
+  const value = error as { name?: unknown; message?: unknown; code?: unknown };
+  return {
+    name: typeof value.name === "string" ? value.name : "ProviderProcessFailed",
+    message: typeof value.message === "string" ? value.message : String(error),
+    code: typeof value.code === "string" ? value.code : "PROVIDER_PROCESS_FAILED",
+  };
 }
 
 function removeUndefinedProperties<T>(obj: T): T {
