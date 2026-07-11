@@ -359,6 +359,8 @@ describe("PiSdkAgentAdapter", () => {
   it("propagates a lifecycle guard failure even when Pi swallows the stream error", async () => {
     const budgetError = new Error("DAILY_TOKEN_BUDGET_EXCEEDED");
     const providerStream = vi.fn(async () => ({}));
+    const afterLlmCall = vi.fn(async () => undefined);
+    const listeners: Array<(event: unknown) => void> = [];
     const beforeLlmCall = vi.fn(async () => {
       throw budgetError;
     });
@@ -373,9 +375,23 @@ describe("PiSdkAgentAdapter", () => {
             await agent.streamFn();
           } catch {
             // Pi may turn provider/stream failures into session state instead of rejecting prompt().
+            listeners.forEach((listener) => listener({
+              type: "message_end",
+              message: {
+                role: "assistant",
+                content: [],
+                usage: { input: 0, output: 0, totalTokens: 0 },
+                stopReason: "error",
+                errorMessage: budgetError.message,
+                timestamp: 1,
+              },
+            }));
           }
         }),
-        subscribe: vi.fn(() => () => undefined),
+        subscribe: vi.fn((listener: (event: unknown) => void) => {
+          listeners.push(listener);
+          return () => undefined;
+        }),
         getLastAssistantText: vi.fn(() => ""),
         getSessionStats: vi.fn(() => undefined),
         abort: vi.fn(async () => undefined),
@@ -392,12 +408,14 @@ describe("PiSdkAgentAdapter", () => {
       {
         llmCallLifecycle: {
           beforeLlmCall,
+          afterLlmCall,
         },
       },
     );
 
     await expect(adapter.execute(runInput(), executionContext())).rejects.toBe(budgetError);
     expect(beforeLlmCall).toHaveBeenCalledTimes(1);
+    expect(afterLlmCall).not.toHaveBeenCalled();
     expect(providerStream).not.toHaveBeenCalled();
   });
 

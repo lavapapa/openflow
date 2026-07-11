@@ -260,6 +260,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
     let activeCallIndex = 0;
     let lastAfterLlmCall = Promise.resolve();
     let llmLifecycleError: unknown = null;
+    const providerCallIndexes: number[] = [];
     if (llmLifecycle?.beforeLlmCall) {
       const streamFn = session.agent.streamFn;
       session.agent.streamFn = async (...args: unknown[]) => {
@@ -278,6 +279,7 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
           llmLifecycleError = error;
           throw error;
         }
+        providerCallIndexes.push(activeCallIndex);
         return streamFn(...args);
       };
     }
@@ -287,8 +289,12 @@ export class PiSdkAgentAdapter implements AgentSdkAdapter {
     const pendingOutput: Array<Promise<void>> = [];
     const unsubscribe = session.subscribe((event: unknown) => {
       const assistantMessage = assistantMessageFromEndEvent(event);
-      if (assistantMessage && llmLifecycle?.afterLlmCall) {
-        const settledCallIndex = activeCallIndex || ++callIndex;
+      const settledCallIndex = assistantMessage
+        ? llmLifecycle?.beforeLlmCall
+          ? providerCallIndexes.shift()
+          : ++callIndex
+        : undefined;
+      if (assistantMessage && settledCallIndex !== undefined && llmLifecycle?.afterLlmCall) {
         lastAfterLlmCall = lastAfterLlmCall.then(async () => {
           const piMessageEntryId = await waitForPersistedAssistantEntryId(
             () => sessionManager.getEntries?.() ?? [],
