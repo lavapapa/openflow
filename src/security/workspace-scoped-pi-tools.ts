@@ -609,7 +609,7 @@ async function prepareSandboxState(workspace: string): Promise<void> {
   ]);
 }
 
-function buildSandboxEnvironment(
+export function buildSandboxEnvironment(
   workspace: string,
   platform: "darwin" | "linux",
   source: NodeJS.ProcessEnv | undefined
@@ -624,9 +624,7 @@ function buildSandboxEnvironment(
     XDG_CACHE_HOME: path.join(stateDir, "xdg-cache"),
     XDG_DATA_HOME: path.join(stateDir, "xdg-data"),
     XDG_RUNTIME_DIR: path.join(stateDir, "xdg-runtime"),
-    PATH: platform === "darwin"
-      ? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-      : "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    PATH: "/usr/bin:/bin:/usr/sbin:/sbin"
   };
   for (const name of ["LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"]) {
     const value = source?.[name];
@@ -666,14 +664,15 @@ async function resolveSandboxRuntime(
   );
 }
 
-function resolveRuntimeReadOnlyPaths(
+export function resolveRuntimeReadOnlyPaths(
   platform: "darwin" | "linux",
   configured: string[] | undefined
 ): string[] {
   const defaults = platform === "darwin"
-    ? ["/System", "/usr", "/bin", "/sbin", "/Library", "/opt/homebrew", "/usr/local"]
-    : ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/usr/local", "/opt"];
-  return [...new Set([...defaults, ...(configured ?? [])].map((entry) => path.resolve(entry)))]
+    ? ["/System", "/usr/bin", "/usr/lib", "/usr/sbin", "/bin", "/sbin"]
+    : ["/usr/bin", "/usr/sbin", "/usr/lib", "/usr/lib64", "/usr/share", "/bin", "/sbin", "/lib", "/lib64"];
+  const selected = configured ?? defaults;
+  return [...new Set(selected.map((entry) => path.resolve(entry)))]
     .filter((entry) => existsSync(entry));
 }
 

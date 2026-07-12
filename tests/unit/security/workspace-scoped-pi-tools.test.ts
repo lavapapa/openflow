@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,9 @@ import {
   buildFencePolicy,
   buildLinuxBwrapArgs,
   buildMacSandboxProfile,
+  buildSandboxEnvironment,
   createWorkspaceScopedPiTools,
+  resolveRuntimeReadOnlyPaths,
   type WorkspaceScopedPiTool
 } from "../../../src/security/workspace-scoped-pi-tools.js";
 
@@ -154,6 +157,23 @@ describe("workspace-scoped Pi tools", () => {
     expect(args).toContain("/workspace/.openflow-sandbox/home");
     expect(args).toContain("/workspace/.openflow-sandbox/tmp");
     expect(args).toContain("/workspace/.openflow-sandbox/xdg-runtime");
+  });
+
+  it("treats configured runtime read paths as the complete allowlist", () => {
+    const configured = ["/usr/bin", "/bin"];
+    expect(resolveRuntimeReadOnlyPaths("linux", configured)).toEqual(
+      configured.filter((entry) => existsSync(entry))
+    );
+    expect(resolveRuntimeReadOnlyPaths("linux", configured)).not.toContain("/usr");
+    expect(resolveRuntimeReadOnlyPaths("linux", configured)).not.toContain("/usr/local");
+    expect(resolveRuntimeReadOnlyPaths("linux", configured)).not.toContain("/opt");
+  });
+
+  it("keeps sandbox PATH inside the minimal system executable surface", () => {
+    const environment = buildSandboxEnvironment("/srv/xiaobai/run-1", "linux", {
+      PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    });
+    expect(environment.PATH).toBe("/usr/bin:/bin:/usr/sbin:/sbin");
   });
 
   it.runIf(process.platform === "darwin")(
