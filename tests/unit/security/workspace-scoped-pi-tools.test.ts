@@ -15,7 +15,7 @@ import {
 } from "../../../src/security/workspace-scoped-pi-tools.js";
 
 describe("workspace-scoped Pi tools", () => {
-  it("allows workspace reads and writes while rejecting absolute and parent paths", async () => {
+  it("allows workspace-contained relative and absolute paths while rejecting outside and parent paths", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "openflow-workspace-tools-"));
     const outside = await mkdtemp(join(tmpdir(), "openflow-workspace-outside-"));
     await writeFile(join(workspace, "inside.txt"), "inside");
@@ -25,6 +25,9 @@ describe("workspace-scoped Pi tools", () => {
     const write = toolNamed(tools, "write");
 
     await expect(callTool(read, { path: "inside.txt" })).resolves.toMatchObject({
+      content: [{ type: "text", text: expect.stringContaining("inside") }]
+    });
+    await expect(callTool(read, { path: join(workspace, "inside.txt") })).resolves.toMatchObject({
       content: [{ type: "text", text: expect.stringContaining("inside") }]
     });
     await expect(callTool(write, { path: "nested/new.txt", content: "created" })).resolves.toBeDefined();

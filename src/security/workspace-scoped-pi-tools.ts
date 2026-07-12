@@ -201,18 +201,21 @@ class WorkspacePathGuard {
     }
     const normalizedCandidate = candidate.startsWith("@") ? candidate.slice(1) : candidate;
     if (
-      path.isAbsolute(normalizedCandidate) ||
-      path.win32.isAbsolute(normalizedCandidate) ||
+      (path.win32.isAbsolute(normalizedCandidate) && !path.isAbsolute(normalizedCandidate)) ||
       normalizedCandidate === "~" ||
       normalizedCandidate.startsWith("~/") ||
       normalizedCandidate.startsWith("~\\")
     ) {
-      throw securityViolation(`Absolute and home-relative paths are not allowed: ${candidate}`);
+      throw securityViolation(`Foreign-platform absolute and home-relative paths are not allowed: ${candidate}`);
     }
     if (normalizedCandidate.split(/[\\/]+/u).includes("..")) {
       throw securityViolation(`Parent path segments are not allowed: ${candidate}`);
     }
-    this.assertLexicalContainment(path.resolve(this.root, normalizedCandidate));
+    this.assertLexicalContainment(
+      path.isAbsolute(normalizedCandidate)
+        ? normalizedCandidate
+        : path.resolve(this.root, normalizedCandidate)
+    );
   }
 
   async assertExisting(candidate: string): Promise<string> {
