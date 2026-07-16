@@ -290,7 +290,7 @@ describe("Cursor Agent Adapter Acceptance Tests (AAA)", () => {
 
       // Assert: Verify list of providers and cursor instance
       expect(providersList).toContain("cursor");
-      expect(providersList).toEqual(["mock", "codex", "gemini", "copilot", "opencode", "antigravity", "pi", "cursor"]);
+      expect(providersList).toEqual(["mock", "codex", "gemini", "copilot", "opencode", "antigravity", "pi", "pi-sdk", "cursor"]);
       expect(cursorAdapter).toBeDefined();
       expect(cursorAdapter.name).toBe("cursor");
     });
