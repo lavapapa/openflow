@@ -398,6 +398,23 @@ describe("Validate Workflow Restrictions", () => {
     expect(issues).toHaveLength(0);
   });
 
+  it("accepts agent() with a managed git worktree", () => {
+    const parsed = createParsed(`
+      await agent({
+        prompt: "Analyze one item.",
+        workspace: {
+          mode: "git-worktree",
+          repository: ".",
+          ref: "HEAD",
+          key: "paper-001",
+          retention: "on-failure"
+        }
+      });
+    `);
+
+    expect(validateWorkflow(parsed, options)).toHaveLength(0);
+  });
+
   it("flags expectedOutputs on agent() because handoff is the supported contract", () => {
     const parsed = createParsed(`
       await agent({
@@ -427,10 +444,35 @@ describe("Validate Workflow Restrictions", () => {
     expect(messages.some(message => message.includes("context.handoff entries must be string literals"))).toBe(true);
     expect(messages.some(message => message.includes("context.notes must be a string literal"))).toBe(true);
     expect(messages.some(message => message.includes("workspace.cwd must be a non-empty string literal"))).toBe(true);
-    expect(messages.some(message => message.includes("workspace.mode must be 'shared' or 'isolated'"))).toBe(true);
+    expect(messages.some(message => message.includes("workspace.mode must be 'shared' or 'git-worktree'"))).toBe(true);
     expect(messages.some(message => message.includes("handoff.writeTo must be a string literal"))).toBe(true);
     expect(messages.some(message => message.includes("handoff.instructions must be a string literal"))).toBe(true);
     expect(messages.some(message => message.includes("handoff.required must be a boolean literal"))).toBe(true);
+  });
+
+  it("rejects the misleading isolated mode and incomplete git worktree fields", () => {
+    const parsed = createParsed(`
+      await agent({ prompt: "legacy", workspace: { mode: "isolated", cwd: "working" } });
+      await agent({ prompt: "missing key", workspace: { mode: "git-worktree", ref: "" } });
+      await agent({ prompt: "shared", workspace: { mode: "shared", key: "unexpected" } });
+    `);
+    const messages = validateWorkflow(parsed, options).map(issue => issue.message);
+
+    expect(messages.some(message => message.includes("'isolated' is unsupported"))).toBe(true);
+    expect(messages.some(message => message.includes("workspace.key is required"))).toBe(true);
+    expect(messages.some(message => message.includes("workspace.ref must be a non-empty"))).toBe(true);
+    expect(messages.some(message => message.includes("only supported in 'git-worktree' mode"))).toBe(true);
+  });
+
+  it("rejects workspace fields from the other mode", () => {
+    const parsed = createParsed(`
+      await agent({ prompt: "worktree", workspace: { mode: "git-worktree", cwd: ".", key: "worker-1" } });
+      await agent({ prompt: "implicit shared", workspace: { repository: ".", key: "worker-2" } });
+    `);
+    const messages = validateWorkflow(parsed, options).map(issue => issue.message);
+
+    expect(messages.some(message => message.includes("workspace.cwd is only supported in 'shared' mode"))).toBe(true);
+    expect(messages.some(message => message.includes("workspace.repository is only supported in 'git-worktree' mode"))).toBe(true);
   });
 
   describe("Shared Agent Validation", () => {

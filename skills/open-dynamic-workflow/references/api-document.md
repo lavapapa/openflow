@@ -90,6 +90,15 @@ type DirectAgentCallInput = {
   };
   timeoutMs?: number;
   cwd?: string;
+  workspace?:
+    | { mode?: "shared"; cwd?: string }
+    | {
+        mode: "git-worktree";
+        repository?: string;
+        ref?: string;
+        key: string;
+        retention?: "on-failure" | "always";
+      };
   permissions?: { mode: "dangerously-full-access" };
   metadata?: Record<string, unknown>;
   thinkingEffort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -128,9 +137,45 @@ type DefinitionAgentCallInput = {
 | `structuredOutput`|       No | Controls how a provided schema reaches the provider.                           |
 | `timeoutMs`       |       No | Per-agent timeout in milliseconds.                                             |
 | `cwd`             |       No | Working directory for the provider call.                                       |
+| `workspace`       |       No | Shared-directory or managed Git worktree contract.                             |
 | `permissions`     |       No | Permission mode for this agent call. Omit for default sandboxed behaviour.    |
 | `metadata`        |       No | Descriptive metadata for reports or artifacts.                                 |
 | `thinkingEffort`  |       No | Thinking effort for this call: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. |
+
+### Managed Git worktree workspace
+
+`workspace.mode: "git-worktree"` gives the agent a detached checkout at an immutable commit. It is intended for concurrent file-producing agents that need isolation from the authority checkout and from one another.
+
+```ts
+const result = await agent({
+  id: "worker-1",
+  provider: "codex",
+  prompt: "Produce a candidate edit in this checkout.",
+  permissions: { mode: "dangerously-full-access" },
+  workspace: {
+    mode: "git-worktree",
+    repository: ".",
+    ref: "HEAD",
+    key: "worker-1",
+    retention: "on-failure"
+  }
+});
+```
+
+Rules:
+
+* `key` is required and must be a safe path segment. It is unique within a run namespace.
+* `repository` defaults to the workflow working directory; relative paths resolve from that directory.
+* `ref` defaults to `HEAD` and is resolved before creating the detached worktree.
+* CLI and SDK composition roots authorize only the Git repository containing their runtime `cwd`. Cross-repository hosts must inject a `GitWorktreeManager` configured with an explicit `allowedRepositories` list.
+* Linked worktrees share repository refs and Git config. This mode isolates working files, not hostile Git-metadata writes; use a stronger sandbox or an independent clone for untrusted Providers.
+* `retention: "on-failure"` removes only clean successful worktrees. Failures, cancellation, timeout, dirty state, or a changed HEAD retain the checkout. `"always"` always retains it.
+* The managed root must be outside the source repository. CLI users may set it with `--worktrees-dir`.
+* The provider sees the prepared path only as `cwd`; repository/ref/key management data stays in runtime artifacts.
+* Worktree calls never use resume cache replay. They still appear in `calls.jsonl`, `events.jsonl`, and `agents/<id>/workspace.json`.
+* Do not combine top-level `cwd` with `workspace.mode: "git-worktree"`; use `workspace.repository`.
+
+The exported `WorkspaceManager` offers two distinct post-run operations. `cleanup(lease)` removes only an unchanged checkout. `discard(lease)` is an explicit host acknowledgement that uncommitted candidate edits may be thrown away after external acceptance or rejection; it also releases a matching recorded partial directory from an interrupted prepare, while still refusing to remove a checkout whose HEAD changed.
 
 ### Structured output
 

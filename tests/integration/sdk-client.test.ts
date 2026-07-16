@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createOpenFlow } from "../../src/sdk/index.js";
+import { ChildProcessGitCommandRunner } from "../../src/workspaces/index.js";
 
 const TEMP_DIR = path.resolve("tests/temp-sdk-client");
 
@@ -56,5 +57,62 @@ export default { answer };
     expect(inspected.report?.status).toBe("succeeded");
     const runs = await openflow.listRuns();
     expect(runs[0]).toMatchObject({ runId: run.runId, status: "succeeded" });
+  });
+
+  it("runs a managed worktree through the public SDK composition root", async () => {
+    const repository = path.join(TEMP_DIR, "repository");
+    const runsDir = path.join(TEMP_DIR, "runs");
+    const worktreesDir = path.join(TEMP_DIR, "worktrees");
+    const workflowPath = path.join(repository, "workflows/worktree.ts");
+    const git = new ChildProcessGitCommandRunner();
+    await fs.mkdir(path.dirname(workflowPath), { recursive: true });
+    await fs.writeFile(path.join(repository, "README.md"), "authority\n");
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "sdk-worktree", description: "test managed workspace" };
+
+const answer = await agent({
+  id: "worker",
+  provider: "mock",
+  prompt: "Inspect this checkout without editing it.",
+  workspace: {
+    mode: "git-worktree",
+    repository: ".",
+    ref: "HEAD",
+    key: "worker",
+    retention: "on-failure"
+  }
+});
+
+export default { answer };
+`, "utf8");
+    await git.run({ cwd: repository, args: ["init"] });
+    await git.run({ cwd: repository, args: ["config", "user.name", "OpenFlow Test"] });
+    await git.run({ cwd: repository, args: ["config", "user.email", "openflow@example.test"] });
+    await git.run({ cwd: repository, args: ["add", "."] });
+    await git.run({ cwd: repository, args: ["commit", "-m", "initial"] });
+
+    const openflow = createOpenFlow({
+      workspace: { cwd: repository, runsDir, worktreesDir }
+    });
+    const run = await openflow.run({ workflow: { kind: "file", path: workflowPath } });
+    const { result } = await collectEvents(run);
+
+    expect(result.status).toBe("succeeded");
+    const workspaceArtifact = result.agents[0]?.artifacts.workspacePath;
+    expect(workspaceArtifact).toBe("agents/worker/workspace.json");
+    const receipt = JSON.parse(await fs.readFile(
+      path.join(result.artifactsDir, workspaceArtifact!),
+      "utf8"
+    ));
+    expect(receipt).toMatchObject({
+      state: "finalized",
+      requested: { mode: "git-worktree", repository, key: "worker" },
+      finalization: { action: "removed" }
+    });
+    await expect(fs.access(receipt.lease.path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await git.run({
+      cwd: repository,
+      args: ["status", "--porcelain=v1", "--untracked-files=all"]
+    })).stdout).toBe("");
   });
 });

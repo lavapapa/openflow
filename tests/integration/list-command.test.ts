@@ -13,8 +13,10 @@ const DUPLICATE_FIXTURES_DIR = path.resolve(process.cwd(), "tests/fixtures/listi
 const HINT_TEMP_DIR = path.resolve(process.cwd(), "tests/temp-list-hint-integration");
 
 describe("list-command integration", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     process.exitCode = 0;
+    // Git cannot preserve an empty directory, so create this fixture per run.
+    await fs.mkdir(EMPTY_FIXTURES_DIR, { recursive: true });
   });
 
   it("lists valid resources from a project", async () => {
@@ -282,4 +284,3 @@ describe("list-command integration", () => {
     });
   });
 });
-

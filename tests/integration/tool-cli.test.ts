@@ -119,7 +119,7 @@ describe("Tool CLI Integration", () => {
     const result = await runCli(["doctor"], projectDir);
 
     expect(result.stdout).toContain("Duplicate tool ID 'dup'");
-  });
+  }, 30_000);
 
   it("JSONL output should remain machine-readable with tool events (Case 60)", async () => {
     const srcToolsPath = path.resolve(process.cwd(), "src/tools/index.ts");

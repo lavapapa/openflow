@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **Managed Git worktree workspaces**: `agent()` can request a detached, per-run Git worktree with explicit repository, ref, key, and retention policy. The runtime isolates concurrent file-producing agents, records workspace lifecycle artifacts and events, retains failed or dirty worktrees, and exposes safe cleanup, explicit discard, and list APIs.
+- **CLI and SDK worktree roots**: CLI runs accept `--worktrees-dir`; SDK clients accept `workspace.worktreesDir`.
+- **Repository authorization**: Default CLI and SDK composition roots restrict managed worktrees to the runtime repository; custom hosts may provide an explicit `allowedRepositories` set.
+
+### Changed
+
+- Managed-worktree agent calls are audit-recorded but excluded from resume cache lookup and cache-index rebuilds, because replaying an agent result cannot reproduce its filesystem changes.
+- Explicit discard can reclaim a durable `preparing` lease and partial directory left by a failed or cancelled `git worktree add`.
+- The former `workspace.mode: "isolated"` placeholder is rejected because it never created an isolated directory; callers must use `"git-worktree"` for working-file isolation.
+
 ## [0.4.0] - 2026-06-25
 
 ### Added

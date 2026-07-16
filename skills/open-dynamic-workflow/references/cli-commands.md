@@ -108,6 +108,7 @@ open-dynamic-workflow run review --report jsonl
 open-dynamic-workflow run review --fail-fast
 open-dynamic-workflow run review --resume <previous-run-id>
 open-dynamic-workflow run review --thinking-effort high
+open-dynamic-workflow run review --worktrees-dir ../managed-worktrees
 ```
 
 ---
@@ -131,6 +132,8 @@ open-dynamic-workflow resume <previous-run-id>
 ### Behavior
 
 Resume/cache is intentionally conservative. Open Dynamic Workflow replays the workflow script and compares each `agent()` call in order. A cached result is reused only while the prefix is unchanged: the call sequence must match, `id` or `label` must match when present, and the call fingerprint must match.
+
+Agent calls using `workspace.mode: "git-worktree"` always execute live and disable cache replay from that call onward. Filesystem side effects cannot be reconstructed from a cached text result. A resumed run creates a fresh run namespace and resolves the requested ref again; it never silently reattaches an older retained worktree.
 
 `open-dynamic-workflow resume` reuses the exact `workflowFile` recorded in the original run's `run-input.json`, even if the original run was started by name. This ensures deterministic replay even if name resolution would now point to a different file.
 
@@ -264,4 +267,3 @@ When the default project configuration file (`.open-dynamic-workflow/config.yaml
         *   In `json` and `jsonl` modes, preflight setup failures write exactly one parseable JSON/JSONL error envelope containing `error.hint` to `stdout`, and no human-readable error messages are written to `stdout` or `stderr`.
 
 Initialization is optional: if no config file exists, the system automatically falls back to built-in defaults. Explicitly specifying a custom configuration path using `--config` suppresses the initialization hint unless that path resolves to the default project configuration path.
-

@@ -3,6 +3,11 @@ import type { SerializedError } from "../types/errors.js";
 import type { AgentPermissions, AgentUsage } from "../types/agent.js";
 import type { WorkflowRunLimitSummary } from "../types/workflow.js";
 import type { ThinkingEffort } from "../types/thinking-effort.js";
+import type {
+  WorkspaceFinalizeResult,
+  WorkspaceLease,
+  WorkspaceRetention
+} from "../workspaces/index.js";
 
 export type EventType =
   | "workflow.started"
@@ -17,6 +22,9 @@ export type EventType =
   | "agent.started"
   | "agent.skill.attached"
   | "agent.context.attached"
+  | "agent.workspace.prepared"
+  | "agent.workspace.finalized"
+  | "agent.workspace.failed"
   | "agent.output"
   | "agent.handoff.missing"
   | "agent.completed"
@@ -160,6 +168,28 @@ export interface AgentContextAttachedPayload {
   path?: string;
   index?: number;
   length?: number;
+}
+
+export interface AgentWorkspacePreparedPayload {
+  agentId: string;
+  artifactPath: string;
+  ref: string;
+  retention: WorkspaceRetention;
+  lease: WorkspaceLease;
+}
+
+export interface AgentWorkspaceFinalizedPayload {
+  agentId: string;
+  artifactPath: string;
+  finalization: WorkspaceFinalizeResult;
+}
+
+export interface AgentWorkspaceFailedPayload {
+  agentId: string;
+  artifactPath: string;
+  operation: "prepare" | "finalize";
+  error: SerializedError;
+  lease?: WorkspaceLease | undefined;
 }
 
 export interface AgentHandoffMissingPayload {

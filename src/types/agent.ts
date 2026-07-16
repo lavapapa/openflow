@@ -18,17 +18,38 @@ export type AgentPermissions =
   | { mode: "default" }
   | { mode: "dangerously-full-access" };
 
-export type AgentWorkspaceMode = "shared" | "isolated";
+export type AgentWorkspaceMode = "shared" | "git-worktree";
+export type AgentWorkspaceRetention = "on-failure" | "always";
 
-export interface AgentWorkspaceInput {
+export interface AgentSharedWorkspaceInput {
   cwd?: string | undefined;
-  mode?: AgentWorkspaceMode | undefined;
+  mode?: "shared" | undefined;
 }
 
-export interface AgentWorkspace {
-  cwd: string;
-  mode: AgentWorkspaceMode;
+export interface AgentGitWorktreeInput {
+  mode: "git-worktree";
+  repository?: string | undefined;
+  ref?: string | undefined;
+  key: string;
+  retention?: AgentWorkspaceRetention | undefined;
 }
+
+export type AgentWorkspaceInput = AgentSharedWorkspaceInput | AgentGitWorktreeInput;
+
+export interface AgentSharedWorkspace {
+  cwd: string;
+  mode: "shared";
+}
+
+export interface AgentGitWorktreeWorkspace {
+  mode: "git-worktree";
+  repository: string;
+  ref: string;
+  key: string;
+  retention: AgentWorkspaceRetention;
+}
+
+export type AgentWorkspace = AgentSharedWorkspace | AgentGitWorktreeWorkspace;
 
 export interface AgentContextInput {
   files?: string[] | undefined;

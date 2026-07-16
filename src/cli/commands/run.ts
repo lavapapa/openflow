@@ -7,7 +7,6 @@ import { parseKeyValueArgs, parsePositiveInteger, parseReportMode, parseThinking
 import { printDryRunSummary } from "../print.js";
 import { DefaultRuntimeRunner, type RuntimeRunner } from "../../runtime/public.js";
 import { FileSystemArtifactStore } from "../../artifacts/run-store.js";
-import { DefaultAgentExecutor } from "../../agents/execute-agent.js";
 import { createReporter } from "../../output/reporter.js";
 import { EventBus } from "../../orchestration/event-bus.js";
 import { loadSharedAgentRegistry } from "../../shared-agents/load.js";
@@ -15,6 +14,7 @@ import { loadToolRegistry } from "../../tools/load.js";
 import { DefaultToolExecutor } from "../../tools/executor.js";
 import * as path from "node:path";
 import { detectProjectInitHintContext, attachHintToError } from "../../errors/project-init-hint.js";
+import { createDefaultAgentExecutor } from "../../runtime/create-agent-executor.js";
 
 export interface RunCommandDeps {
   runtimeRunner: RuntimeRunner;
@@ -67,6 +67,13 @@ export async function runWorkflowService(
     throw new OpenDynamicWorkflowError(
       ErrorCode.CLI_USAGE_ERROR,
       "CLI option '--model' value must be a non-empty string."
+    );
+  }
+
+  if (rawOptions.worktreesDir !== undefined && (typeof rawOptions.worktreesDir !== "string" || rawOptions.worktreesDir.trim() === "")) {
+    throw new OpenDynamicWorkflowError(
+      ErrorCode.CLI_USAGE_ERROR,
+      "CLI option '--worktrees-dir' value must be a non-empty string."
     );
   }
 
@@ -226,6 +233,7 @@ export async function runWorkflowService(
       config: config.configPath,
       cwd: config.cwd,
       out: config.outDir,
+      worktreesDir: rawOptions.worktreesDir,
       report: rawOptions.report,
       concurrency: rawOptions.concurrency,
       timeoutMs: rawOptions.timeoutMs,
@@ -261,10 +269,13 @@ export async function runWorkflowService(
 
   // Note: workflow.resolved is now emitted inside the runtime runner execution boundary.
 
-  const agentExecutor = new DefaultAgentExecutor({
+  const agentExecutor = createDefaultAgentExecutor({
     config: config as any,
     artifactStore,
-    eventBus
+    eventBus,
+    runId: runIdGenerated,
+    cwd: config.cwd,
+    worktreesDir: rawOptions.worktreesDir
   });
 
   // Collect secrets for tool redaction
@@ -398,4 +409,3 @@ export async function runCommand(input: RunCommandInput): Promise<void> {
     throw attachHintToError(error, hintContext);
   }
 }
-

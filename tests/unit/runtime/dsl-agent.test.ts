@@ -283,6 +283,34 @@ describe("DSL: agent()", () => {
     );
   });
 
+  it("normalizes a managed git worktree request before execution", async () => {
+    const agentExecutor = { execute: vi.fn().mockResolvedValue(makeSuccessResult("agent-1")) };
+    const scheduler = makeExecutingScheduler();
+    const runtime = makeRuntimeState({ scheduler: scheduler as any, agentExecutor: agentExecutor as any });
+    const dsl = createDsl(runtime);
+
+    await dsl.agent({
+      id: "agent-1",
+      prompt: "edit candidate",
+      workspace: {
+        mode: "git-worktree",
+        repository: "repo",
+        key: "paper-001"
+      }
+    });
+
+    expect(agentExecutor.execute).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: "/workspace/repo",
+      workspace: {
+        mode: "git-worktree",
+        repository: "/workspace/repo",
+        ref: "HEAD",
+        key: "paper-001",
+        retention: "on-failure"
+      }
+    }));
+  });
+
   it("rejects expectedOutputs because handoff is the supported soft contract", async () => {
     const runtime = makeRuntimeState();
     const dsl = createDsl(runtime);
@@ -303,6 +331,12 @@ describe("DSL: agent()", () => {
       .rejects.toThrow("workspace.mode");
     await expect(dsl.agent({ prompt: "hello", workspace: { cwd: "" } } as any))
       .rejects.toThrow("workspace.cwd");
+    await expect(dsl.agent({ prompt: "hello", workspace: { mode: "isolated" } } as any))
+      .rejects.toThrow("isolated");
+    await expect(dsl.agent({ prompt: "hello", workspace: { mode: "git-worktree", key: "../escape" } } as any))
+      .rejects.toThrow("safe path segment");
+    await expect(dsl.agent({ prompt: "hello", cwd: "/tmp/repo", workspace: { mode: "git-worktree", key: "worker" } } as any))
+      .rejects.toThrow("cannot be combined");
     await expect(dsl.agent({ prompt: "hello", handoff: { required: "yes" } } as any))
       .rejects.toThrow("handoff.required");
   });
@@ -675,6 +709,50 @@ describe("DSL: agent()", () => {
       expect(artifactStore.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
         sequence: 1,
         status: "succeeded"
+      }));
+    });
+
+    it("records worktree calls for audit but permanently excludes them from resume replay", async () => {
+      const cache = {
+        readEnabled: true,
+        previousEntries: new Map([[1, {
+          kind: "agent",
+          sequence: 1,
+          callId: "worktree-call",
+          fingerprint: "would-have-matched",
+          status: "succeeded",
+          resultPath: "agents/old/normalized-result.json",
+          agentId: "old-agent"
+        }]]),
+        prefixCacheUsable: true,
+        currentEntries: [],
+        writeIndex: true
+      };
+      const artifactStore = {
+        getRunArtifacts: () => ({ rootDir: "/workspace/.open-dynamic-workflow/runs/new-run" }),
+        isRunCreated: () => true,
+        writeText: vi.fn(),
+        writeJson: vi.fn(),
+        appendJsonl: vi.fn()
+      };
+      const runtime = makeRuntimeState({
+        callCache: cache as any,
+        artifactStore: artifactStore as any,
+        callSequence: 0
+      });
+
+      await createDsl(runtime).agent({
+        id: "worktree-call",
+        prompt: "edit files",
+        workspace: { mode: "git-worktree", repository: ".", key: "worker-1" }
+      });
+
+      expect(runtime.scheduler.schedule).toHaveBeenCalledTimes(1);
+      expect(cache.prefixCacheUsable).toBe(false);
+      expect(cache.writeIndex).toBe(false);
+      expect(artifactStore.appendJsonl).toHaveBeenCalledWith("calls.jsonl", expect.objectContaining({
+        kind: "agent",
+        cacheable: false
       }));
     });
 

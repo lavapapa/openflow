@@ -10,6 +10,7 @@ export interface AgentArtifacts {
   permissionsPath?: string;
   metadataPath?: string;
   handoffPath?: string;
+  workspacePath?: string;
 }
 
 export interface RunManifest {

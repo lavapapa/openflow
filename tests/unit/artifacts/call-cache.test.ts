@@ -119,7 +119,7 @@ describe("call cache", () => {
     })).not.toBe(first);
     expect(computeAgentFingerprint({
       ...base,
-      call: { ...base.call, workspace: { cwd: "/repo/work", mode: "isolated" as const } }
+      call: { ...base.call, workspace: { mode: "git-worktree" as const, repository: "/repo", key: "worker-1" } }
     })).not.toBe(first);
     expect(computeAgentFingerprint({
       ...base,
@@ -217,6 +217,29 @@ describe("call cache", () => {
     });
 
     expect(cache.previousEntries.get(1)?.fingerprint).toBe("fp2");
+  });
+
+  it("never replays entries explicitly marked non-cacheable", () => {
+    const cache = makeCache([
+      { kind: "agent", sequence: 1, callId: "a", fingerprint: "fp", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a", cacheable: false }
+    ]);
+
+    expect(findPrefixCacheHit({ cache, kind: "agent", sequence: 1, callId: "a", fingerprint: "fp" })).toBeUndefined();
+    expect(cache.prefixCacheUsable).toBe(false);
+  });
+
+  it("excludes non-cacheable calls when rebuilding a missing cache index", async () => {
+    const runRoot = path.join(TEMP_DIR, "run-non-cacheable-rebuild");
+    await fs.mkdir(path.join(runRoot, "agents/a"), { recursive: true });
+    await fs.writeFile(path.join(runRoot, "manifest.json"), JSON.stringify({ runId: "run-non-cacheable-rebuild" }), "utf8");
+    await fs.writeFile(path.join(runRoot, "calls.jsonl"), [
+      JSON.stringify({ kind: "agent", sequence: 1, callId: "a", fingerprint: "fp-a", status: "succeeded", resultPath: "agents/a/normalized-result.json", agentId: "a", cacheable: false }),
+      JSON.stringify({ kind: "agent", sequence: 2, callId: "b", fingerprint: "fp-b", status: "succeeded", resultPath: "agents/b/normalized-result.json", agentId: "b" })
+    ].join("\n"), "utf8");
+
+    const cache = await loadRuntimeCallCache({ resume: "run-non-cacheable-rebuild", outDir: TEMP_DIR });
+    expect(cache.previousEntries.has(1)).toBe(false);
+    expect(cache.previousEntries.get(2)?.fingerprint).toBe("fp-b");
   });
 
   it("materializes cached agent results into current run root and preserves semantic fields in workflow-visible result", async () => {

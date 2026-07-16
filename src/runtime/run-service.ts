@@ -2,7 +2,6 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { EventSubscriber } from "../orchestration/event-bus.js";
 import { EventBus } from "../orchestration/event-bus.js";
-import { DefaultAgentExecutor } from "../agents/execute-agent.js";
 import { FileSystemArtifactStore } from "../artifacts/run-store.js";
 import { loadConfig } from "../config/load.js";
 import type { ConfigCliOverrides } from "../config/merge.js";
@@ -20,12 +19,14 @@ import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
 import type { ThinkingEffort } from "../types/thinking-effort.js";
 import type { ProviderRuntimeMap } from "../agents/registry.js";
+import { createDefaultAgentExecutor } from "./create-agent-executor.js";
 
 export interface RunServiceInput {
   workflowTarget: string;
   cwd: string;
   configPath?: string | undefined;
   runsDir?: string | undefined;
+  worktreesDir?: string | undefined;
   args?: JsonObject | undefined;
   defaultProvider?: ProviderName | undefined;
   model?: string | undefined;
@@ -188,6 +189,7 @@ export async function prepareWorkflowRun(input: RunServiceInput): Promise<Prepar
       config: config.configPath,
       cwd: config.cwd,
       out: config.outDir,
+      worktreesDir: input.worktreesDir,
       report: input.report,
       concurrency: input.concurrency,
       timeoutMs: input.timeoutMs,
@@ -205,11 +207,14 @@ export async function prepareWorkflowRun(input: RunServiceInput): Promise<Prepar
     ...(input.subscribers !== undefined ? { subscribers: input.subscribers } : {})
   });
 
-  const agentExecutor = new DefaultAgentExecutor({
+  const agentExecutor = createDefaultAgentExecutor({
     config: config as any,
     artifactStore,
     eventBus,
-    providerRuntime: input.providerRuntime
+    providerRuntime: input.providerRuntime,
+    runId,
+    cwd: config.cwd,
+    worktreesDir: input.worktreesDir
   });
 
   const abortController = new AbortController();

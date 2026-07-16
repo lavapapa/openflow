@@ -11,3 +11,4 @@ export type {
   DiscoveryService
 } from "./discovery/types.js";
 export { createDiscoveryService } from "./discovery/service.js";
+export * from "./workspaces/index.js";

@@ -889,6 +889,8 @@ export function validateWorkflow(
         }
         return;
       }
+      let literalMode: string | undefined;
+      let hasKey = false;
       for (const workspaceProp of expr.properties) {
         if (!ts.isPropertyAssignment(workspaceProp)) {
           report(workspaceProp, `${callPrefix} workspace does not support shorthand, spread, or method properties.`);
@@ -910,14 +912,55 @@ export function validateWorkflow(
           }
         } else if (key === "mode") {
           if (isStringLiteralLike(init)) {
-            if (init.text !== "shared" && init.text !== "isolated") {
-              report(init, `${callPrefix} workspace.mode must be 'shared' or 'isolated'.`);
+            literalMode = init.text;
+            if (init.text === "isolated") {
+              report(init, `${callPrefix} workspace.mode 'isolated' is unsupported because it did not create an isolated directory; use 'git-worktree'.`);
+            } else if (init.text !== "shared" && init.text !== "git-worktree") {
+              report(init, `${callPrefix} workspace.mode must be 'shared' or 'git-worktree'.`);
             }
           } else if (isStaticValue(init)) {
-            report(init, `${callPrefix} workspace.mode must be 'shared' or 'isolated'.`);
+            report(init, `${callPrefix} workspace.mode must be 'shared' or 'git-worktree'.`);
+          }
+        } else if (key === "repository" || key === "ref" || key === "key") {
+          if (key === "key") hasKey = true;
+          if (isStringLiteralLike(init)) {
+            if (init.text.trim() === "") {
+              report(init, `${callPrefix} workspace.${key} must be a non-empty string literal.`);
+            }
+          } else if (isStaticValue(init)) {
+            report(init, `${callPrefix} workspace.${key} must be a non-empty string literal.`);
+          }
+        } else if (key === "retention") {
+          if (isStringLiteralLike(init)) {
+            if (init.text !== "on-failure" && init.text !== "always") {
+              report(init, `${callPrefix} workspace.retention must be 'on-failure' or 'always'.`);
+            }
+          } else if (isStaticValue(init)) {
+            report(init, `${callPrefix} workspace.retention must be 'on-failure' or 'always'.`);
           }
         } else {
           report(workspaceProp.name, `${callPrefix} workspace contains unsupported key '${key}'.`);
+        }
+      }
+      if (literalMode === "git-worktree" && !hasKey) {
+        report(expr, `${callPrefix} workspace.key is required for 'git-worktree' mode.`);
+      }
+      if (literalMode === "shared" || literalMode === undefined) {
+        for (const workspaceProp of expr.properties) {
+          if (!ts.isPropertyAssignment(workspaceProp)) continue;
+          if (!ts.isIdentifier(workspaceProp.name) && !ts.isStringLiteral(workspaceProp.name)) continue;
+          if (["repository", "ref", "key", "retention"].includes(workspaceProp.name.text)) {
+            report(workspaceProp.name, `${callPrefix} workspace.${workspaceProp.name.text} is only supported in 'git-worktree' mode.`);
+          }
+        }
+      }
+      if (literalMode === "git-worktree") {
+        for (const workspaceProp of expr.properties) {
+          if (!ts.isPropertyAssignment(workspaceProp)) continue;
+          if (!ts.isIdentifier(workspaceProp.name) && !ts.isStringLiteral(workspaceProp.name)) continue;
+          if (workspaceProp.name.text === "cwd") {
+            report(workspaceProp.name, `${callPrefix} workspace.cwd is only supported in 'shared' mode.`);
+          }
         }
       }
     };

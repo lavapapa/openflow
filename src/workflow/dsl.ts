@@ -1,4 +1,10 @@
-import type { AgentCallInput, AgentResult, AgentPermissions, DirectAgentCallInput } from "../types/agent.js";
+import type {
+  AgentCallInput,
+  AgentResult,
+  AgentPermissions,
+  DirectAgentCallInput,
+  AgentWorkspace
+} from "../types/agent.js";
 import type { ScheduledTask, ScheduleOptions } from "../types/scheduler.js";
 import type { AgentExecutionInput } from "../agents/execution-types.js";
 import type { RuntimeState } from "./types.js";
@@ -212,37 +218,72 @@ function normalizeAgentHandoff(value: unknown): DirectAgentCallInput["handoff"] 
   return handoff;
 }
 
-function normalizeWorkspaceInput(input: DirectAgentCallInput, runtimeCwd: string) {
-  if (input.workspace !== undefined) {
-    if (!input.workspace || typeof input.workspace !== "object" || Array.isArray(input.workspace)) {
-      throw new InvalidDslCallError("agent() workspace must be an object.");
-    }
-    if (input.workspace.cwd !== undefined && (typeof input.workspace.cwd !== "string" || input.workspace.cwd.trim() === "")) {
-      throw new InvalidDslCallError("agent() workspace.cwd must be a non-empty string.");
-    }
-    if (
-      input.workspace.mode !== undefined &&
-      input.workspace.mode !== "shared" &&
-      input.workspace.mode !== "isolated"
-    ) {
-      throw new InvalidDslCallError('agent() workspace.mode must be "shared" or "isolated".');
-    }
+function normalizeWorkspaceInput(input: DirectAgentCallInput, runtimeCwd: string): AgentWorkspace {
+  if (input.workspace === undefined) {
+    return { cwd: input.cwd || runtimeCwd, mode: "shared" };
+  }
+  if (!input.workspace || typeof input.workspace !== "object" || Array.isArray(input.workspace)) {
+    throw new InvalidDslCallError("agent() workspace must be an object.");
   }
 
-  const selectedCwd = input.workspace?.cwd !== undefined
-    ? (isAbsolute(input.workspace.cwd) ? input.workspace.cwd : resolve(runtimeCwd, input.workspace.cwd))
-    : (input.cwd || runtimeCwd);
+  const workspace = input.workspace as unknown as Record<string, unknown>;
+  const mode = workspace.mode ?? "shared";
+  if (mode === "isolated") {
+    throw new InvalidDslCallError('agent() workspace.mode "isolated" is unsupported because it did not create an isolated directory; use "git-worktree".');
+  }
+  if (mode !== "shared" && mode !== "git-worktree") {
+    throw new InvalidDslCallError('agent() workspace.mode must be "shared" or "git-worktree".');
+  }
 
+  if (mode === "shared") {
+    const unknown = Object.keys(workspace).filter((key) => key !== "mode" && key !== "cwd");
+    if (unknown.length > 0) {
+      throw new InvalidDslCallError(`agent() shared workspace contains unsupported keys: ${unknown.join(", ")}.`);
+    }
+    if (workspace.cwd !== undefined && (typeof workspace.cwd !== "string" || workspace.cwd.trim() === "")) {
+      throw new InvalidDslCallError("agent() workspace.cwd must be a non-empty string.");
+    }
+    const cwd = typeof workspace.cwd === "string"
+      ? (isAbsolute(workspace.cwd) ? workspace.cwd : resolve(runtimeCwd, workspace.cwd))
+      : (input.cwd || runtimeCwd);
+    return { cwd, mode: "shared" };
+  }
+
+  const unknown = Object.keys(workspace).filter((key) => !["mode", "repository", "ref", "key", "retention"].includes(key));
+  if (unknown.length > 0) {
+    throw new InvalidDslCallError(`agent() git-worktree workspace contains unsupported keys: ${unknown.join(", ")}.`);
+  }
+  if (input.cwd !== undefined) {
+    throw new InvalidDslCallError("agent() cwd cannot be combined with workspace.mode \"git-worktree\"; use workspace.repository.");
+  }
+  for (const key of ["repository", "ref", "key"] as const) {
+    if (workspace[key] !== undefined && (typeof workspace[key] !== "string" || workspace[key].trim() === "")) {
+      throw new InvalidDslCallError(`agent() workspace.${key} must be a non-empty string.`);
+    }
+  }
+  if (typeof workspace.key !== "string") {
+    throw new InvalidDslCallError("agent() workspace.key is required for git-worktree mode.");
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspace.key)) {
+    throw new InvalidDslCallError("agent() workspace.key must be a safe path segment.");
+  }
+  if (workspace.retention !== undefined && workspace.retention !== "on-failure" && workspace.retention !== "always") {
+    throw new InvalidDslCallError('agent() workspace.retention must be "on-failure" or "always".');
+  }
+  const repositoryInput = typeof workspace.repository === "string" ? workspace.repository : runtimeCwd;
   return {
-    cwd: selectedCwd,
-    mode: input.workspace?.mode ?? "shared" as const
+    mode: "git-worktree",
+    repository: isAbsolute(repositoryInput) ? repositoryInput : resolve(runtimeCwd, repositoryInput),
+    ref: typeof workspace.ref === "string" ? workspace.ref : "HEAD",
+    key: workspace.key,
+    retention: workspace.retention === "always" ? "always" : "on-failure"
   };
 }
 
 function buildAgentAttachmentMetadata(input: {
   skills?: string[] | undefined;
   context?: DirectAgentCallInput["context"] | undefined;
-  workspace?: { mode: "shared" | "isolated" } | undefined;
+  workspace?: AgentWorkspace | undefined;
   handoff?: DirectAgentCallInput["handoff"] | undefined;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = {};
@@ -252,6 +293,10 @@ function buildAgentAttachmentMetadata(input: {
     metadata.contextHandoffCount = Array.isArray(input.context.handoff) ? input.context.handoff.length : 1;
   }
   if (input.workspace) metadata.workspaceMode = input.workspace.mode;
+  if (input.workspace?.mode === "git-worktree") {
+    metadata.workspaceKey = input.workspace.key;
+    metadata.workspaceRef = input.workspace.ref;
+  }
   if (input.handoff?.writeTo !== undefined) metadata.handoffWriteTo = input.handoff.writeTo;
   if (input.handoff?.required !== undefined) metadata.handoffRequired = input.handoff.required;
   return metadata;
@@ -385,7 +430,9 @@ export function createDsl(runtime: RuntimeState) {
 
     const normalizedProvider = input.provider || runtime.config.defaultProvider || "mock";
     const normalizedTimeoutMs = input.timeoutMs || runtime.config.timeoutMs || 30000;
-    const normalizedCwd = normalizedWorkspace.cwd;
+    const normalizedCwd = normalizedWorkspace.mode === "shared"
+      ? normalizedWorkspace.cwd
+      : normalizedWorkspace.repository;
 
     const resolved = resolveAgentModel({
       agentModel: input.model,
@@ -421,13 +468,18 @@ export function createDsl(runtime: RuntimeState) {
     });
 
 
-    const cachedEntry = findPrefixCacheHit({
+    const cacheable = normalizedWorkspace.mode !== "git-worktree";
+    if (!cacheable && runtime.callCache) {
+      runtime.callCache.prefixCacheUsable = false;
+      runtime.callCache.writeIndex = false;
+    }
+    const cachedEntry = cacheable ? findPrefixCacheHit({
       cache: runtime.callCache,
       kind: "agent",
       sequence,
       callId,
       fingerprint
-    });
+    }) : undefined;
     if (cachedEntry && runtime.artifactStore && runtime.callCache?.previousRunRoot) {
       const cachedResult = await materializeCachedAgentResult({
         store: runtime.artifactStore,
@@ -600,7 +652,8 @@ export function createDsl(runtime: RuntimeState) {
         sequence,
         callId,
         fingerprint,
-        result
+        result,
+        cacheable
       });
 
       if (!result.ok && result.error?.code === ErrorCode.PROVIDER_UNAVAILABLE) {

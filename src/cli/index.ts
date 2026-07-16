@@ -105,6 +105,7 @@ Examples:
     .option("-c, --config <path>", "Path to config file")
     .option("--cwd <path>", "Custom working directory")
     .option("-o, --out <path>", "Runs artifact directory")
+    .option("--worktrees-dir <path>", "Managed Git worktree directory (must be outside source repositories)")
     .option("-r, --report <mode>", "Reporter mode (pretty, json, jsonl)")
     .option("--concurrency <number>", "Maximum parallel concurrency")
     .option("--timeout-ms <ms>", "Workflow run timeout in ms")
@@ -136,6 +137,7 @@ Examples:
     .argument("<run-id-or-path>", "Previous run id or run directory path")
     .option("--cwd <path>", "Custom working directory")
     .option("-o, --out <path>", "Runs artifact directory")
+    .option("--worktrees-dir <path>", "Managed Git worktree directory (must be outside source repositories)")
     .option("-r, --report <mode>", "Reporter mode (pretty, json, jsonl)")
     .option("--max-agent-calls <number>", "Maximum live provider agent calls for the continuation run")
     .option("--no-cache", "Disable resume/cache lookup and cache index updates")
@@ -263,5 +265,4 @@ export async function runCli(args: string[]): Promise<void> {
     process.exitCode = exitCodeForError(error);
   }
 }
-
 

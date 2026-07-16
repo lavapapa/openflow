@@ -7,10 +7,12 @@ import type {
   AgentPermissions,
   ProviderCommand,
   AgentSdkAdapter,
-  ProviderParsedResult
+  ProviderParsedResult,
+  AgentGitWorktreeWorkspace
 } from "../types/agent.js";
 import type { ResolvedConfig } from "../types/config.js";
 import type { ArtifactStore, AgentArtifacts } from "../types/artifacts.js";
+import type { SerializedError } from "../types/errors.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type {
@@ -35,8 +37,35 @@ import { assertThinkingEffortSupported } from "./thinking-effort-support.js";
 import { resolveStructuredOutputPrompt } from "../structured/structured-output.js";
 import { OpenDynamicWorkflowError } from "../errors/types.js";
 import { ErrorCode } from "../errors/codes.js";
+import type {
+  WorkspaceFinalizeResult,
+  WorkspaceLease,
+  WorkspaceManager
+} from "../workspaces/index.js";
 
 const MAX_IN_MEMORY_LOG_SIZE = 1024 * 1024; // 1MB limit for in-memory results
+
+interface AgentWorkspaceReceipt {
+  schemaVersion: "open-dynamic-workflow.agent-workspace.v1";
+  agentId: string;
+  state: "preparing" | "prepared" | "finalized" | "failed";
+  requested: {
+    mode: "git-worktree";
+    repository: string;
+    ref: string;
+    key: string;
+    retention: AgentGitWorktreeWorkspace["retention"];
+    namespace?: string | undefined;
+  };
+  lease?: WorkspaceLease | undefined;
+  finalization?: WorkspaceFinalizeResult | undefined;
+  error?: SerializedError | undefined;
+  recoveryError?: SerializedError | undefined;
+}
+
+type GitWorktreeExecutionInput = AgentExecutionInput & {
+  workspace: AgentGitWorktreeWorkspace;
+};
 
 interface MockAdapterWithLookup {
   lookupResponse(input: AgentRunInput): any;
@@ -56,22 +85,309 @@ export class DefaultAgentExecutor implements AgentExecutor {
   private readonly artifactStore: ArtifactStore;
   private readonly eventBus: EventBus;
   private readonly providerRuntime: ProviderRuntimeMap | undefined;
+  private readonly workspaceManager: WorkspaceManager | undefined;
+  private readonly workspaceNamespace: string | undefined;
 
   constructor(deps: {
     config: ResolvedConfig;
     artifactStore: ArtifactStore;
     eventBus: EventBus;
     providerRuntime?: ProviderRuntimeMap | undefined;
+    workspaceManager?: WorkspaceManager | undefined;
+    workspaceNamespace?: string | undefined;
   }) {
     this.config = deps.config;
     this.artifactStore = deps.artifactStore;
     this.eventBus = deps.eventBus;
     this.providerRuntime = deps.providerRuntime;
+    this.workspaceManager = deps.workspaceManager;
+    this.workspaceNamespace = deps.workspaceNamespace;
   }
 
   async execute(input: AgentExecutionInput): Promise<AgentResult> {
+    if (input.workspace?.mode === "git-worktree") {
+      return this.executeInGitWorktree(input as GitWorktreeExecutionInput);
+    }
     const result = await this.executeInternal(input);
     return removeUndefinedProperties(result);
+  }
+
+  private async executeInGitWorktree(input: GitWorktreeExecutionInput): Promise<AgentResult> {
+    const startedAt = Date.now();
+    const workspacePath = `agents/${input.id}/workspace.json`;
+    const requested: AgentWorkspaceReceipt["requested"] = {
+      mode: "git-worktree",
+      repository: input.workspace.repository,
+      ref: input.workspace.ref,
+      key: input.workspace.key,
+      retention: input.workspace.retention,
+      ...(this.workspaceNamespace !== undefined ? { namespace: this.workspaceNamespace } : {})
+    };
+
+    await this.artifactStore.writeJson(workspacePath, {
+      schemaVersion: "open-dynamic-workflow.agent-workspace.v1",
+      agentId: input.id,
+      state: "preparing",
+      requested
+    } satisfies AgentWorkspaceReceipt);
+
+    const manager = this.workspaceManager;
+    const namespace = this.workspaceNamespace;
+    if (!manager) {
+      return this.handleWorkspacePrepareFailure(
+        input,
+        workspacePath,
+        requested,
+        new OpenDynamicWorkflowError(
+          ErrorCode.UNSUPPORTED_CAPABILITY,
+          "Git worktree execution requires an injected WorkspaceManager."
+        ),
+        startedAt
+      );
+    }
+    if (!namespace) {
+      return this.handleWorkspacePrepareFailure(
+        input,
+        workspacePath,
+        requested,
+        new OpenDynamicWorkflowError(
+          ErrorCode.INVALID_WORKSPACE_NAMESPACE,
+          "Git worktree execution requires a non-empty workspace namespace."
+        ),
+        startedAt
+      );
+    }
+    if (input.signal.aborted) {
+      return this.handleWorkspacePrepareFailure(
+        input,
+        workspacePath,
+        requested,
+        createWorkspaceAbortError(input.signal.reason),
+        startedAt
+      );
+    }
+
+    let lease: WorkspaceLease;
+    try {
+      lease = await manager.prepare({
+        repository: input.workspace.repository,
+        ref: input.workspace.ref,
+        key: input.workspace.key,
+        namespace,
+        signal: input.signal
+      });
+    } catch (error) {
+      const recovery = await this.recoverPartialWorkspace(manager, namespace, input.workspace.key, error);
+      return this.handleWorkspacePrepareFailure(
+        input,
+        workspacePath,
+        requested,
+        error,
+        startedAt,
+        recovery.lease,
+        recovery.error
+      );
+    }
+
+    const preparedReceipt: AgentWorkspaceReceipt = {
+      schemaVersion: "open-dynamic-workflow.agent-workspace.v1",
+      agentId: input.id,
+      state: "prepared",
+      requested,
+      lease
+    };
+    await this.artifactStore.writeJson(workspacePath, preparedReceipt);
+    await this.eventBus.emit("agent.workspace.prepared", {
+      agentId: input.id,
+      artifactPath: workspacePath,
+      ref: input.workspace.ref,
+      retention: input.workspace.retention,
+      lease
+    });
+
+    let result: AgentResult | undefined;
+    let executionError: unknown;
+    try {
+      if (input.signal.aborted) {
+        result = await this.createPreExecutionFailure(
+          input,
+          createWorkspaceAbortError(input.signal.reason),
+          startedAt
+        );
+      } else {
+        result = await this.executeInternal({
+          ...input,
+          cwd: lease.path
+        });
+      }
+    } catch (error) {
+      executionError = error;
+    }
+
+    try {
+      const finalization = await manager.finalize(lease, {
+        succeeded: result?.ok === true && !input.signal.aborted,
+        retention: input.workspace.retention
+      });
+      const finalizedReceipt: AgentWorkspaceReceipt = {
+        ...preparedReceipt,
+        state: "finalized",
+        finalization
+      };
+      await this.artifactStore.writeJson(workspacePath, finalizedReceipt);
+      await this.eventBus.emit("agent.workspace.finalized", {
+        agentId: input.id,
+        artifactPath: workspacePath,
+        finalization
+      });
+      if (finalization.error) {
+        await this.eventBus.emit("agent.workspace.failed", {
+          agentId: input.id,
+          artifactPath: workspacePath,
+          operation: "finalize",
+          error: serializeWorkspaceError(finalization.error),
+          lease
+        });
+      }
+    } catch (finalizeError) {
+      const serialized = serializeWorkspaceError(finalizeError);
+      try {
+        await this.artifactStore.writeJson(workspacePath, {
+          ...preparedReceipt,
+          state: "failed",
+          error: serialized
+        } satisfies AgentWorkspaceReceipt);
+        await this.eventBus.emit("agent.workspace.failed", {
+          agentId: input.id,
+          artifactPath: workspacePath,
+          operation: "finalize",
+          error: serialized,
+          lease
+        });
+      } catch {
+        // Finalization/audit failures must not replace the provider outcome.
+      }
+    }
+
+    if (executionError !== undefined) {
+      throw executionError;
+    }
+    return removeUndefinedProperties(result!);
+  }
+
+  private async handleWorkspacePrepareFailure(
+    input: GitWorktreeExecutionInput,
+    workspacePath: string,
+    requested: AgentWorkspaceReceipt["requested"],
+    error: unknown,
+    startedAt: number,
+    lease?: WorkspaceLease,
+    recoveryError?: SerializedError
+  ): Promise<AgentFailureResult> {
+    const serialized = serializeWorkspaceError(error);
+    await this.artifactStore.writeJson(workspacePath, {
+      schemaVersion: "open-dynamic-workflow.agent-workspace.v1",
+      agentId: input.id,
+      state: "failed",
+      requested,
+      ...(lease !== undefined ? { lease } : {}),
+      error: serialized,
+      ...(recoveryError !== undefined ? { recoveryError } : {})
+    } satisfies AgentWorkspaceReceipt);
+    await this.eventBus.emit("agent.workspace.failed", {
+      agentId: input.id,
+      artifactPath: workspacePath,
+      operation: "prepare",
+      error: serialized,
+      ...(lease !== undefined ? { lease } : {})
+    });
+    return this.createPreExecutionFailure(input, error, startedAt);
+  }
+
+  private async recoverPartialWorkspace(
+    manager: WorkspaceManager,
+    namespace: string,
+    key: string,
+    prepareError: unknown
+  ): Promise<{ lease?: WorkspaceLease; error?: SerializedError }> {
+    const code = getErrorCode(prepareError);
+    if (code !== ErrorCode.WORKSPACE_ABORTED && code !== ErrorCode.WORKSPACE_PREPARE_FAILED) {
+      return {};
+    }
+    try {
+      const leases = await manager.list({ namespace });
+      const lease = leases.find((candidate) => candidate.key === key);
+      return lease ? { lease } : {};
+    } catch (error) {
+      return { error: serializeWorkspaceError(error) };
+    }
+  }
+
+  private async createPreExecutionFailure(
+    input: GitWorktreeExecutionInput,
+    error: unknown,
+    startedAt: number
+  ): Promise<AgentFailureResult> {
+    const serialized = serializeWorkspaceError(error);
+    const status = resolveWorkspaceFailureStatus(input.signal, serialized);
+    const artifacts = buildAgentArtifacts(input);
+    const resolvedPerms = input.permissions || { mode: "default" };
+    const sanitizedMetadata = sanitizeMetadata(input.metadata);
+    const metadataJson: Record<string, unknown> = {
+      ...sanitizedMetadata,
+      ...buildAgentConfigMetadata(input),
+      model: input.model,
+      resolutionSource: sanitizedMetadata.modelResolutionSource || "provider-default",
+      structuredOutputTransport: input.schema ? input.structuredOutput?.transport ?? "auto" : undefined,
+      permissions: resolvedPerms,
+      thinkingEffortResolutionSource: sanitizedMetadata.thinkingEffortResolutionSource || "provider-cli-default",
+      ...(input.thinkingEffort !== undefined ? { thinkingEffort: input.thinkingEffort } : {})
+    };
+
+    await this.artifactStore.writeText(artifacts.promptPath, input.prompt);
+    if (input.schema && artifacts.schemaPath) {
+      await this.artifactStore.writeJson(artifacts.schemaPath, input.schema);
+    }
+    await this.artifactStore.writeJson(artifacts.metadataPath!, metadataJson);
+    await this.artifactStore.writeJson(artifacts.permissionsPath!, resolvedPerms);
+    await this.artifactStore.writeText(artifacts.stdoutPath, "");
+    await this.artifactStore.writeText(artifacts.stderrPath, "");
+
+    const failureResult: AgentFailureResult = {
+      ok: false,
+      status,
+      id: input.id,
+      label: input.label,
+      provider: input.provider,
+      model: input.model,
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      durationMs: Date.now() - startedAt,
+      artifacts,
+      error: serialized,
+      permissions: resolvedPerms,
+      metadata: sanitizedMetadata
+    };
+    await this.artifactStore.writeJson(artifacts.rawResultPath!, failureResult);
+
+    const secretValues = collectSecretValues(process.env, this.config.security?.redactEnv);
+    await this.emitVerboseResult({
+      agentId: input.id,
+      label: input.label,
+      provider: input.provider,
+      model: input.model,
+      status,
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      durationMs: failureResult.durationMs,
+      error: redactSerializedError(serialized, secretValues),
+      artifacts,
+      permissions: resolvedPerms,
+      metadata: sanitizedMetadata
+    });
+    return failureResult;
   }
 
   private async emitVerboseCommand(input: AgentExecutionInput, details: {
@@ -162,23 +478,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     let timedOut = false;
     let cancelled = false;
 
-    const agentArtifacts: AgentArtifacts = {
-      dir: `agents/${input.id}`,
-      promptPath: `agents/${input.id}/prompt.txt`,
-      stdoutPath: `agents/${input.id}/stdout.log`,
-      stderrPath: `agents/${input.id}/stderr.log`,
-      rawResultPath: `agents/${input.id}/raw-result.json`,
-      normalizedResultPath: `agents/${input.id}/normalized-result.json`,
-      permissionsPath: `agents/${input.id}/permissions.json`,
-      metadataPath: `agents/${input.id}/metadata.json`
-    };
-
-    if (input.schema) {
-      agentArtifacts.schemaPath = `agents/${input.id}/schema.json`;
-    }
-    if (input.handoff?.writeTo) {
-      agentArtifacts.handoffPath = `agents/${input.id}/handoff.json`;
-    }
+    const agentArtifacts = buildAgentArtifacts(input);
 
     // Run input
     const runInput: AgentRunInput = {
@@ -193,11 +493,11 @@ export class DefaultAgentExecutor implements AgentExecutor {
       cwd: input.cwd,
       env: {},
       permissions: resolvedPerms,
-      metadata: input.metadata,
+      metadata: stripWorkspaceProviderMetadata(input.metadata),
       thinkingEffort: input.thinkingEffort,
       skills: input.skills,
       context: input.context,
-      workspace: input.workspace,
+      ...(input.workspace?.mode === "shared" ? { workspace: input.workspace } : {}),
       handoff: input.handoff
     };
 
@@ -922,14 +1222,37 @@ function normalizeHandoffList(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
+/**
+ * Workspace routing belongs to the OpenFlow host. Provider adapters receive the
+ * prepared cwd, but not the lease key/ref that the runtime uses to manage it.
+ */
+function stripWorkspaceProviderMetadata(
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  const providerMetadata = { ...metadata };
+  delete providerMetadata.workspaceMode;
+  delete providerMetadata.workspaceKey;
+  delete providerMetadata.workspaceRef;
+  return Object.keys(providerMetadata).length > 0 ? providerMetadata : undefined;
+}
+
 function buildAgentConfigMetadata(input: AgentExecutionInput): Record<string, unknown> {
   const metadata: Record<string, unknown> = {};
 
   if (input.workspace) {
-    metadata.workspace = {
-      cwd: input.workspace.cwd,
-      mode: input.workspace.mode
-    };
+    metadata.workspace = input.workspace.mode === "shared"
+      ? {
+        cwd: input.workspace.cwd,
+        mode: input.workspace.mode
+      }
+      : {
+        mode: input.workspace.mode,
+        repository: input.workspace.repository,
+        ref: input.workspace.ref,
+        key: input.workspace.key,
+        retention: input.workspace.retention
+      };
   }
 
   if (input.skills?.length) {
@@ -1003,4 +1326,73 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 function cloneArtifacts(artifacts: AgentArtifacts): AgentArtifacts {
   return { ...artifacts };
+}
+
+function buildAgentArtifacts(input: AgentExecutionInput): AgentArtifacts {
+  const artifacts: AgentArtifacts = {
+    dir: `agents/${input.id}`,
+    promptPath: `agents/${input.id}/prompt.txt`,
+    stdoutPath: `agents/${input.id}/stdout.log`,
+    stderrPath: `agents/${input.id}/stderr.log`,
+    rawResultPath: `agents/${input.id}/raw-result.json`,
+    normalizedResultPath: `agents/${input.id}/normalized-result.json`,
+    permissionsPath: `agents/${input.id}/permissions.json`,
+    metadataPath: `agents/${input.id}/metadata.json`
+  };
+  if (input.schema) {
+    artifacts.schemaPath = `agents/${input.id}/schema.json`;
+  }
+  if (input.handoff?.writeTo) {
+    artifacts.handoffPath = `agents/${input.id}/handoff.json`;
+  }
+  if (input.workspace?.mode === "git-worktree") {
+    artifacts.workspacePath = `agents/${input.id}/workspace.json`;
+  }
+  return artifacts;
+}
+
+function serializeWorkspaceError(error: unknown): SerializedError {
+  if (error instanceof Error) {
+    const serialized: SerializedError = {
+      name: error.name || "Error",
+      message: error.message || String(error)
+    };
+    const code = getErrorCode(error);
+    if (code !== undefined) serialized.code = code;
+    if (error.stack) serialized.stack = error.stack;
+    return serialized;
+  }
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    return {
+      name: typeof record.name === "string" ? record.name : "Error",
+      message: typeof record.message === "string" ? record.message : String(error),
+      ...(typeof record.code === "string" ? { code: record.code } : {})
+    };
+  }
+  return { name: "Error", message: String(error) };
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function createWorkspaceAbortError(reason: unknown): OpenDynamicWorkflowError {
+  return new OpenDynamicWorkflowError(
+    ErrorCode.WORKSPACE_ABORTED,
+    typeof reason === "string" && reason.length > 0
+      ? reason
+      : "Git worktree execution was cancelled before provider start."
+  );
+}
+
+function resolveWorkspaceFailureStatus(
+  signal: AbortSignal,
+  error: SerializedError
+): AgentFailureResult["status"] {
+  const reason = `${String(signal.reason ?? "")} ${error.message}`.toLowerCase();
+  if (signal.aborted && reason.includes("timed out")) return "timed_out";
+  if (signal.aborted || error.code === ErrorCode.WORKSPACE_ABORTED) return "cancelled";
+  return "failed";
 }

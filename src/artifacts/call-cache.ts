@@ -25,6 +25,8 @@ export interface BaseCallCacheEntry {
   fingerprint: string;
   status: CallCacheStatus;
   resultPath: string;
+  /** Missing values remain cacheable for backwards compatibility. */
+  cacheable?: boolean | undefined;
 }
 
 export interface AgentCallCacheEntry extends BaseCallCacheEntry {
@@ -196,6 +198,7 @@ export function findPrefixCacheHit(input: {
   const entry = cache.previousEntries.get(input.sequence);
   if (
     !entry ||
+    entry.cacheable === false ||
     entry.kind !== input.kind ||
     entry.status !== "succeeded" ||
     entry.fingerprint !== input.fingerprint ||
@@ -511,6 +514,7 @@ export async function recordAgentCall(input: {
   callId?: string | undefined;
   fingerprint: string;
   result: AgentResult;
+  cacheable?: boolean | undefined;
 }): Promise<void> {
   if (!input.store || typeof input.store.getRunArtifacts !== "function") return;
 
@@ -533,7 +537,8 @@ export async function recordAgentCall(input: {
     fingerprint: input.fingerprint,
     status: input.result.status as CallCacheStatus,
     resultPath: resultPath as string,
-    agentId: input.result.id
+    agentId: input.result.id,
+    ...(input.cacheable === false ? { cacheable: false } : {})
   };
 
   if (input.result.ok && typeof input.store.writeJson === "function") {
@@ -639,7 +644,7 @@ async function recordCallEntry(input: {
   await input.store.appendJsonl("calls.jsonl", input.entry);
 
   if (input.cache) {
-    if (input.entry.status === "succeeded" && input.cache.writeIndex) {
+    if (input.entry.status === "succeeded" && input.entry.cacheable !== false && input.cache.writeIndex) {
       input.cache.currentEntries.push(input.entry);
       await input.store.writeJson("cache-index.json", {
         schemaVersion: "open-dynamic-workflow.cache-index.v1",
@@ -685,7 +690,7 @@ async function rebuildCacheIndexFromCalls(previousRunRoot: string): Promise<Call
     try {
       const parsed = JSON.parse(line);
       const entry = normalizeCallCacheEntry(parsed);
-      if (entry && entry.status === "succeeded") {
+      if (entry && entry.status === "succeeded" && entry.cacheable !== false) {
         entries[entry.sequence] = entry;
       }
     } catch {
@@ -703,7 +708,7 @@ function filterSucceededEntries(values: unknown[]): CallCacheEntry[] {
   const entries: CallCacheEntry[] = [];
   for (const value of values) {
     const entry = normalizeCallCacheEntry(value);
-    if (entry && entry.status === "succeeded") {
+    if (entry && entry.status === "succeeded" && entry.cacheable !== false) {
       entries[entry.sequence] = entry;
     }
   }
@@ -732,6 +737,7 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
         fingerprint: record.fingerprint,
         status: record.status as CallCacheStatus,
         resultPath: record.resultPath,
+        cacheable: typeof record.cacheable === "boolean" ? record.cacheable : undefined,
         agentId: record.agentId,
         agentResultPath: typeof record.agentResultPath === "string" ? record.agentResultPath : undefined
       };
@@ -752,6 +758,7 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
         fingerprint: record.fingerprint,
         status: record.status as CallCacheStatus,
         resultPath: record.resultPath,
+        cacheable: typeof record.cacheable === "boolean" ? record.cacheable : undefined,
         toolCallId: record.toolCallId,
         definitionId: record.definitionId,
         toolResultPath: typeof record.toolResultPath === "string" ? record.toolResultPath : undefined
@@ -772,6 +779,7 @@ function normalizeCallCacheEntry(value: unknown): CallCacheEntry | undefined {
         fingerprint: record.fingerprint,
         status: record.status as CallCacheStatus,
         resultPath: record.resultPath,
+        cacheable: typeof record.cacheable === "boolean" ? record.cacheable : undefined,
         loopId: record.loopId,
         roundIndex: typeof record.roundIndex === "number" ? record.roundIndex : undefined,
         roundId: typeof record.roundId === "string" ? record.roundId : undefined

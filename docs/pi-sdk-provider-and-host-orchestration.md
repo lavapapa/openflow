@@ -186,7 +186,7 @@ Initial shape:
 ```ts
 workspace?: {
   cwd?: string;
-  mode?: "shared" | "isolated";
+  mode?: "shared" | "git-worktree";
 }
 ```
 

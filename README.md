@@ -226,6 +226,38 @@ Expected result:
 * The loop result containing the final state directly, or a settled success/failure envelope.
 * Commands such as `npx @travisliu/open-dynamic-workflow validate workflows/loop-review.ts` and `npx @travisliu/open-dynamic-workflow run workflows/loop-review.ts`.
 
+### Managed Git worktrees
+
+Use a managed worktree when concurrent agents need the same repository snapshot but must not write into the same checkout:
+
+```ts
+const result = await agent({
+  id: "paper-001",
+  provider: "codex",
+  prompt: "Edit the assigned files and leave the candidate changes in this checkout.",
+  permissions: { mode: "dangerously-full-access" },
+  workspace: {
+    mode: "git-worktree",
+    repository: ".",
+    ref: "HEAD",
+    key: "paper-001",
+    retention: "on-failure"
+  }
+});
+```
+
+The runtime resolves `ref` to an immutable commit and creates a detached worktree after the task receives a scheduler slot. `key` must be a safe path segment and must be unique within the run. The provider receives only the resolved worktree as its `cwd`.
+
+CLI and SDK runs authorize only the Git repository containing the runtime `cwd`. A workflow cannot point `workspace.repository` at another local repository. Hosts that intentionally coordinate multiple repositories can construct and inject a `GitWorktreeManager` with an explicit `allowedRepositories` list.
+
+This mode isolates checked-out files and concurrent edits. Git linked worktrees still share the source repository's common Git directory, including refs and repository config. Treat workflow code and Providers as trusted; use an OS sandbox or an independent clone when Git-metadata isolation is required.
+
+`retention: "on-failure"` removes a successful worktree only when it remains clean and at the original commit. Failed, cancelled, timed-out, dirty, or HEAD-changed worktrees are retained for inspection. `retention: "always"` retains every worktree. Managed-worktree calls are recorded in artifacts but are never replayed from the resume cache because cached text cannot reproduce filesystem changes.
+
+Hosts that have durably accepted or rejected a dirty candidate may call `WorkspaceManager.discard(lease)`. This explicit operation uses forced Git removal for uncommitted changes, while still retaining the checkout if its HEAD moved away from the leased commit. It can also release a recorded partial directory left by an interrupted `git worktree add`. Ordinary `cleanup()` never discards edits.
+
+By default, worktrees are stored under `~/.open-dynamic-workflow/worktrees`. Use `--worktrees-dir <path>` for an explicit external root. The root must be outside the source repository.
+
 ### Prompting Tips
 
 * Name the workflow you want.
@@ -272,6 +304,7 @@ Every run creates a local artifact directory.
       validation-error.json
       permissions.json
       metadata.json
+      workspace.json
   workflows/
     <workflowInvocationId>/
       input.json

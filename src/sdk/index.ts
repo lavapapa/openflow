@@ -15,6 +15,7 @@ export interface OpenFlowClientOptions {
   workspace: {
     cwd: string;
     runsDir?: string | undefined;
+    worktreesDir?: string | undefined;
   };
   configPath?: string | undefined;
   providerRuntime?: ProviderRuntimeMap | undefined;
@@ -174,6 +175,7 @@ export function createOpenFlow(options: OpenFlowClientOptions): OpenFlowClient {
       cwd,
       configPath: options.configPath,
       runsDir,
+      worktreesDir: options.workspace.worktreesDir,
       args: input.args,
       defaultProvider: input.defaultProvider,
       model: input.model,

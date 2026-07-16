@@ -74,6 +74,7 @@ export async function resumeCommand(input: ResumeCommandInput): Promise<void> {
     resume: previousRunRoot,
     cwd: runInput.cwd ?? storedOptions.cwd ?? cwd,
     out: rawOptions.out ? resolveUserPath(rawOptions.out, cwd) : storedOptions.out,
+    worktreesDir: rawOptions.worktreesDir ?? storedOptions.worktreesDir,
     noCache,
     report: rawOptions.report !== undefined ? parseReportMode(rawOptions.report) : storedOptions.report,
     maxAgentCalls: rawOptions.maxAgentCalls !== undefined ? parsePositiveInteger(rawOptions.maxAgentCalls, "--max-agent-calls") : storedOptions.maxAgentCalls,
