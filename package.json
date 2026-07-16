@@ -57,6 +57,7 @@
     "postbuild": "node scripts/fix-bin-permissions.mjs",
     "dev": "tsx src/bin/open-dynamic-workflow.ts",
     "start": "node dist/bin/open-dynamic-workflow.js",
+    "prepare": "npm run build",
     "typecheck": "npm run check",
     "check": "tsc --noEmit",
     "lint": "eslint .",

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Git dependencies now build distributable `dist` files through the standard `prepare` lifecycle, so hosts can pin an unreleased commit and load the public package exports.
 - Managed-worktree agent calls are audit-recorded but excluded from resume cache lookup and cache-index rebuilds, because replaying an agent result cannot reproduce its filesystem changes.
 - Explicit discard can reclaim a durable `preparing` lease and partial directory left by a failed or cancelled `git worktree add`.
 - The former `workspace.mode: "isolated"` placeholder is rejected because it never created an isolated directory; callers must use `"git-worktree"` for working-file isolation.
