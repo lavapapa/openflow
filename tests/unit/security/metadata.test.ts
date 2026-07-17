@@ -34,6 +34,19 @@ describe("sanitizeMetadata", () => {
     expect(sanitized).not.toHaveProperty("opencodeVariant");
   });
 
+  it("should preserve explicitly public audit fields", () => {
+    const metadata = {
+      "audit.campaignId": "campaign-1",
+      "audit.assignmentHash": "a".repeat(64),
+      secret: "pass123"
+    };
+
+    expect(sanitizeMetadata(metadata)).toEqual({
+      "audit.campaignId": "campaign-1",
+      "audit.assignmentHash": "a".repeat(64)
+    });
+  });
+
   it("should cap string length", () => {
     const longString = "a".repeat(300);
     const metadata = {

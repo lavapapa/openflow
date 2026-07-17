@@ -34,7 +34,8 @@ export function sanitizeMetadata(metadata?: Record<string, any>): Record<string,
   const sanitized: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(metadata)) {
-    if (!safeFields.has(key)) {
+    // `audit.*` 是调用方显式声明为可公开、可持久化的审计字段；其余自定义字段仍默认丢弃。
+    if (!safeFields.has(key) && !key.startsWith("audit.")) {
       continue;
     }
 
