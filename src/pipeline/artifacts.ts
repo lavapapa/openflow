@@ -12,7 +12,8 @@ export function buildAgentArtifactReferences(agentId: string): AgentArtifacts {
     schemaPath: `agents/${safeId}/schema.json`,
     validationErrorPath: `agents/${safeId}/validation-error.json`,
     rawResultPath: `agents/${safeId}/raw-result.json`,
-    normalizedResultPath: `agents/${safeId}/normalized-result.json`
+    normalizedResultPath: `agents/${safeId}/normalized-result.json`,
+    providerInvocationPath: `agents/${safeId}/provider-invocation.json`
   };
 }
 

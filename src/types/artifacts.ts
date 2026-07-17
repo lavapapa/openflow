@@ -9,6 +9,7 @@ export interface AgentArtifacts {
   validationErrorPath?: string;
   permissionsPath?: string;
   metadataPath?: string;
+  providerInvocationPath?: string;
   handoffPath?: string;
   workspacePath?: string;
 }

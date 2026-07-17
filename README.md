@@ -304,6 +304,7 @@ Every run creates a local artifact directory.
       validation-error.json
       permissions.json
       metadata.json
+      provider-invocation.json
       workspace.json
   workflows/
     <workflowInvocationId>/
@@ -312,6 +313,8 @@ Every run creates a local artifact directory.
       error.json
       summary.json
 ```
+
+`provider-invocation.json` records the provider name, redacted executable and arguments, working directory, stdin hash, environment key names, and the resolved executable file hash. It never stores stdin content. This is auditable execution provenance; it does not provide cryptographic attestation against a machine administrator who can rewrite the entire run directory.
 
 Artifacts are always enabled so failed or partial runs remain debuggable.
 

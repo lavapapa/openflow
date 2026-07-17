@@ -32,6 +32,7 @@ describe("Pipeline Artifacts Helper", () => {
     expect(refs.stderrPath).toBe("agents/agent_1/stderr.log");
     expect(refs.rawResultPath).toBe("agents/agent_1/raw-result.json");
     expect(refs.normalizedResultPath).toBe("agents/agent_1/normalized-result.json");
+    expect(refs.providerInvocationPath).toBe("agents/agent_1/provider-invocation.json");
   });
 
   it("writeStageArtifact writes stage details and child agent references", async () => {

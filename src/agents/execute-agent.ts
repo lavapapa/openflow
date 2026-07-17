@@ -15,6 +15,7 @@ import type { ArtifactStore, AgentArtifacts } from "../types/artifacts.js";
 import type { SerializedError } from "../types/errors.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 import type {
   AgentVerboseCommandPayload,
   AgentVerboseResultPayload
@@ -525,6 +526,11 @@ export class DefaultAgentExecutor implements AgentExecutor {
       await this.emitAndValidateAgentAttachments(input);
       assertThinkingEffortSupported(input.provider, input.thinkingEffort);
       commandInput = await adapter.buildCommand(runInput);
+
+      await this.artifactStore.writeJson(
+        `agents/${input.id}/provider-invocation.json`,
+        await createProviderInvocationEvidence(input.provider, commandInput, input.cwd, secretValues)
+      );
 
       const resolvedPrompt = resolveStructuredOutputPrompt({
         prompt: input.prompt,
@@ -1337,7 +1343,8 @@ function buildAgentArtifacts(input: AgentExecutionInput): AgentArtifacts {
     rawResultPath: `agents/${input.id}/raw-result.json`,
     normalizedResultPath: `agents/${input.id}/normalized-result.json`,
     permissionsPath: `agents/${input.id}/permissions.json`,
-    metadataPath: `agents/${input.id}/metadata.json`
+    metadataPath: `agents/${input.id}/metadata.json`,
+    providerInvocationPath: `agents/${input.id}/provider-invocation.json`
   };
   if (input.schema) {
     artifacts.schemaPath = `agents/${input.id}/schema.json`;
@@ -1349,6 +1356,62 @@ function buildAgentArtifacts(input: AgentExecutionInput): AgentArtifacts {
     artifacts.workspacePath = `agents/${input.id}/workspace.json`;
   }
   return artifacts;
+}
+
+async function createProviderInvocationEvidence(
+  provider: string,
+  command: ProviderCommand,
+  defaultCwd: string,
+  secretValues: string[]
+): Promise<Record<string, unknown>> {
+  const redacted = redactProviderCommand(command, secretValues);
+  const cwd = command.cwd ?? defaultCwd;
+  return {
+    schemaVersion: "open-dynamic-workflow.provider-invocation.v1",
+    provider,
+    command: redacted.command,
+    args: redacted.args,
+    cwd: path.resolve(cwd),
+    stdinSha256: sha256Text(command.stdin ?? ""),
+    environmentKeys: Object.keys(command.env ?? {}).sort(),
+    executable: await resolveExecutableIdentity(command, cwd)
+  };
+}
+
+async function resolveExecutableIdentity(command: ProviderCommand, cwd: string): Promise<{
+  requested: string;
+  resolvedPath: string;
+  realPath: string;
+  sha256: string;
+} | null> {
+  const requested = command.command;
+  const candidates = requested.includes(path.sep)
+    ? [path.resolve(cwd, requested)]
+    : (command.env?.PATH ?? process.env.PATH ?? "")
+      .split(path.delimiter)
+      .filter(Boolean)
+      .map((entry) => path.resolve(entry, requested));
+  for (const candidate of candidates) {
+    try {
+      const realPath = await fs.realpath(candidate);
+      const stats = await fs.stat(realPath);
+      if (!stats.isFile()) continue;
+      const bytes = await fs.readFile(realPath);
+      return {
+        requested,
+        resolvedPath: candidate,
+        realPath,
+        sha256: createHash("sha256").update(bytes).digest("hex")
+      };
+    } catch {
+      // 继续检查 PATH 中的下一个候选项；实际 spawn 仍是最终真值。
+    }
+  }
+  return null;
+}
+
+function sha256Text(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function serializeWorkspaceError(error: unknown): SerializedError {

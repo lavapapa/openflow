@@ -419,6 +419,26 @@ describe("DefaultAgentExecutor environment and redaction", () => {
 
     const stdoutLog = await fs.readFile(path.join(runOutDir, "agents/stdin-agent/stdout.log"), "utf8");
     expect(stdoutLog).toBe(prompt);
+    const invocation = JSON.parse(await fs.readFile(
+      path.join(runOutDir, "agents/stdin-agent/provider-invocation.json"),
+      "utf8"
+    ));
+    expect(invocation).toMatchObject({
+      schemaVersion: "open-dynamic-workflow.provider-invocation.v1",
+      provider: "codex",
+      command: "node",
+      args: ["-e", "process.stdin.pipe(process.stdout)"],
+      cwd: process.cwd(),
+      environmentKeys: expect.any(Array),
+      executable: {
+        requested: "node",
+        resolvedPath: expect.any(String),
+        realPath: expect.any(String),
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+      }
+    });
+    expect(invocation.stdinSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(invocation).not.toHaveProperty("stdin");
   });
 
   it("handles mock native structured output validation failure and writes raw-result.json", async () => {
