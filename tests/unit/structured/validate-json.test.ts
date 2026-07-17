@@ -47,4 +47,14 @@ describe("validateJson", () => {
 
     expect(() => validateJson({}, invalidSchema as any)).toThrow("Invalid JSON Schema");
   });
+
+  it("allows multiple agents to validate against schemas with the same identifier", () => {
+    const identifiedSchema = {
+      $id: "https://example.test/schemas/person.json",
+      ...schema
+    };
+
+    expect(validateJson({ name: "Alice", age: 30 }, identifiedSchema).ok).toBe(true);
+    expect(validateJson({ name: "Bob", age: 40 }, identifiedSchema).ok).toBe(true);
+  });
 });

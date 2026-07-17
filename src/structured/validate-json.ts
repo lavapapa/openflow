@@ -1,7 +1,6 @@
 import AjvModule from "ajv";
 import type { JsonSchema } from "../types/index.js";
 const Ajv = (AjvModule as any).default || AjvModule;
-const ajv = new Ajv({ allErrors: true });
 
 export interface JsonValidationSuccess {
   ok: true;
@@ -20,6 +19,8 @@ export type JsonValidationResult = JsonValidationSuccess | JsonValidationFailure
 export function validateJson(value: unknown, schema: JsonSchema): JsonValidationResult {
   let validate;
   try {
+    // 每次验证使用独立实例，避免并发 Agent 重复编译同一 `$id` 时污染共享注册表。
+    const ajv = new Ajv({ allErrors: true });
     validate = ajv.compile(schema);
   } catch (err) {
     throw new Error(`Invalid JSON Schema: ${(err as Error).message}`);
