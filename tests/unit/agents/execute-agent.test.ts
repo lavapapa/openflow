@@ -424,21 +424,205 @@ describe("DefaultAgentExecutor environment and redaction", () => {
       "utf8"
     ));
     expect(invocation).toMatchObject({
-      schemaVersion: "open-dynamic-workflow.provider-invocation.v1",
+      schemaVersion: "open-dynamic-workflow.provider-invocation.v2",
       provider: "codex",
-      command: "node",
-      args: ["-e", "process.stdin.pipe(process.stdout)"],
-      cwd: process.cwd(),
-      environmentKeys: expect.any(Array),
-      executable: {
-        requested: "node",
-        resolvedPath: expect.any(String),
-        realPath: expect.any(String),
-        sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+      executionMode: "process",
+      requested: {
+        command: "node",
+        args: ["-e", "process.stdin.pipe(process.stdout)"],
+        cwd: process.cwd(),
+        stdinSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        explicitEnvironmentKeys: []
+      },
+      resolution: { status: "resolved" },
+      spawn: {
+        command: expect.any(String),
+        args: ["-e", "process.stdin.pipe(process.stdout)"],
+        cwd: process.cwd(),
+        environmentKeys: expect.any(Array)
+      },
+      executableChain: {
+        kind: "direct-native",
+        launcher: {
+          requested: "node",
+          resolvedPath: expect.any(String),
+          realPath: expect.any(String),
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+        }
       }
     });
-    expect(invocation.stdinSha256).toMatch(/^[a-f0-9]{64}$/u);
-    expect(invocation).not.toHaveProperty("stdin");
+    expect(path.isAbsolute(invocation.spawn.command)).toBe(true);
+    expect(invocation.spawn.command).toBe(invocation.executableChain.launcher.realPath);
+    expect(JSON.stringify(invocation)).not.toContain(prompt);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "spawns the resolved launcher real path even if its PATH entry is retargeted after evidence is written",
+    async () => {
+      const fixtureDir = path.join(TEST_OUT_DIR, "launcher-race-fixture");
+      const binDir = path.join(fixtureDir, "bin");
+      const launcherA = path.join(fixtureDir, "provider-a");
+      const launcherB = path.join(fixtureDir, "provider-b");
+      const commandLink = path.join(binDir, "provider-cli");
+      await fs.mkdir(binDir, { recursive: true });
+      await fs.writeFile(launcherA, "#!/bin/sh\nprintf launcher-a", { mode: 0o755 });
+      await fs.writeFile(launcherB, "#!/bin/sh\nprintf launcher-b", { mode: 0o755 });
+      await fs.symlink(launcherA, commandLink);
+
+      const adapter = {
+        name: "gemini",
+        buildCommand: vi.fn(async () => ({
+          command: "provider-cli",
+          args: [],
+          cwd: fixtureDir,
+          env: { PATH: binDir }
+        })),
+        parseResult: vi.fn(async ({ stdout }) => ({ text: stdout }))
+      };
+      const registrySpy = vi.spyOn(registryModule, "createDefaultProviderRegistry").mockImplementation(() => ({
+        get: () => adapter,
+        list: () => [adapter],
+        register: () => undefined
+      } as any));
+
+      try {
+        const config: any = {
+          defaultProvider: "gemini",
+          providers: { gemini: { command: "provider-cli" } },
+          security: {
+            allowWorkflowImports: false,
+            passEnv: [],
+            redactEnv: []
+          }
+        };
+        const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+        const runId = "test-run-launcher-path-race";
+        const runOutDir = path.join(TEST_OUT_DIR, runId);
+        await store.createRun({
+          runId,
+          outDir: runOutDir,
+          workflowPath: "dummy.ts",
+          workflowSource: "",
+          workflowHash: "hash",
+          resolvedConfig: config,
+          openDynamicWorkflowVersion: "1.0.0",
+          cwd: fixtureDir
+        });
+
+        const originalWriteJson = store.writeJson.bind(store);
+        let retargeted = false;
+        vi.spyOn(store, "writeJson").mockImplementation(async (relativePath, value) => {
+          const writtenPath = await originalWriteJson(relativePath, value);
+          if (!retargeted && relativePath.endsWith("/provider-invocation.json")) {
+            retargeted = true;
+            await fs.unlink(commandLink);
+            await fs.symlink(launcherB, commandLink);
+          }
+          return writtenPath;
+        });
+
+        const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+        const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+        const result = await executor.execute({
+          id: "launcher-race-agent",
+          provider: "gemini",
+          prompt: "run",
+          timeoutMs: 5000,
+          cwd: fixtureDir,
+          permissions: { mode: "default" },
+          signal: new AbortController().signal
+        });
+
+        expect(retargeted).toBe(true);
+        expect(await fs.realpath(commandLink)).toBe(await fs.realpath(launcherB));
+        expect(result.ok).toBe(true);
+        expect(result.stdout).toBe("launcher-a");
+
+        const invocation = JSON.parse(await fs.readFile(
+          path.join(runOutDir, "agents/launcher-race-agent/provider-invocation.json"),
+          "utf8"
+        ));
+        expect(invocation.requested.command).toBe("provider-cli");
+        expect(invocation.spawn.command).toBe(await fs.realpath(launcherA));
+        expect(invocation.executableChain.launcher.realPath).toBe(await fs.realpath(launcherA));
+        expect(invocation.executableChain.launcher.sha256).toMatch(/^[a-f0-9]{64}$/u);
+      } finally {
+        registrySpy.mockRestore();
+      }
+    }
+  );
+
+  it("fails before spawn for an unrecognized Codex script and persists failure evidence", async () => {
+    const fixtureDir = path.join(TEST_OUT_DIR, "unrecognized-codex-fixture");
+    const launcherPath = path.join(fixtureDir, "codex-wrapper");
+    const markerPath = path.join(fixtureDir, "spawned.marker");
+    await fs.mkdir(fixtureDir, { recursive: true });
+    await fs.writeFile(
+      launcherPath,
+      `#!/usr/bin/env node\nrequire("node:fs").writeFileSync(${JSON.stringify(markerPath)}, "spawned");\n`,
+      { mode: 0o755 }
+    );
+
+    const config: any = {
+      defaultProvider: "codex",
+      providers: {
+        codex: {
+          command: launcherPath,
+          args: [],
+          promptMode: "stdin",
+          modelArg: false
+        }
+      },
+      security: {
+        allowWorkflowImports: false,
+        passEnv: [],
+        redactEnv: []
+      }
+    };
+    const store = new FileSystemArtifactStore({ rootDir: TEST_OUT_DIR });
+    const runId = "test-run-unrecognized-codex";
+    const runOutDir = path.join(TEST_OUT_DIR, runId);
+    await store.createRun({
+      runId,
+      outDir: runOutDir,
+      workflowPath: "dummy.ts",
+      workflowSource: "",
+      workflowHash: "hash",
+      resolvedConfig: config,
+      openDynamicWorkflowVersion: "1.0.0",
+      cwd: fixtureDir
+    });
+    const eventBus = new EventBus({ runId, artifactStore: store, subscribers: [] });
+    const executor = new DefaultAgentExecutor({ config, artifactStore: store, eventBus });
+
+    const result = await executor.execute({
+      id: "unrecognized-codex-agent",
+      provider: "codex",
+      prompt: "run",
+      timeoutMs: 5000,
+      cwd: fixtureDir,
+      permissions: { mode: "default" },
+      signal: new AbortController().signal
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Expected the invocation to fail");
+    expect(result.error.code).toBe(ErrorCode.PROVIDER_INVOCATION_UNVERIFIABLE);
+    await expect(fs.access(markerPath)).rejects.toThrow();
+
+    const invocation = JSON.parse(await fs.readFile(
+      path.join(runOutDir, "agents/unrecognized-codex-agent/provider-invocation.json"),
+      "utf8"
+    ));
+    expect(invocation).toMatchObject({
+      schemaVersion: "open-dynamic-workflow.provider-invocation.v2",
+      resolution: {
+        status: "failed",
+        error: { code: ErrorCode.PROVIDER_INVOCATION_UNVERIFIABLE }
+      },
+      spawn: null,
+      executableChain: null
+    });
   });
 
   it("handles mock native structured output validation failure and writes raw-result.json", async () => {

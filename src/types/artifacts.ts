@@ -14,6 +14,68 @@ export interface AgentArtifacts {
   workspacePath?: string;
 }
 
+export interface ProviderExecutableIdentity {
+  requested: string;
+  resolvedPath: string;
+  realPath: string;
+  sha256: string;
+}
+
+export type ProviderExecutableChain =
+  | {
+      kind: "launcher";
+      launcher: ProviderExecutableIdentity;
+    }
+  | {
+      kind: "direct-native";
+      launcher: ProviderExecutableIdentity;
+    }
+  | {
+      kind: "codex-js-launcher";
+      launcher: ProviderExecutableIdentity;
+      env: ProviderExecutableIdentity;
+      node: ProviderExecutableIdentity;
+      nativeCodex: ProviderExecutableIdentity;
+      targetTriple: string;
+      platformPackage: string;
+    };
+
+export interface ProviderInvocationRequestEvidence {
+  command: string;
+  args: string[];
+  cwd: string;
+  stdinSha256: string;
+  explicitEnvironmentKeys: string[];
+}
+
+export interface ProviderInvocationSpawnEvidence {
+  command: string;
+  args: string[];
+  cwd: string;
+  environmentKeys: string[];
+}
+
+export type ProviderInvocationResolutionEvidence =
+  | { status: "resolved" }
+  | { status: "not-applicable" }
+  | {
+      status: "failed";
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+export interface ProviderInvocationEvidence {
+  schemaVersion: "open-dynamic-workflow.provider-invocation.v2";
+  provider: string;
+  executionMode: "process" | "sdk" | "mock";
+  requested: ProviderInvocationRequestEvidence;
+  resolution: ProviderInvocationResolutionEvidence;
+  spawn: ProviderInvocationSpawnEvidence | null;
+  executableChain: ProviderExecutableChain | null;
+}
+
 export interface RunManifest {
   schemaVersion: "open-dynamic-workflow.manifest.v1";
   runId: string;

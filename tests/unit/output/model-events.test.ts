@@ -120,7 +120,16 @@ describe("Model Events, Reports, and Artifacts", () => {
         cliArgs: {}
       },
       artifactStore: mockArtifactStore,
-      eventBus: eventBusMock
+      eventBus: eventBusMock,
+      providerExecutableResolver: async ({ requested, candidates }) => ({
+        identity: {
+          requested,
+          resolvedPath: candidates[0] ?? "/mock/mock-process",
+          realPath: "/mock/mock-process",
+          sha256: "1".repeat(64)
+        },
+        bytes: Buffer.from([0x7f, 0x45, 0x4c, 0x46])
+      })
     });
 
     const result = await executor.execute({

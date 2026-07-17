@@ -37,7 +37,7 @@ export function buildProviderEnv(input: {
 }): Record<string, string> {
   const env: Record<string, string> = {};
 
-  const systemKeys = ["PATH", "HOME", "USER", "LANG", "TERM", "SYSTEMROOT", "WINDIR"];
+  const systemKeys = ["PATH", "PATHEXT", "HOME", "USER", "LANG", "TERM", "SYSTEMROOT", "WINDIR"];
   const allAllowedKeys = new Set([
     ...systemKeys.map((k) => k.toUpperCase()),
     ...input.passEnv.map((k) => k.toUpperCase())

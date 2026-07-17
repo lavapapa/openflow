@@ -314,7 +314,9 @@ Every run creates a local artifact directory.
       summary.json
 ```
 
-`provider-invocation.json` records the provider name, redacted executable and arguments, working directory, stdin hash, environment key names, and the resolved executable file hash. It never stores stdin content. This is auditable execution provenance; it does not provide cryptographic attestation against a machine administrator who can rewrite the entire run directory.
+`provider-invocation.json` uses the `open-dynamic-workflow.provider-invocation.v2` schema. It separates the requested command from the absolute, real-path launcher passed to `spawn`, and records SHA-256 identities for the executable chain. For the official POSIX Codex JavaScript launcher (`#!/usr/bin/env node`), the chain includes the launcher, `/usr/bin/env`, the `node` selected from the exact provider environment, and the platform-native Codex executable. The native target is selected from the resolved Node binary header, so heterogeneous Node installations are recorded correctly; unknown or multi-architecture Node selection fails closed. Direct native Codex executables are supported; an unrecognized Codex script or platform shim fails closed with `PROVIDER_INVOCATION_UNVERIFIABLE` because OpenFlow cannot truthfully identify its downstream executable. Mock and in-process SDK providers explicitly record `spawn: null`.
+
+Arguments are redacted, stdin is represented only by its hash, and environment values are never stored. Process providers are not started unless their launcher can be resolved to a regular file; Windows resolution honors the provider environment's `PATHEXT`. The resolved launcher real path is reused for execution, removing the previous hash-to-spawn `PATH` lookup race. These records provide auditable local execution provenance; they do not provide cryptographic attestation against a machine administrator who can replace binaries or rewrite the run directory. Consumers of the former v1 artifact must migrate to the v2 `requested`, `spawn`, `resolution`, and `executableChain` fields.
 
 Artifacts are always enabled so failed or partial runs remain debuggable.
 

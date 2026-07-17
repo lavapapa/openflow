@@ -15,7 +15,6 @@ import type { ArtifactStore, AgentArtifacts } from "../types/artifacts.js";
 import type { SerializedError } from "../types/errors.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import type {
   AgentVerboseCommandPayload,
   AgentVerboseResultPayload
@@ -25,7 +24,6 @@ import { createDefaultProviderRegistry, type ProviderRuntimeMap } from "./regist
 import { runProcess } from "./process-runner.js";
 import { normalizeAgentOutput } from "../structured/normalize-agent-output.js";
 import {
-  buildProviderEnv,
   redactText,
   StreamRedactor,
   collectSecretValues,
@@ -43,6 +41,11 @@ import type {
   WorkspaceLease,
   WorkspaceManager
 } from "../workspaces/index.js";
+import {
+  prepareProviderInvocation,
+  type ProviderExecutableResolver,
+  type ProviderProcessSpawnPlan
+} from "./provider-invocation.js";
 
 const MAX_IN_MEMORY_LOG_SIZE = 1024 * 1024; // 1MB limit for in-memory results
 
@@ -88,6 +91,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
   private readonly providerRuntime: ProviderRuntimeMap | undefined;
   private readonly workspaceManager: WorkspaceManager | undefined;
   private readonly workspaceNamespace: string | undefined;
+  private readonly providerExecutableResolver: ProviderExecutableResolver | undefined;
 
   constructor(deps: {
     config: ResolvedConfig;
@@ -96,6 +100,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     providerRuntime?: ProviderRuntimeMap | undefined;
     workspaceManager?: WorkspaceManager | undefined;
     workspaceNamespace?: string | undefined;
+    providerExecutableResolver?: ProviderExecutableResolver | undefined;
   }) {
     this.config = deps.config;
     this.artifactStore = deps.artifactStore;
@@ -103,6 +108,7 @@ export class DefaultAgentExecutor implements AgentExecutor {
     this.providerRuntime = deps.providerRuntime;
     this.workspaceManager = deps.workspaceManager;
     this.workspaceNamespace = deps.workspaceNamespace;
+    this.providerExecutableResolver = deps.providerExecutableResolver;
   }
 
   async execute(input: AgentExecutionInput): Promise<AgentResult> {
@@ -521,16 +527,35 @@ export class DefaultAgentExecutor implements AgentExecutor {
 
     let executionResult: { exitCode: number | null; timedOut: boolean; cancelled: boolean };
     let commandInput: ProviderCommand | undefined;
+    let providerSpawnPlan: ProviderProcessSpawnPlan | undefined;
     let sdkParsedResult: ProviderParsedResult | undefined;
     try {
       await this.emitAndValidateAgentAttachments(input);
       assertThinkingEffortSupported(input.provider, input.thinkingEffort);
       commandInput = await adapter.buildCommand(runInput);
 
+      const invocationPreparation = await prepareProviderInvocation({
+        provider: input.provider,
+        command: commandInput,
+        defaultCwd: input.cwd,
+        secretValues,
+        executionMode: input.provider === "mock" && isMockAdapter(adapter)
+          ? "mock"
+          : isSdkAdapter(adapter)
+            ? "sdk"
+            : "process",
+        baseEnv: process.env,
+        passEnv: this.config.security?.passEnv ?? [],
+        ...(this.providerExecutableResolver !== undefined
+          ? { executableResolver: this.providerExecutableResolver }
+          : {})
+      });
       await this.artifactStore.writeJson(
         `agents/${input.id}/provider-invocation.json`,
-        await createProviderInvocationEvidence(input.provider, commandInput, input.cwd, secretValues)
+        invocationPreparation.evidence
       );
+      if (!invocationPreparation.ok) throw invocationPreparation.error;
+      providerSpawnPlan = invocationPreparation.spawn;
 
       const resolvedPrompt = resolveStructuredOutputPrompt({
         prompt: input.prompt,
@@ -619,7 +644,13 @@ export class DefaultAgentExecutor implements AgentExecutor {
       };
       sdkParsedResult = sdkResult.parsed;
     } else {
-      executionResult = await this.executeProcess(input, runInput, commandInput, adapter, appendToLogs, { stdoutRedactor, stderrRedactor });
+      if (!providerSpawnPlan) {
+        throw new OpenDynamicWorkflowError(
+          ErrorCode.INTERNAL_ERROR,
+          "Process provider invocation was not prepared before execution."
+        );
+      }
+      executionResult = await this.executeProcess(input, providerSpawnPlan, appendToLogs, { stdoutRedactor, stderrRedactor });
     }
 
     exitCode = executionResult.exitCode;
@@ -1117,24 +1148,17 @@ export class DefaultAgentExecutor implements AgentExecutor {
 
   private async executeProcess(
     input: AgentExecutionInput,
-    runInput: AgentRunInput,
-    commandInput: any,
-    adapter: any,
+    spawnPlan: ProviderProcessSpawnPlan,
     appendToLogs: (stream: "stdout" | "stderr", chunk: string, redactor: StreamRedactor) => Promise<void>,
     redactors: { stdoutRedactor: StreamRedactor; stderrRedactor: StreamRedactor }
   ): Promise<{ exitCode: number | null; timedOut: boolean; cancelled: boolean }> {
     try {
-      const filteredEnv = buildProviderEnv({
-        baseEnv: process.env,
-        passEnv: this.config.security?.passEnv ?? [],
-        explicitEnv: commandInput.env
-      });
       const processResult = await runProcess({
-        command: commandInput.command,
-        args: commandInput.args,
-        cwd: commandInput.cwd,
-        ...(commandInput.stdin !== undefined ? { stdin: commandInput.stdin } : {}),
-        env: filteredEnv,
+        command: spawnPlan.command,
+        args: spawnPlan.args,
+        cwd: spawnPlan.cwd,
+        ...(spawnPlan.stdin !== undefined ? { stdin: spawnPlan.stdin } : {}),
+        env: spawnPlan.env,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
         onStdout: async (chunk) => {
@@ -1356,62 +1380,6 @@ function buildAgentArtifacts(input: AgentExecutionInput): AgentArtifacts {
     artifacts.workspacePath = `agents/${input.id}/workspace.json`;
   }
   return artifacts;
-}
-
-async function createProviderInvocationEvidence(
-  provider: string,
-  command: ProviderCommand,
-  defaultCwd: string,
-  secretValues: string[]
-): Promise<Record<string, unknown>> {
-  const redacted = redactProviderCommand(command, secretValues);
-  const cwd = command.cwd ?? defaultCwd;
-  return {
-    schemaVersion: "open-dynamic-workflow.provider-invocation.v1",
-    provider,
-    command: redacted.command,
-    args: redacted.args,
-    cwd: path.resolve(cwd),
-    stdinSha256: sha256Text(command.stdin ?? ""),
-    environmentKeys: Object.keys(command.env ?? {}).sort(),
-    executable: await resolveExecutableIdentity(command, cwd)
-  };
-}
-
-async function resolveExecutableIdentity(command: ProviderCommand, cwd: string): Promise<{
-  requested: string;
-  resolvedPath: string;
-  realPath: string;
-  sha256: string;
-} | null> {
-  const requested = command.command;
-  const candidates = requested.includes(path.sep)
-    ? [path.resolve(cwd, requested)]
-    : (command.env?.PATH ?? process.env.PATH ?? "")
-      .split(path.delimiter)
-      .filter(Boolean)
-      .map((entry) => path.resolve(entry, requested));
-  for (const candidate of candidates) {
-    try {
-      const realPath = await fs.realpath(candidate);
-      const stats = await fs.stat(realPath);
-      if (!stats.isFile()) continue;
-      const bytes = await fs.readFile(realPath);
-      return {
-        requested,
-        resolvedPath: candidate,
-        realPath,
-        sha256: createHash("sha256").update(bytes).digest("hex")
-      };
-    } catch {
-      // 继续检查 PATH 中的下一个候选项；实际 spawn 仍是最终真值。
-    }
-  }
-  return null;
-}
-
-function sha256Text(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function serializeWorkspaceError(error: unknown): SerializedError {

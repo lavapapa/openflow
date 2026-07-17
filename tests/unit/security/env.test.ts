@@ -23,6 +23,7 @@ describe("env security helpers", () => {
   it("builds provider env using allowlist", () => {
     const baseEnv = {
       PATH: "/usr/bin",
+      PATHEXT: ".EXE;.CMD",
       HOME: "/home/user",
       MY_SECRET_KEY: "secret123",
       ALLOWED_VAR: "allowed123"
@@ -34,6 +35,7 @@ describe("env security helpers", () => {
     });
 
     expect(providerEnv.PATH).toBe("/usr/bin");
+    expect(providerEnv.PATHEXT).toBe(".EXE;.CMD");
     expect(providerEnv.HOME).toBe("/home/user");
     expect(providerEnv.ALLOWED_VAR).toBe("allowed123");
     expect(providerEnv.MY_SECRET_KEY).toBeUndefined();

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Provider invocation evidence now uses a v2 schema that separates requested commands from pinned absolute spawn launchers, records the full official Codex JavaScript executable chain, honors Windows `PATHEXT`, derives the native Codex target from the resolved Node binary, and fails closed when the chain cannot be verified.
 - Git dependencies now build distributable `dist` files through the standard `prepare` lifecycle, so hosts can pin an unreleased commit and load the public package exports.
 - Managed-worktree agent calls are audit-recorded but excluded from resume cache lookup and cache-index rebuilds, because replaying an agent result cannot reproduce its filesystem changes.
 - Explicit discard can reclaim a durable `preparing` lease and partial directory left by a failed or cancelled `git worktree add`.
