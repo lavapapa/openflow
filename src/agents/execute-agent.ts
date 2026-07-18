@@ -498,7 +498,11 @@ export class DefaultAgentExecutor implements AgentExecutor {
       structuredOutput: input.structuredOutput,
       timeoutMs: input.timeoutMs,
       cwd: input.cwd,
-      env: {},
+      // Provider configuration is supplied by the host or run caller and is
+      // therefore an explicit child-process override. It reaches
+      // buildProviderEnv through ProviderCommand.env, rather than being
+      // filtered by security.passEnv (which only controls inherited env).
+      env: { ...(this.config.providers[input.provider]?.env ?? {}) },
       permissions: resolvedPerms,
       metadata: stripWorkspaceProviderMetadata(input.metadata),
       thinkingEffort: input.thinkingEffort,

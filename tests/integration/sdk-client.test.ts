@@ -59,6 +59,80 @@ export default { answer };
     expect(runs[0]).toMatchObject({ runId: run.runId, status: "succeeded" });
   });
 
+  it("passes SDK provider env overrides to child processes without widening security.passEnv", async () => {
+    const runsDir = path.join(TEMP_DIR, "runs");
+    const workflowPath = path.join(TEMP_DIR, "workflows/provider-env.ts");
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "sdk-provider-env", description: "test provider environment override" };
+
+const answer = await agent({ id: "home", provider: "codex", prompt: "Print the configured HOME." });
+
+export default { answer };
+`, "utf8");
+
+    const openflow = createOpenFlow({
+      workspace: { cwd: TEMP_DIR, runsDir }
+    });
+    const isolatedHome = path.join(TEMP_DIR, "isolated-home");
+    const run = await openflow.run({
+      workflow: { kind: "file", path: workflowPath },
+      providers: {
+        codex: {
+          command: process.execPath,
+          args: ["-e", "process.stdout.write(process.env.HOME ?? '')"],
+          env: { HOME: isolatedHome }
+        }
+      }
+    });
+    const { result } = await collectEvents(run);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.result).toMatchObject({ answer: { text: isolatedHome } });
+
+    const invocation = JSON.parse(await fs.readFile(
+      path.join(result.artifactsDir, "agents/home/provider-invocation.json"),
+      "utf8"
+    ));
+    expect(invocation.requested.explicitEnvironmentKeys).toEqual(["HOME"]);
+    expect(invocation.spawn.environmentKeys).toContain("HOME");
+  });
+
+  it("persists explicitly public workflow metadata in the agent artifact", async () => {
+    const runsDir = path.join(TEMP_DIR, "runs");
+    const workflowPath = path.join(TEMP_DIR, "workflows/audit-metadata.ts");
+    await fs.writeFile(workflowPath, `
+export const meta = { name: "sdk-audit-metadata", description: "test public audit metadata" };
+
+const answer = await agent({
+  id: "audited",
+  provider: "mock",
+  prompt: "Say hello.",
+  metadata: {
+    "audit.example.campaignId": "campaign-42",
+    "audit.example.answerOrdinal": 3
+  }
+});
+
+export default { answer };
+`, "utf8");
+
+    const openflow = createOpenFlow({
+      workspace: { cwd: TEMP_DIR, runsDir }
+    });
+    const run = await openflow.run({ workflow: { kind: "file", path: workflowPath } });
+    const { result } = await collectEvents(run);
+
+    expect(result.status).toBe("succeeded");
+    const metadata = JSON.parse(await fs.readFile(
+      path.join(result.artifactsDir, "agents/audited/metadata.json"),
+      "utf8"
+    ));
+    expect(metadata).toMatchObject({
+      "audit.example.campaignId": "campaign-42",
+      "audit.example.answerOrdinal": 3
+    });
+  });
+
   it("runs a managed worktree through the public SDK composition root", async () => {
     const repository = path.join(TEMP_DIR, "repository");
     const runsDir = path.join(TEMP_DIR, "runs");

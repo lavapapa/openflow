@@ -345,6 +345,10 @@ providers:
       - --json
       - --ephemeral
     defaultModel: null
+    # Explicit overrides for the provider child process.
+    # These do not add inherited environment variables to the allowlist below.
+    env:
+      HOME: /tmp/openflow-codex-home
 
   gemini:
     command: gemini
@@ -372,6 +376,8 @@ Configuration precedence:
 5. Built-in defaults.
 
 `--provider` sets the default provider. It does not override an explicit provider inside an `agent()` call.
+
+`providers.<name>.env` supplies explicit environment overrides to that provider's child process. It is intended for controlled runtime settings such as an isolated `HOME`; it bypasses `security.passEnv`, which only governs variables inherited from the parent process. Do not place credentials in this field.
 
 `maxAgentCalls` limits how many live provider agent calls a run may start. Resume cache hits do not count as new live calls. The CLI flag `--max-agent-calls` overrides the config value for that run.
 
